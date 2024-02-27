@@ -1,0 +1,71 @@
+Seed set to 2222
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: sarthak-ti. Use `wandb login --relogin` to force relogin
+wandb: wandb version 0.16.3 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.16.2
+wandb: Run data is saved locally in ./wandb/run-20240207_094805-3mgdvx3f
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run celestial-meadow-10
+wandb: ⭐️ View project at https://wandb.ai/sarthak-ti/dna
+wandb: 🚀 View run at https://wandb.ai/sarthak-ti/dna/runs/3mgdvx3f
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name               | Type              | Params
+---------------------------------------------------------
+0 | model              | DNAEmbeddingModel | 438 K 
+1 | encoder            | Identity          | 0     
+2 | decoder            | SequenceDecoder   | 129   
+3 | train_torchmetrics | MetricCollection  | 0     
+4 | val_torchmetrics   | MetricCollection  | 0     
+5 | test_torchmetrics  | MetricCollection  | 0     
+---------------------------------------------------------
+438 K     Trainable params
+0         Non-trainable params
+438 K     Total params
+1.755     Total estimated model params size (MB)
+Epoch 0, global step 50369: 'val/mse' reached 3.90721 (best 3.90721), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-07/09-47-18-698056/checkpoints/val/mse.ckpt' as top 1
+`Trainer.fit` stopped: `max_epochs=1` reached.
+wandb: WARNING No program path found, not creating job artifact. See https://docs.wandb.ai/guides/launch/create-job
+wandb: - 0.013 MB of 0.013 MB uploadedwandb: \ 0.013 MB of 0.056 MB uploadedwandb: | 0.056 MB of 0.056 MB uploadedwandb: 
+wandb: Run history:
+wandb:               epoch ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:           test/loss ▁
+wandb:            test/mse ▁
+wandb:         timer/epoch ▁
+wandb:          timer/step ▁▂▂█▅▂▁▅▁▁▂▂▂▁▁▄▂▆▂▅▂▁▁▃▄▁▂▂▂▂▆▂▂▆▂▅▂▂▁▂
+wandb:    timer/validation ▁
+wandb:          train/loss ▁
+wandb:           train/mse ▁
+wandb:       trainer/epoch ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: trainer/global_step ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███
+wandb:        trainer/loss ▅▆█▅▄▇▆▆▄▇▄▄▄▃▆▆▂▂▃▁▂▂▄▁▃▂▅▂▄▃▃▅▃▂▂▁▃▂▂▂
+wandb:      trainer/lr/pg1 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:      trainer/lr/pg2 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:            val/loss ▁
+wandb:             val/mse ▁
+wandb: 
+wandb: Run summary:
+wandb:               epoch 0
+wandb:           test/loss 3.90771
+wandb:            test/mse 3.90771
+wandb:         timer/epoch 40375.54351
+wandb:          timer/step 0.58971
+wandb:    timer/validation 7899.11745
+wandb:          train/loss 4.86815
+wandb:           train/mse 4.86815
+wandb:       trainer/epoch 0.0
+wandb: trainer/global_step 50368
+wandb:        trainer/loss 4.9349
+wandb:      trainer/lr/pg1 1e-05
+wandb:      trainer/lr/pg2 1e-05
+wandb:            val/loss 3.90721
+wandb:             val/mse 3.90721
+wandb: 
+wandb: 🚀 View run celestial-meadow-10 at: https://wandb.ai/sarthak-ti/dna/runs/3mgdvx3f
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20240207_094805-3mgdvx3f/logs

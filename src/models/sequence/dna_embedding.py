@@ -15,7 +15,7 @@ from src.models.sequence.long_conv_lm import LMBackbone
 from src.models.sequence.long_conv_lm import _init_weights
 
 
-class DNAEmbeddingModel(nn.Module, GenerationMixin):
+class DNAEmbeddingModel(nn.Module, GenerationMixin): #this is the actual model that is ussed
     """DNA Embedding Model, which is the same as ConvLMHeadModel (in long_conv_lm.py), except no decoder head, we just pass back the hidden states for downstream tasks."""
 
     def __init__(self, d_model: int, n_layer: int, d_inner: int, vocab_size: int,
@@ -25,14 +25,16 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin):
                  layer_norm_epsilon: float = 1e-5, initializer_cfg=None,
                  fused_mlp=False, fused_dropout_add_ln=False, residual_in_fp32=False,
                  pad_vocab_size_multiple: int = 1, sequence_parallel=True,
-                 device=None, dtype=None, return_hidden_state=False, **kwargs) -> None:
+                 device=None, dtype=None, return_hidden_state=False, adjust_embedding = False, **kwargs) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         self.d_model = d_model  # for decoder
         self.process_group = process_group
         self.return_hidden_state = return_hidden_state
+        # print('original vocab size', vocab_size)
         if vocab_size % pad_vocab_size_multiple != 0:
             vocab_size += pad_vocab_size_multiple - (vocab_size % pad_vocab_size_multiple)
+        # print('padded vocab size', vocab_size)
         self.backbone = LMBackbone(
             d_model=d_model, n_layer=n_layer, d_inner=d_inner, vocab_size=vocab_size,
             process_group=process_group,
@@ -42,11 +44,14 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin):
             dropout_cls=dropout_cls, layer_norm_epsilon=layer_norm_epsilon,
             initializer_cfg=initializer_cfg, fused_mlp=fused_mlp,
             fused_dropout_add_ln=fused_dropout_add_ln, residual_in_fp32=residual_in_fp32,
-            sequence_parallel=sequence_parallel,
+            sequence_parallel=sequence_parallel, adjust_embedding = adjust_embedding,
             **factory_kwargs, **kwargs
         )
         if process_group is None:
             self.lm_head = nn.Linear(d_model, vocab_size, bias=False, **factory_kwargs)
+            # print(vocab_size)
+            # print(self.lm_head.weight.shape)
+            #this stuff is all the correct shape
         else:
             if ColumnParallelLinear is None:
                 raise ImportError('fused_dense_lib is not installed')
@@ -57,9 +62,11 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin):
         # Initialize weights and apply final processing
         self.apply(partial(_init_weights, n_layer=n_layer,
                            **(initializer_cfg if initializer_cfg is not None else {})))
-        self.tie_weights()
+        if not adjust_embedding:
+            self.tie_weights()
 
     def tie_weights(self):
+        
         self.lm_head.weight = self.backbone.embeddings.word_embeddings.weight
         if self.process_group is not None:
             sync_shared_params(self, self.process_group)
@@ -68,6 +75,7 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin):
         hidden_states = self.backbone(input_ids, position_ids=position_ids,
                                       inference_params=inference_params)
         # we only need the last hidden state for embeddings (decoder head will predict classification task)
+        #lm head will NOT use the downstream task
         return hidden_states, None
 
     @property

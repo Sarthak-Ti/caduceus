@@ -15,6 +15,9 @@ from transformers.models.gpt2.configuration_gpt2 import GPT2Config
 
 from einops import rearrange
 
+import sys
+sys.path.append('/data/leslie/sarthak/hyena/hyena-dna/flash-attention')
+
 from flash_attn.modules.mha import MHA, ParallelMHA
 from flash_attn.modules.mlp import Mlp, FusedMLP, ParallelFusedMLP
 from flash_attn.modules.block import Block
@@ -60,8 +63,12 @@ def create_mixer_cls(
         {"process_group": process_group, "sequence_parallel": sequence_parallel}
         if process_group is not None
         else {}
-    )
-    if attn_layer_idx is not None and layer_idx in attn_layer_idx:
+    ) #will be empty dict
+    # print(attn_cfg) #this and the layer idx are both None, uses default
+    # print(attn_layer_idx)
+    # import sys
+    # sys.exit()
+    if attn_layer_idx is not None and layer_idx in attn_layer_idx: #this gets ignored cuz attn_layer_idx is None
         causal = True if attn_cfg is None else attn_cfg.pop("causal", True)
         fused_bias_fc = (
             False if attn_cfg is None else attn_cfg.get("fused_bias_fc", False)
@@ -82,9 +89,12 @@ def create_mixer_cls(
             **factory_kwargs,
         )
     else:
+        # print(layer) #the details of the layer
         fused_bias_fc = False if layer is None else layer.get("fused_bias_fc", False)
         if process_group is not None:
             assert fused_bias_fc, "TensorParallel SSM requires fused_bias_fc"
+        # print(registry.layer) #the options we will use
+        # print(layer_idx) #just 0 for the first 1, 1 for the 2nd etc.
         mixer_cls = instantiate(
             registry.layer,
             layer,
@@ -272,6 +282,7 @@ class LMBackbone(nn.Module):
         checkpoint_mixer=False,
         device=None,
         dtype=None,
+        adjust_embedding = False,
         **kwargs,
     ) -> None:
         factory_kwargs = {"device": device, "dtype": dtype}
@@ -279,15 +290,18 @@ class LMBackbone(nn.Module):
         self.process_group = process_group
         self.sequence_parallel = sequence_parallel
         self.residual_in_fp32 = residual_in_fp32
-
+        
+        if not adjust_embedding:
+            adjust_embedding = vocab_size
+            
         if process_group is None:
             self.embeddings = GPT2Embeddings(
-                d_model, vocab_size, max_position_embeddings, **factory_kwargs
+                d_model, adjust_embedding, max_position_embeddings, **factory_kwargs
             )
         else:
             self.embeddings = ParallelGPT2Embeddings(
                 d_model,
-                vocab_size,
+                adjust_embedding,
                 max_position_embeddings,
                 process_group=process_group,
                 sequence_parallel=self.sequence_parallel,
@@ -303,7 +317,7 @@ class LMBackbone(nn.Module):
         self.fused_dropout_add_ln = fused_dropout_add_ln
         if self.fused_dropout_add_ln and dropout_add_layer_norm is None:
             raise ImportError("dropout_add_layer_norm is not installed")
-
+        
         self.layers = nn.ModuleList(
             [
                 create_block(
@@ -366,6 +380,9 @@ class LMBackbone(nn.Module):
         hidden_states = self.embeddings(
             input_ids, position_ids=position_ids, **embedding_kwargs
         )
+        # print('embedding:', hidden_states.shape)
+        # import sys
+        # sys.exit()
         residual = None
         mixer_kwargs = (
             {"seqlen": input_ids.shape[1]}
@@ -378,6 +395,9 @@ class LMBackbone(nn.Module):
             hidden_states, residual = layer(
                 hidden_states, residual, mixer_kwargs=mixer_kwargs
             )
+        # print(hidden_states.shape) # only 1 layer and output is the same shape
+        # import sys
+        # sys.exit()
         if not self.fused_dropout_add_ln:
             dropped = self.drop_f(hidden_states)
             residual = (dropped + residual) if residual is not None else dropped
@@ -456,6 +476,12 @@ class ConvLMHeadModel(nn.Module, GenerationMixin):
             **factory_kwargs,
             **kwargs,
         )
+        # print("process_group", process_group)
+        # print("ColumnParallelLinear", ColumnParallelLinear)
+        # print("d model", d_model)
+        # print('vocab_size', vocab_size)
+        # import sys
+        # sys.exit()
         if process_group is None:
             self.lm_head = nn.Linear(d_model, vocab_size, bias=False, **factory_kwargs)
         else:
@@ -487,9 +513,15 @@ class ConvLMHeadModel(nn.Module, GenerationMixin):
     def forward(
         self, input_ids, position_ids=None, inference_params=None, state=None
     ):  # state for the repo interface
-        hidden_states = self.backbone(
+        # print('input_id',input_ids.shape) # is 512 x 1023, let's see if inputs are as we expect
+        # print(input_ids[0,:])
+        # print('position_id', position_ids.shape) #it is just none
+        hidden_states = self.backbone( #input ids is just the basic inputs
             input_ids, position_ids=position_ids, inference_params=inference_params
         )
+        # print(hidden_states.shape) this gives us a 512x1023x128 vector
+        # import sys
+        # sys.exit()
         lm_logits = self.lm_head(hidden_states)
         # During inference, we want the full logit for sampling
         if ColumnParallelLinear is not None and inference_params is not None:
@@ -502,7 +534,7 @@ class ConvLMHeadModel(nn.Module, GenerationMixin):
         return CausalLMOutput(logits=lm_logits), None
 
 
-class DNAEmbeddingModel(nn.Module, GenerationMixin):
+class DNAEmbeddingModel(nn.Module, GenerationMixin): #this model isn't used, it's the other one in the separate file
 
     def __init__(self, d_model: int, n_layer: int, d_inner: int, vocab_size: int,
                  process_group=None, layer=None,
@@ -519,6 +551,7 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin):
         self.return_hidden_state = return_hidden_state
         if vocab_size % pad_vocab_size_multiple != 0:
             vocab_size += pad_vocab_size_multiple - (vocab_size % pad_vocab_size_multiple)
+        print('vocab_size', vocab_size)
         self.backbone = LMBackbone(
             d_model=d_model, n_layer=n_layer, d_inner=d_inner, vocab_size=vocab_size,
             process_group=process_group,
@@ -566,7 +599,7 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin):
         return self.d_model
 
 
-def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True):
+def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, add_embeddings=False, ignore_embeddings = False):
     """
 
     Modifies state dict loading with custom function.  Every layer in new model will be
@@ -587,7 +620,15 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True):
     )
 
     model_new_params_dict = model.state_dict()
+    # print(model.state_dict())
+    # for key in model.state_dict().keys():
+    #     print(key)
+    # same as in the cCRE_DNase_level_testing.ipynb
     updated_model_state_dict = {}
+    
+    # print(model_new_params_dict.keys())
+    
+    # print(model_new_params_dict['backbone.embeddings.word_embeddings.weight'].shape) #this is 20x128, which is from our model
 
     # loop through scratch model keys (pretrained may have extra stuff)
     for key in sorted(model_new_params_dict.keys()):
@@ -605,17 +646,73 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True):
             print("found head key / parameter, load from scratch", key)
             # using scratch by default, nothing needed
             used_params = model_new_params_dict[key]
+            
+        #if you want to partially restore them, you can do this approach
+        
+        # elif add_embeddings and 'embedding' in key: #currently unused
+        #     print("adding embeddings:", key)
+        #     # Initialize a new embedding layer with the updated vocabulary size
+        #     # new_embeddings = GPT2Embeddings(model.state_dict()[key].shape[1], model.state_dict()[key].shape[0]+add_embeddings, )
+        #     #not using the GPT2Embeddings, as that just combines the position with it, we don't care about that, just want the words
+        #     # print(loaded_params)
+        #     # print(model.state_dict()[key].shape) #should be 16 x 128, and it is!
+            
+        #     old_vocab = model.state_dict()[key].shape[0]
+        #     old_dim = model.state_dict()[key].shape[1]
+            
+        #     #what we need to do is first save out the extra ones, because they were initialized in a special way
+        #     saved_embeddings = model.state_dict()[key][0:add_embeddings] #will be the amount of extra ones by 128
+            
+        #     #now we create a new nn.embeddings
+        #     new_embeddings = torch.nn.Embedding(old_vocab+add_embeddings,old_dim)
+            
+        #     # Copy the original embeddings for the known tokens
+        #     new_embeddings.weight.data[:old_vocab] = loaded_params
+        #     # Randomly initialize the embeddings for the new tokens
+        #     new_embeddings.weight.data[old_vocab:] = saved_embeddings #this is a hacky way, could just initialize the same way they did, but it's whatever
+        #     used_params = new_embeddings.weight.data #assuming that the loaded_params is indeed just the .weights.data
+        #     print(used_params.shape)
+        #     # import sys
+        #     # sys.exit()
+        
+        # elif 'embedding' in key:
+        #     print(loaded_params)
+        #     print(loaded_params.shape) #also 20 x 128
+            
+        elif ignore_embeddings and 'embedding' in key: #if you just want to restart the embeddings
+            print("found embedding key / parameter, load from scratch", key)
+            used_params = model_new_params_dict[key]
+            # print(used_params)
+            # print(used_params.shape) #is vocab size x 128
+            # import sys
+            # sys.exit()
+            
+        # elif adjust_embedding and 'embedding' in key: #if you just want to change the size of the embedding but still load it
+        #     print("found embedding key / parameter, DO NOT load from scratch", key)
+        #     #create a random embedding size 20x128
+        #     new_embeddings = torch.nn.Embedding(20,128)
+        #     used_params = new_embeddings.weight.data
 
         elif "decoder" in key:
             print("found decoder key / parameter, load from scratch", key)
             used_params = model_new_params_dict[key]
         else:
-            print('key: shape MATCH, loading', key)  # load matched weights
+            print('key: shape MATCH, loading', key)  # load matched weights #I commented out because I don't want it
             used_params = loaded_params
 
         # we need to pass back a state dict with the '.model' prefix!!!!!
         key_with_prefix = 'model.' + key
         updated_model_state_dict[key_with_prefix] = used_params
+
+        # if add_embeddings: #now implemented in the main train.py file
+        #     print("adding embeddings:", key)
+            
+            
+        #     old_vocab = model.state_dict()[key].shape[0]
+        #     old_dim = model.state_dict()[key].shape[1]
+            
+        #     #what we need to do is first save out the extra ones, because they were initialized in a special way
+        #     saved_embeddings = model.state_dict()[key][0:add_embeddings]
 
     if freeze_backbone:
         print("freezing model backbone params!")

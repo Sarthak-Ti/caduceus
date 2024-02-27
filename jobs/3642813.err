@@ -1,0 +1,26 @@
+Error executing job with overrides: ['wandb.group=DNase_f_allcelltypes', 'experiment=hg38/DNase_allcelltypes_finetune_continue']
+Traceback (most recent call last):
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/train.py", line 750, in main
+    config = utils.train.process_config(config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/src/utils/train.py", line 69, in process_config
+    config = omegaconf_filter_keys(config, lambda k: not k.startswith('__'))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/src/utils/config.py", line 121, in omegaconf_filter_keys
+    {k: omegaconf_filter_keys(v, fn) for k, v in d.items() if fn(k)}
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/src/utils/config.py", line 121, in <dictcomp>
+    {k: omegaconf_filter_keys(v, fn) for k, v in d.items() if fn(k)}
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/src/utils/config.py", line 121, in omegaconf_filter_keys
+    {k: omegaconf_filter_keys(v, fn) for k, v in d.items() if fn(k)}
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/src/utils/config.py", line 121, in <dictcomp>
+    {k: omegaconf_filter_keys(v, fn) for k, v in d.items() if fn(k)}
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/src/utils/config.py", line 121, in omegaconf_filter_keys
+    {k: omegaconf_filter_keys(v, fn) for k, v in d.items() if fn(k)}
+                                                 ^^^^^^^^^
+omegaconf.errors.InterpolationKeyError: Interpolation key 'val.monitor' not found
+    full_key: callbacks.model_checkpoint.monitor
+    object_type=dict
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

@@ -10,6 +10,18 @@ import src.utils.train
 
 log = src.utils.train.get_logger(__name__)
 
+import inspect
+
+# def trace_call():
+#     stack = inspect.stack()
+#     # Adjust the index to 2 to get the caller of the function that called trace_call
+#     #let's print a few of the values
+#     for i in range(1,len(stack)-1):
+#         caller_frame = stack[i]  # This goes two levels up in the call stack
+#         frame_info = inspect.getframeinfo(caller_frame[0])
+
+#         print(f"Called from {frame_info.filename} at line {frame_info.lineno} in function {frame_info.function}")
+
 
 class Decoder(nn.Module):
     """This class doesn't do much but just signals the interface that Decoders are expected to adhere to
@@ -40,6 +52,10 @@ class SequenceDecoder(Decoder):
         self, d_model, d_output=None, l_output=None, use_lengths=False, mode="last"
     ):
         super().__init__()
+        # trace_call() #called via instantiate, which isn't too helpful honestly, going more out we see it comes from
+        #that was called form _isntantiate like 250 lines below this
+        # import sys
+        # sys.exit()
 
         self.output_transform = nn.Identity() if d_output is None else nn.Linear(d_model, d_output)
 
@@ -60,6 +76,11 @@ class SequenceDecoder(Decoder):
 
         if mode == 'ragged':
             assert not use_lengths
+            
+        # print(f"SequenceDecoder: mode={mode}, l_output={l_output}, use_lengths={use_lengths}, d_output={d_output}, d_model={d_model}")
+        # import sys
+        # sys.exit()
+        #wondering why this is the casea, but d_output is none for some reason with my regression thing, think I need to define the task
 
     def forward(self, x, state=None, lengths=None, l_output=None, mask=None):
         """
@@ -134,6 +155,12 @@ class SequenceDecoder(Decoder):
             x = x.squeeze(-2)
 
         x = self.output_transform(x)
+        
+        # print('output of forward from decoders.py', x.shape)
+        # print(x) #was 1024 x 128 because the decoder was identity and using dna embedding model
+        # #but when we added in the experiment yaml about d_output being 1, now we see it is 1024 x 1 as we hoped! 
+        # import sys
+        # sys.exit()
 
         return x
 

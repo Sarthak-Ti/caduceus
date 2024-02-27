@@ -1,0 +1,23 @@
+# @package _global_
+defaults:
+  - /trainer: default
+  - /loader: default
+  - /dataset: DNase_ctst
+  # - /task: regression #one of the options, uses mse loss
+  - /optimizer: adamw
+  - /scheduler: plateau
+  - /callbacks: [base, model_every_epoch]
+
+train:
+  monitor: val/mse # the metric to monitor for early stopping
+  mode: min
+
+task:
+  _name_: regression
+  loss: mse
+  # torchmetrics: ['mse'] no need for this I don't think like perplexity, we just care about mse
+
+encoder: id
+decoder:
+  _name_: sequence #the generic class, could do NDDecoder too
+  mode: pool #to average the embeddings

@@ -17,7 +17,7 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities import rank_zero_only, rank_zero_warn
 from pytorch_lightning.strategies.ddp import DDPStrategy
 from tqdm.auto import tqdm
-from pytorch_lightning.strategies.ddp import DDPStrategy
+# from pytorch_lightning.strategies.ddp import DDPStrategy #literally just repeated 2 lines above
 
 import src.models.nn.utils as U
 import src.utils as utils
@@ -135,6 +135,8 @@ class SequenceLightningModule(pl.LightningModule):
         self.save_hyperparameters(config, logger=False)
 
         # Dataset arguments
+        # print(self.hparams.dataset._name_) is cCRE or DNase depending on what you need
+        # print(SequenceDataset.registry)
         self.dataset = SequenceDataset.registry[self.hparams.dataset._name_](
             **self.hparams.dataset
         )
@@ -181,6 +183,10 @@ class SequenceLightningModule(pl.LightningModule):
         self.task = utils.instantiate(
             tasks.registry, self.hparams.task, dataset=self.dataset, model=self.model
         )
+        # print("Task:", self.task)
+        # import sys
+        # #and close out the file
+        # sys.exit()
 
         # Create encoders and decoders
         encoder = encoders.instantiate(
@@ -210,9 +216,12 @@ class SequenceLightningModule(pl.LightningModule):
                 partial=True,
             )
             state_dict = model_state_hook(self.model, state_dict)
-
+        # print(self.model.lm_head.weight.shape) #this is the wrong shape, could find some way to modify it here
         print("Custom load_state_dict function is running.")
-
+        # print("State dict keys:", state_dict.keys())
+        # print(state_dict['model.backbone.embeddings.word_embeddings.weight'].shape)
+        # print(state_dict['model.lm_head.weight'].shape)
+        # print(self.model) #all have an embedding size 20x128
         # strict==True will require all modules to match
         # strict==False can allow encoder/decoder to be loaded from scratch too
         return super().load_state_dict(state_dict, strict=strict)
@@ -305,6 +314,11 @@ class SequenceLightningModule(pl.LightningModule):
     #     return x, y, w
 
     def forward(self, batch):
+        # print(self.encoder)
+        # print(self.model)
+        # print(self.decoder)
+        # import sys
+        # sys.exit()
         return self.task.forward(batch, self.encoder, self.model, self.decoder, self._state)
 
     def step(self, x_t):
@@ -319,10 +333,20 @@ class SequenceLightningModule(pl.LightningModule):
 
     def _shared_step(self, batch, batch_idx, prefix="train"):
 
-        self._process_state(batch, batch_idx, train=(prefix == "train"))
-        x, y, w = self.forward(batch)
-
+        self._process_state(batch, batch_idx, train=(prefix == "train")) #does some state stuff
+        x, y, w = self.forward(batch) #here the forward is gone through, x is actually y hat, and y is the output, w is the parameters
+        #expect x to be long x 16 since it's the logits
+        # print("x shape", x.shape) #it is correct, as we expected
+        # print("y shape", y.shape)
+        # print("w shape", w) #just empty dict with state none
+        # import sys
+        # sys.exit()
         # Loss
+        # print(self.loss) #both are the same of <function discard_kwargs.<locals>.f_ at 0x2aba86612c00>
+        #this is located at src.models.nn.utils
+        # print(self.loss_val)
+        # import sys
+        # sys.exit()
         if prefix == 'train':
             loss = self.loss(x, y, **w)
         else:
@@ -364,27 +388,29 @@ class SequenceLightningModule(pl.LightningModule):
         # Reset training torchmetrics
         self.task._reset_torchmetrics("train")
 
-    def training_epoch_end(self, outputs):
-        # Log training torchmetrics
-        super().training_epoch_end(outputs)
+    # def training_epoch_end(self, outputs):
+    #     # Log training torchmetrics
+    #     super().training_epoch_end(outputs)
+    #     #inherits the training_epoch_end of the parent class, which is the basic pl.lightningmodule.
+    #     #we will just comment it out since it doesn't seem to do anything using the basic values, doesn't seem to be called anywhere
 
     def on_validation_epoch_start(self):
         # Reset all validation torchmetrics
         for name in self.val_loader_names:
             self.task._reset_torchmetrics(name)
 
-    def validation_epoch_end(self, outputs):
-        # Log all validation torchmetrics
-        super().validation_epoch_end(outputs)
+    # def validation_epoch_end(self, outputs):
+    #     # Log all validation torchmetrics
+    #     super().validation_epoch_end(outputs)
 
     def on_test_epoch_start(self):
         # Reset all test torchmetrics
         for name in self.test_loader_names:
             self.task._reset_torchmetrics(name)
 
-    def test_epoch_end(self, outputs):
-        # Log all test torchmetrics
-        super().test_epoch_end(outputs)
+    # def test_epoch_end(self, outputs):
+    #     # Log all test torchmetrics
+    #     super().test_epoch_end(outputs)
 
     def training_step(self, batch, batch_idx, dataloader_idx=0):
         loss = self._shared_step(batch, batch_idx, prefix="train")
@@ -571,6 +597,9 @@ class SequenceLightningModule(pl.LightningModule):
         test_loader_names, test_loaders = self._eval_dataloaders()
         self.test_loader_names = ["final/" + name for name in test_loader_names]
         return test_loaders
+    
+    #save model after training
+    # def on_train_end()
 
 
 ### pytorch-lightning utils and entrypoint ###
@@ -623,6 +652,7 @@ def create_trainer(config, **kwargs):
     log.info(f"Instantiating trainer <{config.trainer._target_}>")
     # special processing for seqlen warmup scheduler (reload)
     if config.callbacks.get("seqlen_warmup_reload", None) is not None:
+        # print('IT is the IF')
         # we need to instantiate manually instead of with hydra, since it expects a dict instead of a hydra config for the accumulate_grad_batches
         # so we convert everything to dicts (from hydra configs)
         trainer_config_dict = dict(config.trainer)
@@ -641,6 +671,7 @@ def create_trainer(config, **kwargs):
         trainer_config_dict['strategy'] = DDPStrategy(find_unused_parameters=False, gradient_as_bucket_view=True)
         trainer = pl.Trainer(**trainer_config_dict, callbacks=callbacks, logger=logger)
     else:
+        # print('IT is the ELSE') #this is what runs
         trainer = hydra.utils.instantiate(config.trainer, callbacks=callbacks, logger=logger)    
 
     return trainer
@@ -651,15 +682,60 @@ def train(config):
         pl.seed_everything(config.train.seed, workers=True)
     trainer = create_trainer(config)
     model = SequenceLightningModule(config)
+    
+    #check which device the model is on
+    # param = next(model.parameters())
+    # print(param.device)
+    # if isinstance(model, torch.nn.DataParallel):
+    #     print(model.device_ids)
+    #it appears to be cpu and not data parallel yet
+    # model = model.to('cuda:0')
 
     # Load pretrained_model if specified
     if config.train.get("pretrained_model_path", None) is not None:
         # PTL style.  Note, method returns a new model object, and need to pass config.
+        # print(config)
         model = SequenceLightningModule.load_from_checkpoint(
             config.train.pretrained_model_path,
             config=config,
             strict=config.train.pretrained_model_strict_load,
         )
+    
+    # print(model)
+    #below is a hack to access the embeddings, we will save it out once, then can randomly access it
+    #set seed, so should be repeatable, and honestly not the worst thing, just grabbing them all
+    #you set the ignore_embeddings to true, and then you can access the embeddings and save them out
+    # embeddings = model.model.backbone.embeddings.word_embeddings
+    # #and save them out
+    # torch.save(embeddings, '/data/leslie/sarthak/data/saved_embeddings.pt')
+    # import sys
+    # sys.exit()
+    
+                
+    # word_embeddings_layer = self.model.backbone.embeddings.word_embeddings #this accesses the embeddings
+    # print(self.hparams.model) #dict of the stuff under model in the experiment
+    # print(self.hparams.train) # this is what we need to decide to add embeddings or not
+    # print("Model:", self.model)
+    # print(word_embeddings_layer) #class Embedding(20,128), we know how to modify that and access the embeddings
+    
+    '''A hack to ensure that we can add embeddings to the modle while keeping the old embeddings
+    This approach is useful to increase the vocabulary size of the model'''
+    if config.train['pretrained_model_state_hook']['add_embeddings']:
+        add_embeddings = config.train['pretrained_model_state_hook']['add_embeddings']
+        #we add the number of embeddings equal to the model
+        original_embeddings = model.model.backbone.embeddings.word_embeddings
+        # new_vocab_size = original_embeddings.num_embeddings + add_embeddings
+        # new_embedding_layer = torch.nn.Embedding(new_vocab_size, original_embeddings.embedding_dim)
+        # nn.init.normal_(module.weight, std=initializer_range) #no need to use since we grabbed their values
+        saved_embeddings = torch.load('/data/leslie/sarthak/data/saved_embeddings.pt')
+        saved_embeddings.weight.data[:12] = original_embeddings.weight.data[:12]
+        model.model.backbone.embeddings.word_embeddings = saved_embeddings
+        print(saved_embeddings)
+    
+    # import sys
+    # sys.exit()
+        
+    
 
     # Run initial validation epoch (useful for debugging, finetuning)
     if config.train.validate_at_start:
@@ -689,6 +765,7 @@ def main(config: OmegaConf):
     utils.train.print_config(config, resolve=True)
 
     train(config)
+    print('model trained')
 
 
 if __name__ == "__main__":

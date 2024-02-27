@@ -45,6 +45,9 @@ class BaseTask:
         # Wrap loss and metrics so that they accept kwargs and
 
         # Create loss function
+        # print(loss)
+        # import sys
+        # sys.exit()
         self.loss = instantiate(M.output_metric_fns, loss, partial=True)
         self.loss = U.discard_kwargs(self.loss)
         if loss_val is not None:
@@ -164,22 +167,102 @@ class LMTask(BaseTask):
         """Passes a batch through the encoder, backbone, and decoder"""
         # z holds arguments such as sequence length
         x, y, *z = batch # z holds extra dataloader info such as resolution
+        # print("x shape: ", x.shape)
+        # print("y shape: ", y.shape) #x and y shape seems to be 512 x 1023, not sure why since batch size is 256
+        # print("z shape: ", z) #is an empty dict for now, because not doing transformer
+        # print("x one sample", x[0,:])
+        # print("y one sample", y[0,:])
+        # print('test pad', x[0,0:25])
+        if len(z) == 0:
+            z = {} #sets to an exmpty dict, seems dataloader can have some other options, only for encoder and decoder
+        else:
+            assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
+            z = z[0]
+        x, w = encoder(x, **z) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        #the x output should be identical, not sure what w is, probably some options
+        # print('w: ', w)
+        # print("state before model: ", _state)
+        x, state = model(x, **w, state=_state)
+        self._state = state
+        # print("state after model: ", state) #both are none
+        x, w = decoder(x, state=state, **z)
+        # print(torch.all(x.eq(w)))
+        # print("w after decoder: ", w) # just a dict with key state and value none
+        # print("x after decoder: ", x) #this is now a dict
+        x = x.logits
+        # print("x shape after logit: ", x.shape) #is (512 x 1023) x 16 which doesn't make sense, but that is the network output
+        #it is 523776 x 16, and then y is just the labels, so it is 523776 x 1
+        
+        #let's visualize the output before rearranging
+        # print(x.shape) #is now 512 x 1023 x 16 for the logits. batch size, then for each of the values the prediction for the 16 classes
+        # print(y.shape)
+        # print('example 15')
+        # print(x[15,100:102,:])
+        # print(y[15, 100:102]) #the actual values
+        # print('example 16')
+        # print(x[16,100:102,:])
+        # print(y[16, 100:102]) #the actual values
+        #looks as you expect, the predicted logits and the actual values
+        
+               
+        x = rearrange(x, '... C -> (...) C')
+        # print("x shape after rearrange: ", x.shape)
+        # print("y shape before rearrange: ", y.shape)
+        y = rearrange(y, '... -> (...)')
+        # print("y shape after rearrange: ", y.shape)
+        # import sys
+        # sys.exit()
+        return x, y, w
+
+
+class Regression(BaseTask): #my custom defined task
+    # def __init__(self, batch, encoder, model, decoder, _state):
+    #     super().__init__(dataset, model, loss, loss_val, metrics, torchmetrics)
+    #     self.loss = nn.MSELoss()
+    def forward(self, batch, encoder, model, decoder, _state, minimum=-10):
+        """Passes a batch through the encoder, backbone, and decoder"""
+        # z holds arguments such as sequence length
+        x, y, *z = batch
+        
+        # print("x shape: ", x.shape) # 1024 x 1023 as we expect
+        # print(x[:,0:7]) #it seems to just work... damn!
+        # # print("y shape: ", y.shape) #1024 x 1 again as expected!
+        # # print("z shape: ", z) #is empty
+        # import sys
+        # sys.exit()
+        # print('decoder:',decoder) #was identity until we set loose load, now it seems we can have a decoder, let's try again
+        #just set d_output and it's good
+        
         if len(z) == 0:
             z = {}
         else:
             assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
             z = z[0]
-        x, w = encoder(x, **z) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
-        x, state = model(x, **w, state=_state)
+            
+        x, w = encoder(x) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        x, state = model(x)
         self._state = state
         x, w = decoder(x, state=state, **z)
-
-        x = x.logits
-        x = rearrange(x, '... C -> (...) C')
-        y = rearrange(y, '... -> (...)')
-
+        # print(x.shape, y.shape, w) #with d_output=1 we find that x is 1024 x 1, y is 1024 x 1, and w is none. This is perfect and what we need!
+        # import sys
+        # sys.exit()
+        
+        #what we will do is now clamp the data to at minimum be -10
+        x = torch.clamp(x, min=minimum)
+        
         return x, y, w
 
+
+    # def metrics(self, x, y, **kwargs):
+    #     output_metrics = {
+    #         name: U.discard_kwargs(M.output_metric_fns[name])(x, y, **kwargs)
+    #         for name in self.metric_names if name in M.output_metric_fns
+    #     }
+    #     loss_metrics = {
+    #         name: U.discard_kwargs(M.loss_metric_fns[name])(x, y, self.loss, **kwargs)
+    #         for name in self.metric_names if name in M.loss_metric_fns
+    #     }
+    #     return {**output_metrics, **loss_metrics}
 
 class MultiClass(BaseTask):
     
@@ -385,4 +468,5 @@ registry = {
     'lm': LMTask,
     'hg38': HG38Task,
     "masked_multiclass": MaskedMultiClass,
+    'regression': Regression,
 }

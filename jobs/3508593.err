@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/evals/DNase_evals.py", line 77, in <module>
+    decoder.load_state_dict(decoder_state_dict, strict=True)
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/nn/modules/module.py", line 2152, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for SequenceDecoder:
+	size mismatch for output_transform.weight: copying a param with shape torch.Size([1, 128]) from checkpoint, the shape in current model is torch.Size([161, 128]).
+	size mismatch for output_transform.bias: copying a param with shape torch.Size([1]) from checkpoint, the shape in current model is torch.Size([161]).

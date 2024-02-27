@@ -13,6 +13,7 @@ train:
   mode: max
 
 encoder: id
+#very likely this is identity, but have to verify this
 
 # we need this for classification!
 decoder:

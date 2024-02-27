@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/evals/DNase_midpoint.py", line 114, in <module>
+    predict_array[start_idx:start_idx+b_size] = y_hat.detach().cpu().numpy()
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: can't assign a numpy.ndarray to a torch.FloatTensor

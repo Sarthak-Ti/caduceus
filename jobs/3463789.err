@@ -1,0 +1,171 @@
+Seed set to 2222
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: sarthak-ti. Use `wandb login --relogin` to force relogin
+wandb: wandb version 0.16.3 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.16.2
+wandb: Run data is saved locally in ./wandb/run-20240209_173900-vxsivee0
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run smart-firefly-14
+wandb: ⭐️ View project at https://wandb.ai/sarthak-ti/dna
+wandb: 🚀 View run at https://wandb.ai/sarthak-ti/dna/runs/vxsivee0
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name               | Type              | Params
+---------------------------------------------------------
+0 | model              | DNAEmbeddingModel | 438 K 
+1 | encoder            | Identity          | 0     
+2 | decoder            | SequenceDecoder   | 129   
+3 | train_torchmetrics | MetricCollection  | 0     
+4 | val_torchmetrics   | MetricCollection  | 0     
+5 | test_torchmetrics  | MetricCollection  | 0     
+---------------------------------------------------------
+438 K     Trainable params
+0         Non-trainable params
+438 K     Total params
+1.755     Total estimated model params size (MB)
+wandb: Network error (ReadTimeout), entering retry loop.
+Epoch 0, global step 6729: 'val/mse' reached 3.72499 (best 3.72499), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 1, global step 13458: 'val/mse' reached 3.63853 (best 3.63853), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 2, global step 20187: 'val/mse' was not in top 1
+Epoch 3, global step 26916: 'val/mse' reached 3.55482 (best 3.55482), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 4, global step 33645: 'val/mse' reached 3.53980 (best 3.53980), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 5, global step 40374: 'val/mse' reached 3.53621 (best 3.53621), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 6, global step 47103: 'val/mse' reached 3.51816 (best 3.51816), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 7, global step 53832: 'val/mse' reached 3.51100 (best 3.51100), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 8, global step 60561: 'val/mse' reached 3.50969 (best 3.50969), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 9, global step 67290: 'val/mse' reached 3.50389 (best 3.50389), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 10, global step 74019: 'val/mse' reached 3.49869 (best 3.49869), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 11, global step 80748: 'val/mse' was not in top 1
+Epoch 12, global step 87477: 'val/mse' reached 3.48925 (best 3.48925), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 13, global step 94206: 'val/mse' reached 3.48711 (best 3.48711), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 14, global step 100935: 'val/mse' was not in top 1
+Epoch 15, global step 107664: 'val/mse' reached 3.48544 (best 3.48544), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 16, global step 114393: 'val/mse' reached 3.48527 (best 3.48527), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 17, global step 121122: 'val/mse' reached 3.46893 (best 3.46893), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 18, global step 127851: 'val/mse' was not in top 1
+Epoch 19, global step 134580: 'val/mse' was not in top 1
+Epoch 20, global step 141309: 'val/mse' was not in top 1
+Epoch 21, global step 148038: 'val/mse' was not in top 1
+Epoch 22, global step 154767: 'val/mse' was not in top 1
+Epoch 23, global step 161496: 'val/mse' was not in top 1
+Epoch 24, global step 168225: 'val/mse' was not in top 1
+Epoch 25, global step 174954: 'val/mse' was not in top 1
+Epoch 26, global step 181683: 'val/mse' reached 3.46332 (best 3.46332), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 27, global step 188412: 'val/mse' was not in top 1
+Epoch 28, global step 195141: 'val/mse' was not in top 1
+Epoch 29, global step 201870: 'val/mse' was not in top 1
+Epoch 30, global step 208599: 'val/mse' was not in top 1
+Epoch 31, global step 215328: 'val/mse' was not in top 1
+Epoch 32, global step 222057: 'val/mse' was not in top 1
+Epoch 33, global step 228786: 'val/mse' reached 3.45247 (best 3.45247), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 34, global step 235515: 'val/mse' was not in top 1
+Epoch 35, global step 242244: 'val/mse' was not in top 1
+Epoch 36, global step 248973: 'val/mse' was not in top 1
+Epoch 37, global step 255702: 'val/mse' was not in top 1
+Epoch 38, global step 262431: 'val/mse' was not in top 1
+Epoch 39, global step 269160: 'val/mse' was not in top 1
+Epoch 40, global step 275889: 'val/mse' reached 3.45050 (best 3.45050), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 41, global step 282618: 'val/mse' reached 3.44889 (best 3.44889), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 42, global step 289347: 'val/mse' was not in top 1
+Epoch 43, global step 296076: 'val/mse' was not in top 1
+Epoch 44, global step 302805: 'val/mse' reached 3.44835 (best 3.44835), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 45, global step 309534: 'val/mse' was not in top 1
+Epoch 46, global step 316263: 'val/mse' was not in top 1
+Epoch 47, global step 322992: 'val/mse' was not in top 1
+Epoch 48, global step 329721: 'val/mse' reached 3.44280 (best 3.44280), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 49, global step 336450: 'val/mse' reached 3.44103 (best 3.44103), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 50, global step 343179: 'val/mse' was not in top 1
+Epoch 51, global step 349908: 'val/mse' reached 3.43874 (best 3.43874), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 52, global step 356637: 'val/mse' was not in top 1
+Epoch 53, global step 363366: 'val/mse' was not in top 1
+Epoch 54, global step 370095: 'val/mse' was not in top 1
+Epoch 55, global step 376824: 'val/mse' was not in top 1
+Epoch 56, global step 383553: 'val/mse' was not in top 1
+Epoch 57, global step 390282: 'val/mse' was not in top 1
+Epoch 58, global step 397011: 'val/mse' was not in top 1
+Epoch 59, global step 403740: 'val/mse' reached 3.43700 (best 3.43700), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 60, global step 410469: 'val/mse' was not in top 1
+Epoch 61, global step 417198: 'val/mse' was not in top 1
+Epoch 62, global step 423927: 'val/mse' was not in top 1
+Epoch 63, global step 430656: 'val/mse' was not in top 1
+Epoch 64, global step 437385: 'val/mse' was not in top 1
+Epoch 65, global step 444114: 'val/mse' was not in top 1
+Epoch 66, global step 450843: 'val/mse' was not in top 1
+Epoch 67, global step 457572: 'val/mse' was not in top 1
+Epoch 68, global step 464301: 'val/mse' was not in top 1
+Epoch 69, global step 471030: 'val/mse' reached 3.43110 (best 3.43110), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 70, global step 477759: 'val/mse' was not in top 1
+Epoch 71, global step 484488: 'val/mse' was not in top 1
+Epoch 72, global step 491217: 'val/mse' was not in top 1
+Epoch 73, global step 497946: 'val/mse' was not in top 1
+Epoch 74, global step 504675: 'val/mse' was not in top 1
+Epoch 75, global step 511404: 'val/mse' was not in top 1
+Epoch 76, global step 518133: 'val/mse' was not in top 1
+Epoch 77, global step 524862: 'val/mse' was not in top 1
+Epoch 78, global step 531591: 'val/mse' was not in top 1
+Epoch 79, global step 538320: 'val/mse' reached 3.42943 (best 3.42943), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 80, global step 545049: 'val/mse' was not in top 1
+Epoch 81, global step 551778: 'val/mse' was not in top 1
+Epoch 82, global step 558507: 'val/mse' reached 3.42509 (best 3.42509), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 83, global step 565236: 'val/mse' was not in top 1
+Epoch 84, global step 571965: 'val/mse' was not in top 1
+Epoch 85, global step 578694: 'val/mse' was not in top 1
+Epoch 86, global step 585423: 'val/mse' reached 3.41900 (best 3.41900), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 87, global step 592152: 'val/mse' was not in top 1
+Epoch 88, global step 598881: 'val/mse' was not in top 1
+Epoch 89, global step 605610: 'val/mse' was not in top 1
+Epoch 90, global step 612339: 'val/mse' was not in top 1
+Epoch 91, global step 619068: 'val/mse' reached 3.41767 (best 3.41767), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-09/17-38-16-568113/checkpoints/val/mse.ckpt' as top 1
+Epoch 92, global step 625797: 'val/mse' was not in top 1
+Epoch 93, global step 632526: 'val/mse' was not in top 1
+Epoch 94, global step 639255: 'val/mse' was not in top 1
+Epoch 95, global step 645984: 'val/mse' was not in top 1
+Epoch 96, global step 652713: 'val/mse' was not in top 1
+Epoch 97, global step 659442: 'val/mse' was not in top 1
+Epoch 98, global step 666171: 'val/mse' was not in top 1
+Epoch 99, global step 672900: 'val/mse' was not in top 1
+`Trainer.fit` stopped: `max_epochs=100` reached.
+wandb: WARNING No program path found, not creating job artifact. See https://docs.wandb.ai/guides/launch/create-job
+wandb: - 0.007 MB of 0.007 MB uploadedwandb: \ 0.007 MB of 0.270 MB uploadedwandb: 
+wandb: Run history:
+wandb:               epoch ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇███
+wandb:           test/loss █▆▄▃▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▂▂▁▁▂▁▁▂▁▂▁▁
+wandb:            test/mse █▆▄▃▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▂▂▁▁▂▁▁▂▁▂▁▁
+wandb:         timer/epoch ▂▄▁▂▂▂▃▅▇▇█▇▇▇▇█▇▆▃▁▃▃▃▃▁▆▆▇▆▆▇▇██▇▆▆▇▇▅
+wandb:          timer/step ▃▁▃▂▃▂▄▄▄▅▅▅█▅▅▅▃▃▅▄▃▃▂▁▃▃▂▃▃▅▃▆▃▇▆▄▄▄▄▅
+wandb:    timer/validation ▇█▂▄▄▄▂▄▃▃▄▃▄▄▃▅▄▄▂▁▃▃▃▄▂▂▂▄▂▂▄▄▅▄▅▂▃▄▄▃
+wandb:          train/loss █▄▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:           train/mse █▄▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:       trainer/epoch ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇███
+wandb: trainer/global_step ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇███
+wandb:        trainer/loss ▆▄█▂▅▄▃▃▄▂▄▄▂▆▄▄▂▃▄▃▃▅▄▁▃▅▂▃▄▃▃▃▅▅▁▅▃▄▃▅
+wandb:      trainer/lr/pg1 █▆▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:      trainer/lr/pg2 █▆▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:            val/loss █▆▄▃▃▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▁▂▁▁▂▁▁▂▁▂▁▁
+wandb:             val/mse █▆▄▃▃▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▁▂▁▁▂▁▁▂▁▂▁▁
+wandb: 
+wandb: Run summary:
+wandb:               epoch 99
+wandb:           test/loss 3.43292
+wandb:            test/mse 3.43292
+wandb:         timer/epoch 4466.35296
+wandb:          timer/step 0.58901
+wandb:    timer/validation 480.52136
+wandb:          train/loss 3.6236
+wandb:           train/mse 3.6236
+wandb:       trainer/epoch 99.0
+wandb: trainer/global_step 672899
+wandb:        trainer/loss 3.52577
+wandb:      trainer/lr/pg1 1e-05
+wandb:      trainer/lr/pg2 1e-05
+wandb:            val/loss 3.43484
+wandb:             val/mse 3.43484
+wandb: 
+wandb: 🚀 View run smart-firefly-14 at: https://wandb.ai/sarthak-ti/dna/runs/vxsivee0
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20240209_173900-vxsivee0/logs

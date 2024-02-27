@@ -163,23 +163,38 @@ def binary_accuracy(logits, y):
 def padded_cross_entropy(logits, y, pad_mask, pad_value=-1):
     """Will ignore the pad value in label (eg, -1)
     
-    logits: (batch_size, seq_len, vocab_size)
+    logits: (batch_size, seq_len, vocab_size) #is actually (batch_size * seq_len, vocab_size)
     y: (batch_size, seq_len)
     pad_mask: (batch_size, seq_len)
     
     """
-
+    
+    #actually this is not even used, we only use the normal cross entropy
+    
+    # print('y_shape',y.shape)
+    # print('y',y)
+    # print('pad_mask',pad_mask[0:25])
     # need to apply pad mask to y
-    y_pad = y + pad_mask * pad_value
-
-    logits = logits.view(-1, logits.shape[-1])
-    y_pad = y_pad.view(-1)
+    y_pad = y + pad_mask * pad_value #this is just to make sure the pad value is ignored
+    # import sys
+    # sys.exit()
+    logits = logits.view(-1, logits.shape[-1]) #all this does is flatten it to 1 dimension
+    y_pad = y_pad.view(-1) #also 1 dimensions it, then calculates cross entropy loss
     return F.cross_entropy(logits, y_pad, ignore_index=pad_value)
 
 
 def cross_entropy(logits, y, ignore_index=-100):
+    # print('y before view', y.shape)
     logits = logits.view(-1, logits.shape[-1])
     y = y.view(-1)
+    # print('y after view', y.shape) #is actually exactly the same
+    # print('y', y)
+    # import sys
+    # sys.exit()
+    
+    #let's visualize the logits a bit better
+    # print('example 15', logits[15])
+    
     return F.cross_entropy(logits, y, ignore_index=ignore_index)
 
 

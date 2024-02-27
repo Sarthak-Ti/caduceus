@@ -1,0 +1,39 @@
+Seed set to 2222
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: sarthak-ti. Use `wandb login --relogin` to force relogin
+wandb: wandb version 0.16.3 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.16.2
+wandb: Run data is saved locally in ./wandb/run-20240207_224140-wfwrntdl
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run devout-breeze-11
+wandb: ⭐️ View project at https://wandb.ai/sarthak-ti/dna
+wandb: 🚀 View run at https://wandb.ai/sarthak-ti/dna/runs/wfwrntdl
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name               | Type              | Params
+---------------------------------------------------------
+0 | model              | DNAEmbeddingModel | 438 K 
+1 | encoder            | Identity          | 0     
+2 | decoder            | SequenceDecoder   | 129   
+3 | train_torchmetrics | MetricCollection  | 0     
+4 | val_torchmetrics   | MetricCollection  | 0     
+5 | test_torchmetrics  | MetricCollection  | 0     
+---------------------------------------------------------
+438 K     Trainable params
+0         Non-trainable params
+438 K     Total params
+1.755     Total estimated model params size (MB)
+Epoch 0, global step 50369: 'val/mse' reached 3.79734 (best 3.79734), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-07/22-40-54-392625/checkpoints/val/mse.ckpt' as top 1
+wandb: Network error (ConnectTimeout), entering retry loop.
+Epoch 1, global step 100738: 'val/mse' reached 3.74021 (best 3.74021), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-07/22-40-54-392625/checkpoints/val/mse.ckpt' as top 1
+Epoch 2, global step 151107: 'val/mse' reached 3.70405 (best 3.70405), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-07/22-40-54-392625/checkpoints/val/mse.ckpt' as top 1
+
+Aborted!
+[rank: 0] Received SIGTERM: 15
+[rank: 0] Received SIGTERM: 15
+Terminated

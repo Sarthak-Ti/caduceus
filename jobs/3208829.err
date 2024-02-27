@@ -1,0 +1,277 @@
+Seed set to 2222
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+`Trainer(limit_train_batches=1.0)` was configured so 100% of the batches per epoch will be used..
+`Trainer(limit_val_batches=1.0)` was configured so 100% of the batches will be used..
+Lightning automatically upgraded your loaded checkpoint from v1.8.6 to v2.1.3. To apply the upgrade to your files permanently, run `python -m pytorch_lightning.utilities.upgrade_checkpoint ../../../../../../../../../data/leslie/sarthak/hyena/hyena-dna/hyenadna-tiny-1k-seqlen/weights.ckpt`
+wandb: Currently logged in as: sarthak-ti. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.16.2
+wandb: Run data is saved locally in ./wandb/run-20240129_173726-4b7ux478
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run ethereal-water-2
+wandb: ⭐️ View project at https://wandb.ai/sarthak-ti/dna
+wandb: 🚀 View run at https://wandb.ai/sarthak-ti/dna/runs/4b7ux478
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name               | Type             | Params
+--------------------------------------------------------
+0 | model              | ConvLMHeadModel  | 436 K 
+1 | encoder            | Identity         | 0     
+2 | decoder            | Identity         | 0     
+3 | train_torchmetrics | MetricCollection | 0     
+4 | val_torchmetrics   | MetricCollection | 0     
+5 | test_torchmetrics  | MetricCollection | 0     
+--------------------------------------------------------
+436 K     Trainable params
+0         Non-trainable params
+436 K     Total params
+1.744     Total estimated model params size (MB)
+Epoch 0, global step 3345: 'test/loss' reached 1.24168 (best 1.24168), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 1, global step 6690: 'test/loss' was not in top 1
+Epoch 2, global step 10035: 'test/loss' reached 1.24014 (best 1.24014), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 3, global step 13380: 'test/loss' reached 1.23774 (best 1.23774), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 4, global step 16725: 'test/loss' was not in top 1
+Epoch 5, global step 20070: 'test/loss' was not in top 1
+Epoch 6, global step 23415: 'test/loss' reached 1.23373 (best 1.23373), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 7, global step 26760: 'test/loss' was not in top 1
+Epoch 8, global step 30105: 'test/loss' was not in top 1
+Epoch 9, global step 33450: 'test/loss' reached 1.23307 (best 1.23307), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 10, global step 36795: 'test/loss' was not in top 1
+Epoch 11, global step 40140: 'test/loss' reached 1.23272 (best 1.23272), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 12, global step 43485: 'test/loss' reached 1.23136 (best 1.23136), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 13, global step 46830: 'test/loss' was not in top 1
+Epoch 14, global step 50175: 'test/loss' reached 1.23127 (best 1.23127), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 15, global step 53520: 'test/loss' was not in top 1
+Epoch 16, global step 56865: 'test/loss' was not in top 1
+Epoch 17, global step 60210: 'test/loss' reached 1.23017 (best 1.23017), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 18, global step 63555: 'test/loss' was not in top 1
+Epoch 19, global step 66900: 'test/loss' was not in top 1
+Epoch 20, global step 70245: 'test/loss' was not in top 1
+Epoch 21, global step 73590: 'test/loss' was not in top 1
+Epoch 22, global step 76935: 'test/loss' was not in top 1
+Epoch 23, global step 80280: 'test/loss' reached 1.22979 (best 1.22979), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 24, global step 83625: 'test/loss' reached 1.22953 (best 1.22953), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 25, global step 86970: 'test/loss' was not in top 1
+Epoch 26, global step 90315: 'test/loss' reached 1.22932 (best 1.22932), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 27, global step 93660: 'test/loss' reached 1.22858 (best 1.22858), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 28, global step 97005: 'test/loss' was not in top 1
+Epoch 29, global step 100350: 'test/loss' reached 1.22796 (best 1.22796), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 30, global step 103695: 'test/loss' was not in top 1
+Epoch 31, global step 107040: 'test/loss' was not in top 1
+Epoch 32, global step 110385: 'test/loss' was not in top 1
+Epoch 33, global step 113730: 'test/loss' was not in top 1
+Epoch 34, global step 117075: 'test/loss' was not in top 1
+Epoch 35, global step 120420: 'test/loss' was not in top 1
+Epoch 36, global step 123765: 'test/loss' was not in top 1
+Epoch 37, global step 127110: 'test/loss' reached 1.22764 (best 1.22764), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 38, global step 130455: 'test/loss' reached 1.22764 (best 1.22764), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 39, global step 133800: 'test/loss' reached 1.22744 (best 1.22744), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 40, global step 137145: 'test/loss' reached 1.22723 (best 1.22723), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 41, global step 140490: 'test/loss' was not in top 1
+Epoch 42, global step 143835: 'test/loss' reached 1.22708 (best 1.22708), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 43, global step 147180: 'test/loss' was not in top 1
+Epoch 44, global step 150525: 'test/loss' was not in top 1
+Epoch 45, global step 153870: 'test/loss' was not in top 1
+Epoch 46, global step 157215: 'test/loss' was not in top 1
+Epoch 47, global step 160560: 'test/loss' reached 1.22707 (best 1.22707), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 48, global step 163905: 'test/loss' was not in top 1
+Epoch 49, global step 167250: 'test/loss' reached 1.22624 (best 1.22624), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 50, global step 170595: 'test/loss' was not in top 1
+Epoch 51, global step 173940: 'test/loss' was not in top 1
+Epoch 52, global step 177285: 'test/loss' was not in top 1
+Epoch 53, global step 180630: 'test/loss' reached 1.22623 (best 1.22623), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 54, global step 183975: 'test/loss' was not in top 1
+Epoch 55, global step 187320: 'test/loss' was not in top 1
+Epoch 56, global step 190665: 'test/loss' was not in top 1
+Epoch 57, global step 194010: 'test/loss' was not in top 1
+Epoch 58, global step 197355: 'test/loss' was not in top 1
+Epoch 59, global step 200700: 'test/loss' reached 1.22578 (best 1.22578), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 60, global step 204045: 'test/loss' was not in top 1
+Epoch 61, global step 207390: 'test/loss' was not in top 1
+Epoch 62, global step 210735: 'test/loss' was not in top 1
+Epoch 63, global step 214080: 'test/loss' was not in top 1
+Epoch 64, global step 217425: 'test/loss' was not in top 1
+Epoch 65, global step 220770: 'test/loss' was not in top 1
+Epoch 66, global step 224115: 'test/loss' was not in top 1
+Epoch 67, global step 227460: 'test/loss' was not in top 1
+Epoch 68, global step 230805: 'test/loss' reached 1.22574 (best 1.22574), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 69, global step 234150: 'test/loss' reached 1.22541 (best 1.22541), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 70, global step 237495: 'test/loss' was not in top 1
+Epoch 71, global step 240840: 'test/loss' was not in top 1
+Epoch 72, global step 244185: 'test/loss' was not in top 1
+Epoch 73, global step 247530: 'test/loss' was not in top 1
+Epoch 74, global step 250875: 'test/loss' reached 1.22523 (best 1.22523), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 75, global step 254220: 'test/loss' was not in top 1
+Epoch 76, global step 257565: 'test/loss' was not in top 1
+Epoch 77, global step 260910: 'test/loss' was not in top 1
+Epoch 78, global step 264255: 'test/loss' was not in top 1
+Epoch 79, global step 267600: 'test/loss' reached 1.22498 (best 1.22498), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 80, global step 270945: 'test/loss' was not in top 1
+Epoch 81, global step 274290: 'test/loss' was not in top 1
+Epoch 82, global step 277635: 'test/loss' was not in top 1
+Epoch 83, global step 280980: 'test/loss' was not in top 1
+Epoch 84, global step 284325: 'test/loss' was not in top 1
+Epoch 85, global step 287670: 'test/loss' was not in top 1
+Epoch 86, global step 291015: 'test/loss' reached 1.22486 (best 1.22486), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 87, global step 294360: 'test/loss' was not in top 1
+Epoch 88, global step 297705: 'test/loss' was not in top 1
+Epoch 89, global step 301050: 'test/loss' reached 1.22480 (best 1.22480), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 90, global step 304395: 'test/loss' was not in top 1
+Epoch 91, global step 307740: 'test/loss' reached 1.22447 (best 1.22447), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 92, global step 311085: 'test/loss' was not in top 1
+Epoch 93, global step 314430: 'test/loss' was not in top 1
+Epoch 94, global step 317775: 'test/loss' was not in top 1
+Epoch 95, global step 321120: 'test/loss' reached 1.22430 (best 1.22430), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 96, global step 324465: 'test/loss' was not in top 1
+Epoch 97, global step 327810: 'test/loss' was not in top 1
+Epoch 98, global step 331155: 'test/loss' was not in top 1
+Epoch 99, global step 334500: 'test/loss' was not in top 1
+Epoch 100, global step 337845: 'test/loss' was not in top 1
+Epoch 101, global step 341190: 'test/loss' was not in top 1
+Epoch 102, global step 344535: 'test/loss' was not in top 1
+Epoch 103, global step 347880: 'test/loss' reached 1.22408 (best 1.22408), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 104, global step 351225: 'test/loss' was not in top 1
+Epoch 105, global step 354570: 'test/loss' was not in top 1
+Epoch 106, global step 357915: 'test/loss' was not in top 1
+Epoch 107, global step 361260: 'test/loss' was not in top 1
+Epoch 108, global step 364605: 'test/loss' was not in top 1
+Epoch 109, global step 367950: 'test/loss' was not in top 1
+Epoch 110, global step 371295: 'test/loss' was not in top 1
+Epoch 111, global step 374640: 'test/loss' was not in top 1
+Epoch 112, global step 377985: 'test/loss' was not in top 1
+Epoch 113, global step 381330: 'test/loss' was not in top 1
+Epoch 114, global step 384675: 'test/loss' was not in top 1
+Epoch 115, global step 388020: 'test/loss' was not in top 1
+Epoch 116, global step 391365: 'test/loss' was not in top 1
+Epoch 117, global step 394710: 'test/loss' was not in top 1
+Epoch 118, global step 398055: 'test/loss' was not in top 1
+Epoch 119, global step 401400: 'test/loss' was not in top 1
+Epoch 120, global step 404745: 'test/loss' was not in top 1
+Epoch 121, global step 408090: 'test/loss' reached 1.22396 (best 1.22396), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 122, global step 411435: 'test/loss' was not in top 1
+Epoch 123, global step 414780: 'test/loss' reached 1.22390 (best 1.22390), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 124, global step 418125: 'test/loss' reached 1.22383 (best 1.22383), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 125, global step 421470: 'test/loss' was not in top 1
+Epoch 126, global step 424815: 'test/loss' was not in top 1
+Epoch 127, global step 428160: 'test/loss' was not in top 1
+Epoch 128, global step 431505: 'test/loss' reached 1.22369 (best 1.22369), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 129, global step 434850: 'test/loss' was not in top 1
+Epoch 130, global step 438195: 'test/loss' reached 1.22307 (best 1.22307), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 131, global step 441540: 'test/loss' was not in top 1
+Epoch 132, global step 444885: 'test/loss' was not in top 1
+Epoch 133, global step 448230: 'test/loss' was not in top 1
+Epoch 134, global step 451575: 'test/loss' was not in top 1
+Epoch 135, global step 454920: 'test/loss' was not in top 1
+Epoch 136, global step 458265: 'test/loss' was not in top 1
+Epoch 137, global step 461610: 'test/loss' was not in top 1
+Epoch 138, global step 464955: 'test/loss' was not in top 1
+Epoch 139, global step 468300: 'test/loss' was not in top 1
+Epoch 140, global step 471645: 'test/loss' was not in top 1
+Epoch 141, global step 474990: 'test/loss' was not in top 1
+Epoch 142, global step 478335: 'test/loss' was not in top 1
+Epoch 143, global step 481680: 'test/loss' was not in top 1
+Epoch 144, global step 485025: 'test/loss' was not in top 1
+Epoch 145, global step 488370: 'test/loss' reached 1.22305 (best 1.22305), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 146, global step 491715: 'test/loss' was not in top 1
+Epoch 147, global step 495060: 'test/loss' was not in top 1
+Epoch 148, global step 498405: 'test/loss' was not in top 1
+Epoch 149, global step 501750: 'test/loss' was not in top 1
+Epoch 150, global step 505095: 'test/loss' was not in top 1
+Epoch 151, global step 508440: 'test/loss' was not in top 1
+Epoch 152, global step 511785: 'test/loss' was not in top 1
+Epoch 153, global step 515130: 'test/loss' was not in top 1
+Epoch 154, global step 518475: 'test/loss' was not in top 1
+Epoch 155, global step 521820: 'test/loss' was not in top 1
+Epoch 156, global step 525165: 'test/loss' was not in top 1
+Epoch 157, global step 528510: 'test/loss' was not in top 1
+Epoch 158, global step 531855: 'test/loss' was not in top 1
+Epoch 159, global step 535200: 'test/loss' reached 1.22294 (best 1.22294), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 160, global step 538545: 'test/loss' was not in top 1
+Epoch 161, global step 541890: 'test/loss' was not in top 1
+Epoch 162, global step 545235: 'test/loss' was not in top 1
+Epoch 163, global step 548580: 'test/loss' was not in top 1
+Epoch 164, global step 551925: 'test/loss' was not in top 1
+Epoch 165, global step 555270: 'test/loss' was not in top 1
+Epoch 166, global step 558615: 'test/loss' was not in top 1
+Epoch 167, global step 561960: 'test/loss' was not in top 1
+Epoch 168, global step 565305: 'test/loss' was not in top 1
+Epoch 169, global step 568650: 'test/loss' was not in top 1
+Epoch 170, global step 571995: 'test/loss' was not in top 1
+Epoch 171, global step 575340: 'test/loss' reached 1.22291 (best 1.22291), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 172, global step 578685: 'test/loss' was not in top 1
+Epoch 173, global step 582030: 'test/loss' was not in top 1
+Epoch 174, global step 585375: 'test/loss' was not in top 1
+Epoch 175, global step 588720: 'test/loss' was not in top 1
+Epoch 176, global step 592065: 'test/loss' was not in top 1
+Epoch 177, global step 595410: 'test/loss' was not in top 1
+Epoch 178, global step 598755: 'test/loss' was not in top 1
+Epoch 179, global step 602100: 'test/loss' reached 1.22264 (best 1.22264), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-01-29/17-36-53-758146/checkpoints/test/loss.ckpt' as top 1
+Epoch 180, global step 605445: 'test/loss' was not in top 1
+Epoch 181, global step 608790: 'test/loss' was not in top 1
+Epoch 182, global step 612135: 'test/loss' was not in top 1
+Epoch 183, global step 615480: 'test/loss' was not in top 1
+Epoch 184, global step 618825: 'test/loss' was not in top 1
+Epoch 185, global step 622170: 'test/loss' was not in top 1
+Epoch 186, global step 625515: 'test/loss' was not in top 1
+Epoch 187, global step 628860: 'test/loss' was not in top 1
+Epoch 188, global step 632205: 'test/loss' was not in top 1
+Epoch 189, global step 635550: 'test/loss' was not in top 1
+Epoch 190, global step 638895: 'test/loss' was not in top 1
+Epoch 191, global step 642240: 'test/loss' was not in top 1
+Epoch 192, global step 645585: 'test/loss' was not in top 1
+Epoch 193, global step 648930: 'test/loss' was not in top 1
+Epoch 194, global step 652275: 'test/loss' was not in top 1
+Epoch 195, global step 655620: 'test/loss' was not in top 1
+Epoch 196, global step 658965: 'test/loss' was not in top 1
+Epoch 197, global step 662310: 'test/loss' was not in top 1
+Epoch 198, global step 665655: 'test/loss' was not in top 1
+Epoch 199, global step 669000: 'test/loss' was not in top 1
+`Trainer.fit` stopped: `max_epochs=200` reached.
+wandb: WARNING No program path found, not creating job artifact. See https://docs.wandb.ai/guides/launch/create-job
+wandb: - 0.012 MB of 0.012 MB uploadedwandb: \ 0.012 MB of 0.183 MB uploadedwandb: | 0.183 MB of 0.183 MB uploadedwandb: 
+wandb: Run history:
+wandb:               epoch ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇███
+wandb:           test/loss ▇▆▄▃▃█▃▃▂▂▂▂▂▂▂▂▂▂▁▂▂▂▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:     test/num_tokens ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███
+wandb:     test/perplexity ▇▆▄▃▃█▃▃▂▂▂▂▂▂▂▂▂▂▁▂▂▂▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:         timer/epoch ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▇██▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:          timer/step ▆▆▆▄▅▂▃▁▅▅▅▄▄▆▄▅▂▆▄█▆▇▅▆▃▅▅▄▂▁▄▄▃▂▃▂▅▅▃▄
+wandb:    timer/validation ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁██▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:          train/loss █▆▄▄▄▅▃▃▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:    train/num_tokens ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███
+wandb:    train/perplexity █▆▄▄▄▅▃▃▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:       trainer/epoch ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇███
+wandb: trainer/global_step ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇███
+wandb:        trainer/loss ▇▅▄▄▆▆▅█▅▁▇▄▇▃▃▆▄▄▄▅▃▃▃▃▇▅▃▅▂▂▂▅▅▂▆▃▄▂▃▃
+wandb:      trainer/lr/pg1 ████████▇▇▇▇▇▇▆▆▆▆▅▅▅▅▄▄▄▄▃▃▃▃▂▂▂▂▂▂▁▁▁▁
+wandb:      trainer/lr/pg2 ████████▇▇▇▇▇▇▆▆▆▆▅▅▅▅▄▄▄▄▃▃▃▃▂▂▂▂▂▂▁▁▁▁
+wandb:            val/loss ▇▆▄▃▃█▃▃▂▂▂▂▂▂▂▂▂▂▁▂▂▂▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:      val/num_tokens ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███
+wandb:      val/perplexity ▇▆▄▃▃█▃▃▂▂▂▂▂▂▂▂▂▂▁▂▂▂▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: 
+wandb: Run summary:
+wandb:               epoch 199
+wandb:           test/loss 1.22441
+wandb:     test/num_tokens 20982777552
+wandb:     test/perplexity 3.40216
+wandb:         timer/epoch 754.4102
+wandb:          timer/step 0.09279
+wandb:    timer/validation 130.50898
+wandb:          train/loss 1.21263
+wandb:    train/num_tokens 175153149600
+wandb:    train/perplexity 3.36231
+wandb:       trainer/epoch 199.0
+wandb: trainer/global_step 668999
+wandb:        trainer/loss 1.2262
+wandb:      trainer/lr/pg1 0.00011
+wandb:      trainer/lr/pg2 0.00011
+wandb:            val/loss 1.22443
+wandb:      val/num_tokens 20982777552
+wandb:      val/perplexity 3.40222
+wandb: 
+wandb: 🚀 View run ethereal-water-2 at: https://wandb.ai/sarthak-ti/dna/runs/4b7ux478
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20240129_173726-4b7ux478/logs

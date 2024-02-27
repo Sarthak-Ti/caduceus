@@ -1,0 +1,30 @@
+Seed set to 2222
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: sarthak-ti. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.16.2
+wandb: Run data is saved locally in ./wandb/run-20240203_144857-hd4edv0l
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run colorful-frog-7
+wandb: ⭐️ View project at https://wandb.ai/sarthak-ti/dna
+wandb: 🚀 View run at https://wandb.ai/sarthak-ti/dna/runs/hd4edv0l
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name               | Type              | Params
+---------------------------------------------------------
+0 | model              | DNAEmbeddingModel | 436 K 
+1 | encoder            | Identity          | 0     
+2 | decoder            | SequenceDecoder   | 0     
+3 | train_torchmetrics | MetricCollection  | 0     
+4 | val_torchmetrics   | MetricCollection  | 0     
+5 | test_torchmetrics  | MetricCollection  | 0     
+---------------------------------------------------------
+436 K     Trainable params
+0         Non-trainable params
+436 K     Total params
+1.746     Total estimated model params size (MB)
+Epoch 0, global step 1007: 'val/mse' reached 6.23672 (best 6.23672), saving model to '/lila/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-02-03/14-48-10-067838/checkpoints/val/mse.ckpt' as top 1
+/scratch/lsftmp/1706989637.3261064.shell: line 24: 68694 Bus error               (core dumped) python -m train wandb.group=DNase experiment=hg38/DNase_finetune

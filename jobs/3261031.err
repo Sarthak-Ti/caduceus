@@ -1,0 +1,58 @@
+Seed set to 2222
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+Error executing job with overrides: ['wandb.group=DNase', 'experiment=hg38/DNase_finetune']
+Traceback (most recent call last):
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/train.py", line 718, in main
+    train(config)
+  File "/lila/data/leslie/sarthak/hyena/hyena-dna/train.py", line 685, in train
+    model = SequenceLightningModule.load_from_checkpoint(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/pytorch_lightning/core/module.py", line 1561, in load_from_checkpoint
+    loaded = _load_from_checkpoint(
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/pytorch_lightning/core/saving.py", line 61, in _load_from_checkpoint
+    checkpoint = pl_load(checkpoint_path, map_location=map_location)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/lightning_fabric/utilities/cloud_io.py", line 56, in _load
+    return torch.load(f, map_location=map_location)  # type: ignore[arg-type]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/serialization.py", line 1014, in load
+    return _load(opened_zipfile,
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/serialization.py", line 1422, in _load
+    result = unpickler.load()
+             ^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/pickle.py", line 1213, in load
+    dispatch[key[0]](self)
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/pickle.py", line 1254, in load_binpersid
+    self.append(self.persistent_load(pid))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/serialization.py", line 1392, in persistent_load
+    typed_storage = load_tensor(dtype, nbytes, key, _maybe_decode_ascii(location))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/serialization.py", line 1366, in load_tensor
+    wrap_storage=restore_location(storage, location),
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/serialization.py", line 1304, in restore_location
+    result = default_restore_location(storage, location)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/serialization.py", line 381, in default_restore_location
+    result = fn(storage, location)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/serialization.py", line 279, in _cuda_deserialize
+    return obj.cuda(device)
+           ^^^^^^^^^^^^^^^^
+  File "/data/leslie/sarthak/environments/hyena-dna/lib/python3.11/site-packages/torch/_utils.py", line 114, in _cuda
+    untyped_storage = torch.UntypedStorage(
+                      ^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.
