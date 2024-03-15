@@ -63,8 +63,9 @@ class ShapUtils():
         
         train_cfg = cfg['train']  # grab section `train` section of config
         model_cfg = cfg['model_config']  # grab the `model` section of config
-        d_output = train_cfg['d_output'] 
+        d_output = train_cfg['d_output']
         backbone = DNAEmbeddingModel(**model_cfg)
+        # backbone_skip = DNAEmbeddingModel(skip_embedding=True, **model_cfg)
         decoder = SequenceDecoder(model_cfg['d_model'], d_output=d_output, l_output=0, mode='pool')
         state_dict = torch.load(ckpt_path, map_location='cpu')  # has both backbone and decoder
         
@@ -87,18 +88,22 @@ class ShapUtils():
 
         #now adjust the backbone if needed
         if self.mtype == 'DNase':
-            embedding = torch.nn.Embedding(20, 128)
-            backbone.backbone.embeddings.word_embeddings = embedding #again a hack
+            embedding1 = torch.nn.Embedding(20, 128)
+            # embedding2 = torch.nn.Embedding(20, 128)
+            backbone.backbone.embeddings.word_embeddings = embedding1 #again a hack
+            # backbone_skip.backbone.embeddings.word_embeddings = embedding2 #again a hack
 
         # now actually load the state dict to the decoder and backbone separately
         decoder.load_state_dict(decoder_state_dict, strict=True)
         backbone.load_state_dict(model_state_dict, strict=True)
+        # backbone_skip.load_state_dict(model_state_dict, strict=True)
 
         # decoder = decoder.to(self.device)
         # backbone = backbone.to(sdevice)
 
-        self.backbone = backbone
-        self.decoder = decoder
+        self.backbone = backbone.eval()
+        self.decoder = decoder.eval()
+        # self.backbone_skip = backbone_skip.eval()
 
         self.create_model(ignore_embed)
         # Net(backbone, decoder)
@@ -106,13 +111,24 @@ class ShapUtils():
         #we also can assign the background and test input
         self.assign_train(1/percentage_background)
 
+        #also assign this class that finds the filtered data for the variance
+        # filtered_idx_list = []
+        # for key in self.dataset.filtered_indices:
+        #     # print(self.dataset.filtered_indices[key])
+        #     filtered_idx_list.append(self.dataset.filtered_indices[key])
+        # self.dnase_filtered = self.dataset.cell_dnase_levels[:,filtered_idx_list]
+        #we just added this in the class itself
+
+
         #now the last step is to load the data, but that should be done externally from the class
         
 
     def create_model(self, ignore_embed = False):
         #here we can define the model that will be used for the SHAP analysis
         if ignore_embed:
-            self.model = NetNoEmbed(self.backbone, self.decoder).eval()
+            self.model = NetNoEmbed(self.backbone, self.decoder).eval() #surprisingly enough, this sets it all to eval!!!!
+            #so now self.backbone_skip and self.decoder will be in eval mode! It's incredibly interesting!!
+            #recurses through and sets all the submodules to eval!!
         else:
             self.model = Net(self.backbone, self.decoder).eval()
 
@@ -169,9 +185,30 @@ class ShapUtils():
         shap_values = self.explainer.shap_values(test_input)
         return shap_values
 
+
+    def var(self, idx):
+        # idx = idx * util.dataset.cell_types #takes into account the fact that we need to find ccre, but we're given cell type
+        # seq_idx = int(idx/self.dataset.cell_types)
+        #but we are given ccre id so it's easy
+        seq_idx = idx
+        cCRE_id = self.dataset.array[seq_idx][0] #get the id from the array
+        row = self.dataset.cCRE_dict[cCRE_id]
+        #now we can calculate the variance using this data
+        # print(np.var(dnase_filtered[row,:])) #identical
+        
+        return np.var(self.dataset.cell_dnase_levels[row,:])
+
+
     
          
+''' The NetNoEmbed is actually just wrong, we should never use this, the backbone_skip is it instead!!
+To run through, start from the data
+a,_ = util.dataset[i]. Then b,_ = util.backbone(a) and util.decoder(b) gives output
+or we embed it manually and then run through the backbone_skip and decoder isntead!
 
+Actually that all causes a gradient issue, we just had this tiny bug with this, let's redo everything and try again
+Issue with NetNoEmbed was what I was passing to the decoder, it was literally just the hidden states, not the output of the backbone
+That makes it so that it doesn't even go through the model, so of course the values are the same!!!'''
 class NetNoEmbed(torch.nn.Module):
     def __init__(self, backbone, decoder):
         super(NetNoEmbed, self).__init__()
@@ -190,7 +227,7 @@ class NetNoEmbed(torch.nn.Module):
         hidden_states = backbone.backbone.ln_f(residual.to(dtype=backbone.backbone.ln_f.weight.dtype))
         
         # x = self.backbone(x)  # Pass input through backbone
-        x = self.decoder(x)   # Pass backbone's output through decoder
+        x = self.decoder(hidden_states)   # Pass backbone's output through decoder
         return x
     
 

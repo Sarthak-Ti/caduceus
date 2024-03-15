@@ -7,6 +7,8 @@ data.tar.gz
 *.pkl
 *.npy
 *.out
+*.pt
+*.err
 
 .DS_Store
 .idea/

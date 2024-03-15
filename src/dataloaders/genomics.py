@@ -309,8 +309,8 @@ class DNase(HG38):
                 padding_side='left', return_mask=False, val_ratio=0.0005, val_split_seed=2357, add_eos=False, 
                 detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
-                fast_forward_epochs=None, fast_forward_batches=None, filter = False, *args, **kwargs):
-
+                fast_forward_epochs=None, fast_forward_batches=None, filter = False, classification=False, *args, **kwargs):
+        self.classification = classification
         self.filter = filter
         self.dataset_name = dataset_name
         self.dest_path = dest_path
@@ -375,6 +375,7 @@ class DNase(HG38):
                                 rc_aug=self.rc_aug,
                                 return_augs=False,
                                 filter = self.filter,
+                                classification = self.classification,
                                 # return_mask=self.return_mask,
             )
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])
@@ -393,8 +394,8 @@ class DNaseCtst(HG38): #for unique cell type tokens
                 padding_side='left', return_mask=False, val_ratio=0.0005, val_split_seed=2357, add_eos=False, 
                 detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
-                fast_forward_epochs=None, fast_forward_batches=None, filter = False, *args, **kwargs):
-
+                fast_forward_epochs=None, fast_forward_batches=None, filter = False, classification=False, *args, **kwargs):
+        self.classification = classification
         self.filter = filter
         self.dataset_name = dataset_name
         self.dest_path = dest_path
@@ -463,6 +464,7 @@ class DNaseCtst(HG38): #for unique cell type tokens
                                 rc_aug=self.rc_aug,
                                 return_augs=False,
                                 filter = self.filter,
+                                classification = self.classification,
                                 # return_mask=self.return_mask,
             )
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])
@@ -481,8 +483,8 @@ class DNaseAllCellTypes(HG38):
                 padding_side='left', return_mask=False, val_ratio=0.0005, val_split_seed=2357, add_eos=False, 
                 detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
-                fast_forward_epochs=None, fast_forward_batches=None, filter=False, *args, **kwargs):
-
+                fast_forward_epochs=None, fast_forward_batches=None, filter=False, classification=False, *args, **kwargs):
+        self.classification = classification
         self.dataset_name = dataset_name
         self.dest_path = dest_path
         self.tokenizer_name = tokenizer_name

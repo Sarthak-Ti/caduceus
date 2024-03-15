@@ -57,6 +57,7 @@ class DNaseDataset():
         cell_types = 1205, #no longer needed for me
         d_output = None,
         filter = False,
+        classification = False,
     ):
         # print(filter)
         # import sys
@@ -79,6 +80,7 @@ class DNaseDataset():
         self.rc_aug = rc_aug
         self.uppercase = uppercase
         self.filter = filter
+        self.classification = classification
         # self.cell_types = cell_types
 
         #we load in based on the split
@@ -109,11 +111,12 @@ class DNaseDataset():
             #finally we consider that we filtered the cell types, so we load in that file
             #this is an ugly workaround, basically we use the hash table to find the index in the large array
             self.filtered_cell_types = np.load('/data/leslie/sarthak/data/cCRE_celltype_matrices/cell_type_f_indices.npy')
-            self.filtered_indices = {}
-            for i in range(self.filtered_cell_types.shape[0]):
-                self.filtered_indices[i] = int(self.filtered_cell_types[i])
-                
-            self.cell_types = len(self.filtered_cell_types)
+            # self.filtered_indices = {}
+            # for i in range(self.filtered_cell_types.shape[0]):
+            #     self.filtered_indices[i] = int(self.filtered_cell_types[i])
+            #that is incredibly inefficient, here's the better way
+            self.cell_dnase_levels = self.cell_dnase_levels[:,self.filtered_cell_types]
+        self.cell_types = self.cell_dnase_levels.shape[1]
         
         #and print the tokenizer vocab
         # print(self.tokenizer._vocab_str_to_int)
@@ -133,8 +136,9 @@ class DNaseDataset():
         #we first find the specific cell type
         celltype_idx = idx%self.cell_types #it's the remainder
         #and now we index into the filtered indices with this if we will be filtering
-        if self.filter:
-            celltype_idx = self.filtered_indices[celltype_idx] #this gives us what the actual index in the large array is
+        # if self.filter:
+        #     celltype_idx = self.filtered_indices[celltype_idx] #this gives us what the actual index in the large array is
+        #the above is for if we used the old hash table lookup method, it's much more efficient to just have cut down the columns in the first place
         
         #here we load in the celltype tokens
         #then after self.rc_aug we append the tokens to the left
@@ -216,6 +220,16 @@ class DNaseDataset():
         target = self.cell_dnase_levels[row,col]
         
         data = seq[:-1].clone()  # don't need the eos
-        target = torch.FloatTensor([target]) #double causes an error
-        
-        return data, target
+        # target = torch.FloatTensor([target]) #double causes an error
+
+        if self.classification:
+            out_class = 1
+            if target == -10:
+                out_class = 0 #0 means it's closed, 1 means it's open
+            target = torch.FloatTensor([target])
+            class_target = torch.LongTensor([out_class])
+            return data, (class_target, target)
+            
+        else:
+            target = torch.FloatTensor([target]) #double causes an error
+            return data, target

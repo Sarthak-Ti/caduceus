@@ -57,6 +57,7 @@ class DNaseAllCellTypeDataset():
         # cell_types = 1205,
         d_output = None,
         filter = False,
+        classification = False,
     ):
 
         self.max_length = max_length
@@ -75,6 +76,8 @@ class DNaseAllCellTypeDataset():
         self.pad_interval = pad_interval
         self.rc_aug = rc_aug
         self.uppercase = uppercase
+        self.filter = filter
+        self.classification = classification
         # self.cell_types = cell_types
 
         #we load in based on the split
@@ -107,6 +110,8 @@ class DNaseAllCellTypeDataset():
             #nowo filter the columns by this
             self.cell_dnase_levels = self.cell_dnase_levels[:,self.filtered_cell_types]
             self.d_output = len(self.filtered_cell_types)
+
+        self.cell_types = self.cell_dnase_levels.shape[1]
         
         
     def __len__(self):
@@ -166,6 +171,12 @@ class DNaseAllCellTypeDataset():
         
         data = seq[:-1].clone()  # don't need the eos
         target = torch.FloatTensor([target]) #double causes an error
-        target = target.squeeze(0) #remove the extra dimension, it is 1,1205 unless you do this
-        
-        return data, target
+        target = target.squeeze(0) #remove the extra dimension, it is 1,161 unless you do this
+
+        if self.classification:
+            condition = target != -10
+            out_class = condition.int().long()
+            # class_target = torch.LongTensor([out_class])
+            return data, (out_class, target)
+        else:
+            return data, target

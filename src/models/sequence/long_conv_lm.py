@@ -375,7 +375,7 @@ class LMBackbone(nn.Module):
         embedding_kwargs = (
             {"combine_batch_seqlen_dim": True}
             if self.process_group is not None and self.sequence_parallel
-            else {}
+            else {} #this is what is chosen
         )
         hidden_states = self.embeddings(
             input_ids, position_ids=position_ids, **embedding_kwargs
@@ -387,7 +387,7 @@ class LMBackbone(nn.Module):
         mixer_kwargs = (
             {"seqlen": input_ids.shape[1]}
             if self.process_group is not None and self.sequence_parallel
-            else {}
+            else {} #is also none
         )
         if inference_params is not None:
             mixer_kwargs["inference_params"] = inference_params

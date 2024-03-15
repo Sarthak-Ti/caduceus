@@ -36,10 +36,10 @@ task:
 
 trainer:
   accelerator: gpu
-  devices: 2
+  devices: 4
   num_nodes: 1
   accumulate_grad_batches: ${div_up:${train.global_batch_size}, ${eval:${trainer.devices} * ${dataset.batch_size} * ${trainer.num_nodes}}}
-  max_epochs: 30
+  max_epochs: 200
   precision: bf16  # bf16 only a100
   gradient_clip_val: 1.0
   strategy: ddp
@@ -58,7 +58,7 @@ dataset:
   add_eos: true
   rc_aug: true #was false
   d_output: 1 #have to manually define this
-  num_workers: 4
+  num_workers: 16
   use_fixed_len_val: false  # placing a fixed length val here, but it's really the test
   replace_N_token: false  # replace N (uncertain token) with pad tokens in dataloader
   pad_interval: false  # handle uncertain tokens within the FastaInteral class  

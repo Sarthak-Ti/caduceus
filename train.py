@@ -676,12 +676,39 @@ def create_trainer(config, **kwargs):
 
     return trainer
 
+# import subprocess
+
+# def check_gpu_status():
+#     try:
+#         # Execute the nvidia-smi command and get JSON output
+#         result = subprocess.run(['nvidia-smi', '-q', '-x'], capture_output=True, text=True)
+#         if result.returncode != 0:
+#             print("Failed to execute nvidia-smi")
+#             return
+        
+#         # Convert XML output to JSON for easier parsing
+#         # Using xml.etree.ElementTree to parse XML
+#         import xml.etree.ElementTree as ET
+#         root = ET.fromstring(result.stdout)
+        
+#         # Parse and print GPU information
+#         for gpu in root.findall('gpu'):
+#             gpu_id = gpu.find('minor_number').text
+#             gpu_name = gpu.find('product_name').text
+#             gpu_util = gpu.find('utilization').find('gpu_util').text
+#             memory_total = gpu.find('fb_memory_usage').find('total').text
+#             memory_used = gpu.find('fb_memory_usage').find('used').text
+#             memory_free = gpu.find('fb_memory_usage').find('free').text
+#             print(f"GPU {gpu_id} - {gpu_name}: Utilization {gpu_util}, Memory Usage {memory_used}/{memory_total} ({memory_free} free)")
+#     except Exception as e:
+#         print(f"An error occurred: {e}")
 
 def train(config):
     if config.train.seed is not None:
         pl.seed_everything(config.train.seed, workers=True)
     trainer = create_trainer(config)
     model = SequenceLightningModule(config)
+    # check_gpu_status()
     
     #check which device the model is on
     # param = next(model.parameters())
@@ -695,12 +722,13 @@ def train(config):
     if config.train.get("pretrained_model_path", None) is not None:
         # PTL style.  Note, method returns a new model object, and need to pass config.
         # print(config)
+        #first check if ddp
         model = SequenceLightningModule.load_from_checkpoint(
             config.train.pretrained_model_path,
             config=config,
             strict=config.train.pretrained_model_strict_load,
+            map_location='cpu',
         )
-    
     # print(model)
     #below is a hack to access the embeddings, we will save it out once, then can randomly access it
     #set seed, so should be repeatable, and honestly not the worst thing, just grabbing them all
@@ -719,7 +747,9 @@ def train(config):
     # print(word_embeddings_layer) #class Embedding(20,128), we know how to modify that and access the embeddings
     
     '''A hack to ensure that we can add embeddings to the modle while keeping the old embeddings
-    This approach is useful to increase the vocabulary size of the model'''
+    This approach is useful to increase the vocabulary size of the model
+    No longer used, as the embeddings don't really matter, can be retrained, but the option remains
+    Requres saving out the old embeddings manually, then it loads them in here'''
     if config.train['pretrained_model_state_hook']['add_embeddings']:
         add_embeddings = config.train['pretrained_model_state_hook']['add_embeddings']
         #we add the number of embeddings equal to the model

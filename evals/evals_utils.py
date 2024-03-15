@@ -18,8 +18,11 @@ from src.dataloaders.datasets.ccre_dataset import CcreDataset
 from src.models.sequence.long_conv_lm import ConvLMHeadModel
 
 class Evals():
-    def __init__(self, model_type, ckpt_path, filter=True):
+    def __init__(self, model_type, ckpt_path, filter=True, cfg = None):
         #model type is like ccre, DNase, DNase_ctst etc.
+        #ckpt_path is the path to the model checkpoint
+        #filter is a boolean which is true if you want to filter the dataset to only include the cell types present in the training set
+        #cfg is the path to the config file, if it's not provided, it will be inferred from the model type, but if you need a specific config, this is good to provide
         type_list = ['ccre', 'DNase_ctst', 'DNase_allcelltypes', 'DNase']
         if model_type not in type_list:
             raise ValueError('Model type not recognized')
@@ -27,12 +30,14 @@ class Evals():
         self.filter = filter
         self.ckpt_path = ckpt_path
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.cfg = cfg #this is for if we want to define a separate one
         self.tokenizer = self.setup_tokenizer()
         self.setup_model()
         self.dataset = self.setup_dataset()
         
         
-    def setup_tokenizer(self, model_type):
+    def setup_tokenizer(self):
+        model_type = self.model_type
         acgtn_list = ['ccre', 'DNase_ctst', 'DNase_allcelltypes']
         extra_list = ['DNase']
         if model_type in acgtn_list:
@@ -56,7 +61,7 @@ class Evals():
         model_type = self.model_type
         if model_type == 'ccre':
             cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/ccre.yaml'
-            self.model = HG38Encoder(cfg, self.ckpt_path, 1024)
+            self.model = HG38Encoder(cfg, self.ckpt_path, 1024).eval()
         elif model_type == 'DNase_ctst':
             cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/DNase_ctst.yaml'
             self.regression_head(cfg, adjust_embedding=False) #new 171 dimensional vocab and lm head size
@@ -86,7 +91,11 @@ class Evals():
             return dataset
         
     def regression_head(self, cfg, adjust_embedding=False):
-        cfg = yaml.load(open(cfg, 'r'), Loader=yaml.FullLoader)
+        if self.cfg is None:
+            cfg = yaml.load(open(cfg, 'r'), Loader=yaml.FullLoader)
+        else:
+            cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/' + self.cfg
+            cfg = yaml.load(open(cfg, 'r'), Loader=yaml.FullLoader)
         train_cfg = cfg['train']  # grab section `train` section of config
         model_cfg = cfg['model_config']  # grab the `model` section of config
         d_output = train_cfg['d_output'] 
@@ -112,8 +121,8 @@ class Evals():
         # now actually load the state dict to the decoder and backbone separately
         decoder.load_state_dict(decoder_state_dict, strict=True)
         backbone.load_state_dict(model_state_dict, strict=True)
-        self.decoder = decoder.to(self.device)
-        self.backbone = backbone.to(self.device)
+        self.decoder = decoder.to(self.device).eval()
+        self.backbone = backbone.to(self.device).eval()
         
     def evaluate(self, batch_size=4096, num_workers=4):
         if self.model_type == 'ccre':
@@ -135,7 +144,7 @@ class Evals():
         elif self.model_type == 'DNase' or self.model_type == 'DNase_ctst': #this does the flatten then reshape
             targets_flat = torch.zeros(len(self.dataset)) #because output is just a single value, it's so obvious it's kind of stupid
             predicts_flat = torch.zeros(len(self.dataset))
-            DNase = DataLoader(self.dataset, batch_size=4096, shuffle=False, num_workers=4) #results are identical even if you shuffle, obviously since it's just the mean
+            DNase = DataLoader(self.dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers) #results are identical even if you shuffle, obviously since it's just the mean
             with torch.no_grad():
                 idx = 0
                 for i, batch in tqdm(enumerate(DNase), total = len(DNase)):
@@ -150,13 +159,15 @@ class Evals():
                     targets_flat[idx:b_size+idx] = target.squeeze()
                     predicts_flat[idx:b_size+idx] = y_hat.detach().cpu().squeeze()
                     idx += b_size
+                    # if i == 5:
+                    #     break
             targets = targets_flat.reshape(-1, self.dataset.cell_types)
             predicts = predicts_flat.reshape(-1, self.dataset.cell_types)
             return targets, predicts
         elif self.model_type == 'DNase_allcelltypes':
-            targets = torch.zeros((len(self.dataset), self.dataset.cell_types))
-            predicts = torch.zeros((len(self.dataset), self.dataset.cell_types))
-            DNase = DataLoader(self.dataset, batch_size=4096, shuffle=False) #results are identical even if you shuffle, obviously since it's just the mean
+            targets = torch.zeros((len(self.dataset), 161))
+            predicts = torch.zeros((len(self.dataset), 161))
+            DNase = DataLoader(self.dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers) #results are identical even if you shuffle, obviously since it's just the mean
             with torch.no_grad():
                 idx = 0
                 for i, batch in tqdm(enumerate(DNase), total = len(DNase)):
