@@ -25,12 +25,13 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin): #this is the actual model t
                  layer_norm_epsilon: float = 1e-5, initializer_cfg=None,
                  fused_mlp=False, fused_dropout_add_ln=False, residual_in_fp32=False,
                  pad_vocab_size_multiple: int = 1, sequence_parallel=True,
-                 device=None, dtype=None, return_hidden_state=False, adjust_embedding = False, **kwargs) -> None:
+                 device=None, dtype=None, return_hidden_state=False, adjust_embedding = False,load_old_embedding=False, **kwargs) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         self.d_model = d_model  # for decoder
         self.process_group = process_group
         self.return_hidden_state = return_hidden_state
+        self.load_old_embedding = load_old_embedding
         # print('original vocab size', vocab_size)
         if vocab_size % pad_vocab_size_multiple != 0:
             vocab_size += pad_vocab_size_multiple - (vocab_size % pad_vocab_size_multiple)
@@ -44,7 +45,7 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin): #this is the actual model t
             dropout_cls=dropout_cls, layer_norm_epsilon=layer_norm_epsilon,
             initializer_cfg=initializer_cfg, fused_mlp=fused_mlp,
             fused_dropout_add_ln=fused_dropout_add_ln, residual_in_fp32=residual_in_fp32,
-            sequence_parallel=sequence_parallel, adjust_embedding = adjust_embedding,
+            sequence_parallel=sequence_parallel, adjust_embedding = adjust_embedding, load_old_embedding=self.load_old_embedding,
             **factory_kwargs, **kwargs
         )
         if process_group is None:

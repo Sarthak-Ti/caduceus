@@ -5,11 +5,11 @@ source ~/.bashrc
 
 # LSF directives
 #BSUB -q gpuqueue
-#BSUB -n 4
-#BSUB -gpu "num=1:j_exclusive=yes:gmodel=UnknownNVIDIAA10080GBPCIe"
+#BSUB -n 2
+#BSUB -gpu "num=1:j_exclusive=yes"
 #BSUB -R "A100 rusage[mem=100]"
 #BSUB -sla llSC2
-#BSUB -W 168:00
+#BSUB -W 48:00
 #BSUB -o jobs/%J.out
 #BSUB -e jobs/%J.err
 
@@ -21,6 +21,6 @@ mamba activate /data/leslie/sarthak/environments/hyena-dna
 cd /data/leslie/sarthak/hyena/hyena-dna/
 
 # Run your Python training script
-python -m train wandb.group=DNase_f_allcelltypes experiment=hg38/DNase_allcelltypes_finetune_continue
+python -m train wandb.group=DNase_class_multitask experiment=hg38/DNase_allcelltypes_classification_finetune
 
 # DNase allcelltypes train

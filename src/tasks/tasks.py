@@ -18,6 +18,8 @@ import torchmetrics as tm
 from src.utils.config import to_list, instantiate
 from torchmetrics import MetricCollection
 
+from icecream import ic
+
 class BaseTask:
     """ Abstract class that takes care of:
     - loss function
@@ -224,6 +226,60 @@ class Regression(BaseTask): #my custom defined task
         # z holds arguments such as sequence length
         x, y, *z = batch
         
+        # ic(x.shape)
+        # # ic(y.shape)
+        # ic(y[0].shape)
+        # ic(y[1].shape)
+        # ic(y)
+        # ic(x)
+        # ic(z)
+        
+        if len(z) == 0:
+            z = {}
+        else:
+            assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
+            z = z[0]
+            
+        x, w = encoder(x) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        # ic(x)
+        # ic(x.shape)
+        # print(model)
+        x, state = model(x)
+        self._state = state
+        x, w = decoder(x, state=state, **z)
+        # print(x.shape, y.shape, w) #with d_output=1 we find that x is 1024 x 1, y is 1024 x 1, and w is none. This is perfect and what we need!
+        # import sys
+        # sys.exit()
+        
+        #what we will do is now clamp the data to at minimum be -10
+        x = torch.clamp(x, min=minimum)
+        # ic(x)
+        # import sys
+        # sys.exit()
+        # ic(y)
+        # ic(w)
+        return x, y, w
+
+
+    # def metrics(self, x, y, **kwargs):
+    #     output_metrics = {
+    #         name: U.discard_kwargs(M.output_metric_fns[name])(x, y, **kwargs)
+    #         for name in self.metric_names if name in M.output_metric_fns
+    #     }
+    #     loss_metrics = {
+    #         name: U.discard_kwargs(M.loss_metric_fns[name])(x, y, self.loss, **kwargs)
+    #         for name in self.metric_names if name in M.loss_metric_fns
+    #     }
+    #     return {**output_metrics, **loss_metrics}
+
+class RegClass(BaseTask):
+    #this class will separately calculate the loss for regression and classification
+    #note that since it's just the loss calculation, we can just use the same forward pass as the regression task
+    def forward(self, batch, encoder, model, decoder, _state, minimum=-10):
+        """Passes a batch through the encoder, backbone, and decoder"""
+        # z holds arguments such as sequence length
+        x, y, *z = batch
+        
         # print("x shape: ", x.shape) # 1024 x 1023 as we expect
         # print(x[:,0:7]) #it seems to just work... damn!
         # # print("y shape: ", y.shape) #1024 x 1 again as expected!
@@ -248,21 +304,10 @@ class Regression(BaseTask): #my custom defined task
         # sys.exit()
         
         #what we will do is now clamp the data to at minimum be -10
-        x = torch.clamp(x, min=minimum)
+        x[1] = torch.clamp(x[1], min=minimum)
+        # print()
         
         return x, y, w
-
-
-    # def metrics(self, x, y, **kwargs):
-    #     output_metrics = {
-    #         name: U.discard_kwargs(M.output_metric_fns[name])(x, y, **kwargs)
-    #         for name in self.metric_names if name in M.output_metric_fns
-    #     }
-    #     loss_metrics = {
-    #         name: U.discard_kwargs(M.loss_metric_fns[name])(x, y, self.loss, **kwargs)
-    #         for name in self.metric_names if name in M.loss_metric_fns
-    #     }
-    #     return {**output_metrics, **loss_metrics}
 
 class MultiClass(BaseTask):
     
@@ -469,4 +514,5 @@ registry = {
     'hg38': HG38Task,
     "masked_multiclass": MaskedMultiClass,
     'regression': Regression,
+    'regclass': RegClass,
 }

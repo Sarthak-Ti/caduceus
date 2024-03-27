@@ -27,6 +27,8 @@ from src.tasks import decoders, encoders, tasks
 from src.utils import registry
 from src.utils.optim_groups import add_optimizer_hooks
 
+from icecream import ic
+
 log = src.utils.train.get_logger(__name__)
 
 # Turn on TensorFloat32 (speeds up large model training substantially)
@@ -36,6 +38,9 @@ torch.backends.cudnn.allow_tf32 = True
 
 OmegaConf.register_new_resolver('eval', eval)
 OmegaConf.register_new_resolver('div_up', lambda x, y: (x + y - 1) // y)
+
+#and make pretty errors work
+# import pretty_errors
 
 # Lots of annoying hacks to get WandbLogger to continuously retry on failure
 class DummyExperiment:
@@ -597,6 +602,22 @@ class SequenceLightningModule(pl.LightningModule):
         test_loader_names, test_loaders = self._eval_dataloaders()
         self.test_loader_names = ["final/" + name for name in test_loader_names]
         return test_loaders
+
+    # for debugging
+    # def on_after_backward(self):
+    #     # if self.hparams.train.get("clip_grad_norm", None) is not None:
+    #     #     torch.nn.utils.clip_grad_norm_(
+    #     #         self.parameters(), self.hparams.train.clip_grad_norm
+    #     #     )
+    #     super().on_after_backward()  # Ensure the original behavior is preserved
+    #     unused_params = []
+    #     for name, param in self.named_parameters():
+    #         if param.grad is None:
+    #             unused_params.append(name)
+    #     if unused_params:
+    #         print("Unused Parameters:", unused_params)
+    #     import sys
+    #     sys.exit()
     
     #save model after training
     # def on_train_end()
@@ -708,6 +729,8 @@ def train(config):
         pl.seed_everything(config.train.seed, workers=True)
     trainer = create_trainer(config)
     model = SequenceLightningModule(config)
+    # print(model.model.backbone.load_old_embedding,'\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n')
+    #this is fine now
     # check_gpu_status()
     
     #check which device the model is on
@@ -723,12 +746,43 @@ def train(config):
         # PTL style.  Note, method returns a new model object, and need to pass config.
         # print(config)
         #first check if ddp
+        #the model doesn't like having the load_old_embeddings for some reason, so let's remove it
+        # temp_config = config
+        # if temp_config.train.pretrained_model_state_hook.get('load_old_embedding', None) is not None:
+        #     temp_config.train.pretrained_model_state_hook.pop('load_old_embedding')
         model = SequenceLightningModule.load_from_checkpoint(
             config.train.pretrained_model_path,
             config=config,
             strict=config.train.pretrained_model_strict_load,
             map_location='cpu',
         )
+        #let's just go ahead and find the weights and save the embeddings
+        # torch.save(ic(model.model.backbone.embeddings.word_embeddings), '/data/leslie/sarthak/data/og_embeddings.pt')
+        # torch.save(ic(model.model.backbone.new_embeddings.word_embeddings), '/data/leslie/sarthak/data/new_embeddings.pt')
+        # try:
+        #     load_old_embeddings = config.train['pretrained_model_state_hook']['load_old_embedding'] #a better hack to load the old embeddings
+        # except:
+        #     load_old_embeddings = False
+
+        #a better method than the try except is
+        load_old_embeddings =  config.train['pretrained_model_state_hook'].get('load_old_embedding', False)
+            # load_old_embeddings = config.train['pretrained_model_state_hook']['load_old_embedding']
+        #much better than the one below
+        if load_old_embeddings: #for all intents and purposes, is 12!
+            #now we replace the embeddings with the old ones
+            old_embeddings = model.model.backbone.embeddings.word_embeddings
+            new_embeddings = model.model.backbone.new_embeddings.word_embeddings
+            new_embeddings.weight.data[:load_old_embeddings] = old_embeddings.weight.data[:load_old_embeddings] #this should be the important ones
+            model.model.backbone.embeddings.word_embeddings = new_embeddings
+            model.model.lm_head = new_embeddings #so we can load the model, we never use this for downstream finetuned tasks
+            #now let's set the unused embeddings to None
+            model.model.backbone.new_embeddings = None #doesn't affect the rest now new_embeddings references None, they reference old new_embedding
+            # old_embeddings = None
+            #the other issue is that old_embeddings 
+            
+        print('model successfully loaded!!')
+        # print(model)
+        # print(model.model.backbone.embeddings.word_embeddings)
     # print(model)
     #below is a hack to access the embeddings, we will save it out once, then can randomly access it
     #set seed, so should be repeatable, and honestly not the worst thing, just grabbing them all
@@ -745,26 +799,42 @@ def train(config):
     # print(self.hparams.train) # this is what we need to decide to add embeddings or not
     # print("Model:", self.model)
     # print(word_embeddings_layer) #class Embedding(20,128), we know how to modify that and access the embeddings
-    
-    '''A hack to ensure that we can add embeddings to the modle while keeping the old embeddings
-    This approach is useful to increase the vocabulary size of the model
-    No longer used, as the embeddings don't really matter, can be retrained, but the option remains
-    Requres saving out the old embeddings manually, then it loads them in here'''
-    if config.train['pretrained_model_state_hook']['add_embeddings']:
-        add_embeddings = config.train['pretrained_model_state_hook']['add_embeddings']
-        #we add the number of embeddings equal to the model
-        original_embeddings = model.model.backbone.embeddings.word_embeddings
-        # new_vocab_size = original_embeddings.num_embeddings + add_embeddings
-        # new_embedding_layer = torch.nn.Embedding(new_vocab_size, original_embeddings.embedding_dim)
-        # nn.init.normal_(module.weight, std=initializer_range) #no need to use since we grabbed their values
-        saved_embeddings = torch.load('/data/leslie/sarthak/data/saved_embeddings.pt')
-        saved_embeddings.weight.data[:12] = original_embeddings.weight.data[:12]
-        model.model.backbone.embeddings.word_embeddings = saved_embeddings
-        print(saved_embeddings)
+
+    #note that this approach is not great, as it just uses the already saved embeddings. terrible coding practice, not flexible at all
+    # '''A hack to ensure that we can add embeddings to the modle while keeping the old embeddings
+    # This approach is useful to increase the vocabulary size of the model
+    # No longer used, as the embeddings don't really matter, can be retrained, but the option remains
+    # Requres saving out the old embeddings manually, then it loads them in here
+    # Also, we have a better method below, where we don't need this anymore
+    # Actually this method is wrong, so we will be taking it out and commenting it, not useful!!'''
+    # if config.train['pretrained_model_state_hook']['add_embeddings']:
+    #     # keep = config.train['pretrained_model_state_hook']['add_embeddings']
+    #     #we add the number of embeddings equal to the model
+    #     original_embeddings = model.model.backbone.embeddings.word_embeddings
+    #     # new_vocab_size = original_embeddings.num_embeddings + add_embeddings
+    #     # new_embedding_layer = torch.nn.Embedding(new_vocab_size, original_embeddings.embedding_dim)
+    #     # nn.init.normal_(module.weight, std=initializer_range) #no need to use since we grabbed their values
+    #     saved_embeddings = torch.load('/data/leslie/sarthak/data/saved_embeddings.pt')
+    #     saved_embeddings.weight.data[:12] = original_embeddings.weight.data[:12] #because it's set by what was saved
+    #     model.model.backbone.embeddings.word_embeddings = saved_embeddings
+    #     print(saved_embeddings)
     
     # import sys
     # sys.exit()
-        
+    #we will now test to see if our data matches
+    # ic(model.model.backbone.embeddings.word_embeddings)
+    #now load in embeddings with torch
+    # old = torch.load('/data/leslie/sarthak/data/saved_embeddings.pt') #based on wrong ones so does give false, but ours is correct
+    # ic(old)
+    #and now make sure that all of it is the same
+    # weights1 = model.model.backbone.embeddings.word_embeddings.weight.data[:12]
+    # weights2 = old.weight.data[:12]
+    # a = ic(torch.allclose(weights1.detach().cpu(), weights2.detach().cpu()))
+    # ic(a)
+    #save out the new embeddings
+    # torch.save(model.model.backbone.embeddings.word_embeddings, '/data/leslie/sarthak/data/saved_embeddings_new.pt')
+    # import sys
+    # sys.exit()
     
 
     # Run initial validation epoch (useful for debugging, finetuning)

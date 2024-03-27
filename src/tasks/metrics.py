@@ -8,6 +8,7 @@ import torch.distributions as dist
 from sklearn.metrics import f1_score, roc_auc_score, matthews_corrcoef
 from torchmetrics import Metric
 from torchmetrics.classification import MulticlassRecall, MulticlassPrecision
+from icecream import ic
 
 class CorrectAggregatedMetric(Metric):
     """This is needed to calculate some metrics b/c small batch sizes cause aggregation via a simple
@@ -274,6 +275,17 @@ def roc_auc_micro(logits, y):
 def mse(outs, y, len_batch=None):
     # assert outs.shape[:-1] == y.shape and outs.shape[-1] == 1
     # outs = outs.squeeze(-1)
+    # y = y.squeeze(-1)
+    # ic(outs)
+    # ic(len(y))
+    # ic(y)
+    # ic(outs.shape)
+    # # ic(y.shape)
+    # ic(y[0].shape)
+    # ic(y[1].shape)
+    # ic(len_batch)
+    # import sys
+    # sys.exit()
     if len(y.shape) < len(outs.shape):
         assert outs.shape[-1] == 1
         outs = outs.squeeze(-1)
@@ -295,7 +307,8 @@ def forecast_rmse(outs, y, len_batch=None):
 
 def mae(outs, y, len_batch=None):
     # assert outs.shape[:-1] == y.shape and outs.shape[-1] == 1
-    # outs = outs.squeeze(-1)
+    outs = outs.squeeze(-1) #inputs are actually shape (batch_size, 1)
+    y = y.squeeze(-1)
     if len(y.shape) < len(outs.shape):
         assert outs.shape[-1] == 1
         outs = outs.squeeze(-1)
@@ -309,6 +322,89 @@ def mae(outs, y, len_batch=None):
         outs_masked = torch.masked_select(outs, mask)
         y_masked = torch.masked_select(y, mask)
         return F.l1_loss(outs_masked, y_masked)
+
+def binary_cross_entropy_with_logits(logits, y, ignore_index = -100, pos_weight=.04):
+    # No need to reshape if your logits and y are already in the desired shape (batch_size, num_nodes)
+    pos_weight_value = pos_weight #no need to copy it, it's immutable
+    num_classes = logits.shape[1]
+    pos_weight = torch.full((num_classes,), pos_weight_value, dtype=torch.float).to(logits.device)
+    logits = logits.view(-1, logits.shape[-1])
+    y = y.view(-1, logits.shape[-1])
+    #make sure y is type float
+    y = y.float()
+    # ic(y) #1s and 0s
+    # ic(logits) # outputs of model
+    # ic(logits.shape) # batch x 161 for multitasking
+    # ic(y.shape) # batch x 161 for multitasking
+    # ic(pos_weight.shape) #[161] for multitasking
+    # ic(pos_weight) # all just .04
+    return F.binary_cross_entropy_with_logits(logits, y, pos_weight=pos_weight)/(2*pos_weight_value) #the 2 is because there's 2 elements in the sum, keeps it similar scales
+
+def custom_mse_ce(outs, y, len_batch=None, ignore_index=-100, mask = True, weight = .5, pos_weight=.04):
+    '''This loss function will be used for the custom model for the DNase dataset, the goal is to minimize the MSE and the CE at the same time'''
+    #first has to split the outs into the two different outputs
+    #it's always going to be exactly half
+    #len batch is indeed none, just ignore that
+    # if outs.shape[1] == 2:
+    #     class_out = outs[:,0]
+    #     reg_out = outs[:,1]
+    #     class_y = y[0]
+    #     reg_y = y[1]
+    # else:        
+    class_out = outs[:,0:outs.shape[1]//2] #this should work just fine for either 2 or 322
+    reg_out = outs[:,outs.shape[1]//2:]
+    class_y = y[0]
+    reg_y = y[1] #should be 64x1 or 64 x 161 if multitasking
+
+    # ic(class_out.shape)
+    # ic(reg_out.shape)
+    # ic(class_y.shape)
+    # ic(reg_y.shape)
+    # import sys
+    # sys.exit()
+
+    #now that we have the two different outputs, we can calculate the two different losses
+    #note that we also need to know what len_batch is, so see where this may be called?
+    #or we literally just use their functions
+    ce_loss = binary_cross_entropy_with_logits(class_out, class_y, pos_weight=pos_weight)
+    #now we mask the regression so that it ignores the values where it 
+    if mask:
+        mask = class_y == 1 #finds where it's 1, and keeps thos
+        #now apply the mask and set those rows to 0
+        reg_out = reg_out * mask
+        reg_y = reg_y * mask
+    mse_loss = mse(reg_out, reg_y, len_batch)
+    #the other factor is that if ce loss is too high, then it will dominate the loss, so we need to scale it
+    #now we just add them together
+    # ic(ce_loss)
+    # ic(mse_loss)
+    # ic(weight*mse_loss + (1-weight)*ce_loss)
+    # ic(ignore_index)
+    # ic(len_batch)
+    # import sys
+    # sys.exit()
+    return weight*mse_loss + (1-weight)*ce_loss #note we can weight them if we want to
+
+def custom_mse(outs, y, len_batch=None, ignore_index=-100, mask = True, weight = .5):
+    class_out = outs[:,0:outs.shape[1]//2] #this should work just fine for either 2 or 322
+    reg_out = outs[:,outs.shape[1]//2:]
+    class_y = y[0]
+    reg_y = y[1] #should be 64x1 or 64 x 161 if multitasking
+    if mask:
+        mask = class_y == 1 #finds where it's 1, and keeps thos
+        #now apply the mask and set those rows to 0
+        reg_out = reg_out * mask
+        reg_y = reg_y * mask
+    mse_loss = mse(reg_out, reg_y, len_batch)
+    return mse_loss*weight
+
+def custom_ce(outs, y, len_batch=None, ignore_index=-100, mask = True, weight = .5, pos_weight = .04):
+    class_out = outs[:,0:outs.shape[1]//2] #this should work just fine for either 2 or 322
+    reg_out = outs[:,outs.shape[1]//2:]
+    class_y = y[0]
+    reg_y = y[1] #should be 64x1 or 64 x 161 if multitasking
+    ce_loss = binary_cross_entropy_with_logits(class_out, class_y, pos_weight=pos_weight)
+    return ce_loss*(1-weight)
 
 
 # Metrics that can depend on the loss
@@ -355,6 +451,9 @@ output_metric_fns = {
     "soft_cross_entropy": soft_cross_entropy,  # only for pytorch 1.10+
     "student_t": student_t_loss,
     "gaussian_ll": gaussian_ll_loss,
+    "custom_mse_ce": custom_mse_ce,
+    "custom_mse": custom_mse,
+    "custom_ce": custom_ce,
 }
 
 loss_metric_fns = {

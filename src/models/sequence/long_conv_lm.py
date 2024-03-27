@@ -283,6 +283,7 @@ class LMBackbone(nn.Module):
         device=None,
         dtype=None,
         adjust_embedding = False,
+        load_old_embedding = False,
         **kwargs,
     ) -> None:
         factory_kwargs = {"device": device, "dtype": dtype}
@@ -290,10 +291,18 @@ class LMBackbone(nn.Module):
         self.process_group = process_group
         self.sequence_parallel = sequence_parallel
         self.residual_in_fp32 = residual_in_fp32
+        self.load_old_embedding = load_old_embedding
         
-        if not adjust_embedding:
+        if not adjust_embedding: #this means will default to not adjusting the embedding dimension at all
             adjust_embedding = vocab_size
-            
+
+        if self.load_old_embedding: #shoudl never be true with adjust_embedding, both do separate things to embedding, but same goal
+            self.new_embeddings = GPT2Embeddings(
+                d_model, self.load_old_embedding, max_position_embeddings, **factory_kwargs
+            )
+        # else:
+        #     print(load_old_embedding)
+        #     raise NotImplementedError("This is not implemented yet")
         if process_group is None:
             self.embeddings = GPT2Embeddings(
                 d_model, adjust_embedding, max_position_embeddings, **factory_kwargs
@@ -599,7 +608,7 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin): #this model isn't used, it'
         return self.d_model
 
 
-def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, add_embeddings=False, ignore_embeddings = False):
+def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, add_embeddings=False, ignore_embeddings = False, load_old_embedding = False, adjust_embedding = False):
     """
 
     Modifies state dict loading with custom function.  Every layer in new model will be
@@ -632,12 +641,16 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, ad
 
     # loop through scratch model keys (pretrained may have extra stuff)
     for key in sorted(model_new_params_dict.keys()):
-
+        
         loaded_params = state_dict.get(key, None)
         # make sure key is in the loaded params first, if not, then print it out
-    
+        # print(loaded_params)
+        if load_old_embedding and 'new_embedding' in key:
+            continue #we don't care about the new embedding and loading it, so we just ignore it
+        
         if loaded_params is None:
             # This should never happen, it should be there!
+            #however it isn't there if we for example save something to model.new_embeddings, which is only to be used for adjusting embedding size
             print("Missing key in pretrained model!", key)
             raise Exception
 
@@ -646,6 +659,8 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, ad
             print("found head key / parameter, load from scratch", key)
             # using scratch by default, nothing needed
             used_params = model_new_params_dict[key]
+
+        
             
         #if you want to partially restore them, you can do this approach
         

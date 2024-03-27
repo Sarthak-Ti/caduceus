@@ -549,6 +549,7 @@ class DNaseAllCellTypes(HG38):
                                 rc_aug=self.rc_aug,
                                 return_augs=False,
                                 filter=self.filter,
+                                classification = self.classification,
                                 # return_mask=self.return_mask,
             )
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])

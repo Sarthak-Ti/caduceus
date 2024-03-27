@@ -16,7 +16,9 @@ import seaborn as sns
 import pandas as pd
 import logomaker
 from tqdm import tqdm
+
 #TODO there are many NotImplementedErrors that need to be fixed, search for self.dataset to see where it's used and fix it
+#TODO there is one difference based on the opposite signs function that is in shap_testing5, but not in the actual ism_utils.py, copy paste it
 
 class ISMUtils():
     def __init__(self, model_type, ckpt_path, cfg = None, split = 'train', filter=True):
@@ -207,7 +209,7 @@ class ISMUtils():
             print(f'predicted output: {out[0,0]}, actual output: {b[0]}')
             return b[0], out[0,0]
 
-    def output_all(self,idx):
+    def output_all(self,idx, print_out = False):
         #given the index, this finds the associated output (all values averaged across the cell types for a singel ccre)
         #if it's DNase, then we need to do it for all the cell types, here the input idx should not be 161 times any number, rather just the ccre number
         if self.mtype == 'DNase' or self.mtype == 'DNase_ctst':
@@ -223,7 +225,8 @@ class ISMUtils():
                     raise NotImplementedError('This is not implemented yet, need to consider how to do handle these outputs and what we want to display')
                 target_list.append(b.item())
             out = np.mean(out_list)
-            print(f'predicted output mean: {out}, actual output mean: {np.mean(target_list)}')
+            if print_out:
+                print(f'predicted output mean: {out}, actual output mean: {np.mean(target_list)}')
             #but return the whole lists
             return np.array(target_list), np.array(out_list)
 
@@ -655,5 +658,72 @@ def multi_logo(utils_list,title_list, ccre, startend=None, heights_list = None, 
         #now set the title
         ax.flatten()[j].set_title(f'{title_list[j]} model')
         ax.flatten()[j].set_xlim(start, end)
+    plt.tight_layout()
+    return fig, ax
+
+def celltype_logo(utils, ccre, celltype_idx, heights_all, startend=None, true_values = None):
+    # utils is the single utility for the one we want
+    # ccre is the ccre number of that split
+    # startend is the start and end of the sequence, if none, will use the middle 100. Note that it adjusts DNase and DNase_ctst slightly, it aligns to the multitasking model!
+    # heights_all is basically just the saved array of ISM values or can be something else
+    fig, ax = plt.subplots(len(celltype_idx),1, figsize = (15,len(celltype_idx)*3))
+    celltypesfile = '/data/leslie/sarthak/data/cCRE_celltype_matrices/cell_types_filtered.txt'
+    # if true_values is None:
+    #     utils.dataset[ccre][1]
+    #now load in the celltypes
+    celltypes = []
+    with open(celltypesfile) as f:
+        for line in f:
+            celltypes.append(line.strip())
+    #first find global min and max
+    global_min = np.min(heights_all)
+    global_max = np.max(heights_all)
+    for j,i in enumerate(celltype_idx):
+        #what we do is first get the sequence
+        if utils.mtype == 'DNase' or utils.mtype == 'DNase_ctst':
+            tempccre = 161*ccre
+        else:
+            tempccre = ccre
+        a,_ = utils.dataset[tempccre]
+        #now we will check to see if it's none, if so we will use the middle
+        if startend is None:
+            start = utils.middle-50
+            end = utils.middle+50
+        else:
+            start = startend[0]
+            end = startend[1]
+
+        if utils.mtype == 'DNase':
+            start = start+4
+            end = end+4
+        try:
+            seq=utils.dataset.tokenizer.decode(a)
+        except:
+            seq=utils.dataset.tokenizer.decode(a[1:])
+        cut_seq = seq[start:end]
+        #in this function heights is required, generally just the results used for ism
+
+        #now we define cut heights
+        heights = heights_all[start:end,i] #will be a matrix of values, we take just the row of the provided celltype_idx
+        if True:
+            heights = -heights
+        logo_df = pd.DataFrame(0, index=np.arange(len(cut_seq)), columns=list(set(cut_seq)), dtype=float)
+        # print(heights)
+
+        # Fill the DataFrame with heights, converting heights to float if necessary
+        
+        for k, symbol in enumerate(cut_seq):
+            logo_df.loc[k, symbol] = heights[k]
+
+        # Generate the sequence logo
+        logo = logomaker.Logo(logo_df, color_scheme='classic', flip_below = True, ax = ax.flatten()[j])
+        #now set the title
+        try:
+            ax.flatten()[j].set_title(f'{celltypes[i]}, true={true_values[i]}') #if you provide true values then it works
+        except:
+            ax.flatten()[j].set_title(f'{celltypes[i]}')
+        ax.flatten()[j].set_xticks(np.arange(0,end-start,int((end-start)/5)))
+        ax.flatten()[j].set_xticklabels(np.arange(start,end,int((end-start)/5)))
+        ax.flatten()[j].set_ylim(global_min,global_max)
     plt.tight_layout()
     return fig, ax
