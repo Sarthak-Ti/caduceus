@@ -21,13 +21,14 @@ from tqdm import tqdm
 #TODO there is one difference based on the opposite signs function that is in shap_testing5, but not in the actual ism_utils.py, copy paste it
 
 class ISMUtils():
-    def __init__(self, model_type, ckpt_path, cfg = None, split = 'train', filter=True):
+    def __init__(self, model_type, ckpt_path, cfg = None, split = 'train', filter=True, classification = False):
         type_list = ['ccre', 'DNase_ctst', 'DNase_allcelltypes', 'DNase']
         if model_type not in type_list:
             raise ValueError('Model type not recognized')
         self.mtype = model_type
         if cfg is not None:
             cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/'+cfg
+        self.classification = classification
         
         #check to see the type, and then load the right tokenizer, class and cfg
         if self.mtype == 'DNase':
@@ -50,7 +51,11 @@ class ISMUtils():
                 padding_side='left'
             )
             if cfg is None:
-                cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/DNase_allcelltypes.yaml'
+                if self.classification:
+                    cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/DNase_allcelltypes_classification.yaml'
+                else:
+                    cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/DNase_allcelltypes.yaml'
+                 
 
         elif self.mtype == 'DNase_ctst':
             from src.dataloaders.datasets.DNase_ctst_dataset import DNaseCtstDataset as DatasetClass
@@ -61,7 +66,10 @@ class ISMUtils():
                 padding_side='left'
             )
             if cfg is None:
-                cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/DNase_ctst.yaml'
+                if self.classification:
+                    cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/DNase_ctst_classification.yaml'
+                else:
+                    cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/DNase_ctst.yaml'
 
         else:
             raise ValueError('Model type not recognized')
@@ -69,7 +77,7 @@ class ISMUtils():
         #now we load the model and dataset
 
         # self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.dataset = DatasetClass(max_length = 1024, split = split, tokenizer=self.tokenizer, rc_aug = False, tokenizer_name='char', add_eos='True', filter = filter)
+        self.dataset = DatasetClass(max_length = 1024, split = split, tokenizer=self.tokenizer, rc_aug = False, tokenizer_name='char', add_eos='True', filter = filter, classification=self.classification)
         cfg = yaml.load(open(cfg, 'r'), Loader=yaml.FullLoader)
         
         train_cfg = cfg['train']  # grab section `train` section of config
@@ -113,11 +121,13 @@ class ISMUtils():
 
         self.bed = pd.read_csv('/data/leslie/sarthak/data/GRCh38-cCREs.bed', header=None, delimiter='\t').to_numpy()
         self.middle = 1023//2 #just used for the logo plots
+        self.ccre_id_dict = None
 
-    def calculate_ISM(self,ccre, cuda = False, return_out = False, progress_bar = False):
+    def calculate_ISM(self,ccre, cuda = False, return_out = False, progress_bar = False, stop=False, b_size = 8):
         #does ISM for that ccre, based on the model type
         #Does what the ISM.py and ISM_allcelltypes.py files do but for one ccre at a time
         #ccre should be the index of the ccre, not the index to get that dataset
+        # start = time.time()
         device = "cuda:0" if cuda else "cpu"
         backbone = self.backbone.to(device)
         decoder = self.decoder.to(device)
@@ -126,61 +136,104 @@ class ISMUtils():
         if self.mtype == 'DNase' or self.mtype == 'DNase_ctst':
             ccre = 161*ccre
             ccre_list = []
-            out_list = []
+            # out_list = []
+            # class_list = []
             for i in range(161):
                 a,b = self.dataset[ccre+i]
                 ccre_list.append(a)
-                if isinstance(b,tuple):
-                    raise NotImplementedError('This is not implemented yet, need to consider how to do ISM with the classification model')
-                out_list.append(b.item())
+                # if self.classification:
+                    # raise NotImplementedError('This is not implemented yet, need to consider how to do ISM with the classification model')
+                    # class_list.append(b[0].item())
+                    # b = b[1] #just ignore the classification stuff?
+                # out_list.append(b.item())
             ccre_list = torch.stack(ccre_list)
         else:
             ccre_list = self.dataset[ccre][0].unsqueeze(0)
-
-        temp,_ = backbone(ccre_list.to(device))
+            # class_list = self.dataset[ccre][1][0] #the classification stuff
+        # print(class_list)
+        temp,_ = backbone(ccre_list.to(device)) #pass whole ccre as a batch
         out = decoder(temp)
+        seqlen = ccre_list.shape[1] #because it's batch x seq
+        dim_out = out.shape[1]//2
+        #also a dimension for ccre_list.shape[0]
+        dim_celltypes = ccre_list.shape[0]
 
+        if self.classification:
+            out_class = out[:,:dim_out]
+            out = out[:,dim_out:] #just ignore the classification stuff? for now maybe and we just look at the regression outputs?
+            #but if it thinks that the thing is closed, we should keep it as 0... or maybe set it to some other value? idk
+            #i say keep it but we know that we can mask it, no let's mask for reg, but still need to use for class...
+            #and let's keep the class out
+            #we can mask out the reg if needed using the actual outputs, if it's -10, ignore it maybe?
+            out_class_gt = out_class.detach().reshape(1,1,161)
+            ISM_class = torch.ones((4,seqlen,161)).to(device)*out_class_gt
+            out_class_gt_np = out_class.detach().cpu().numpy().reshape(1,1,161)
+            
+        out_gt = out.detach().reshape(1,1,161)
+        ISM_results = torch.ones((4,seqlen,161)).to(device)*out_gt
         out_gt_np = out.detach().cpu().numpy().reshape(1, 1, 161) #the initial output of the model before ism
-        
-        #now we can calculate the ISM
-        #we add someway to return the output of the model as well if we want to
-        ISM_results = np.ones((4,1023,161))*out_gt_np
-        if self.mtype == 'DNase_ctst':
-            ISM_results = np.ones((4,1024,161))*out_gt_np #because is full 1024 sequence length...
-        if self.mtype == 'DNase' or self.mtype == 'DNase_ctst':
+        # if self.classification:
+        #     mask_idx = np.array(class_list) == 1 #if it's open
+        #     #now we make this a matrix of the same size as the output which will be 3x1x161 or just 3x161
+        #     mask = np.zeros((1,1,161))
+        #     mask[:,:,mask_idx] = 1
+        # print(mask)
+        if self.mtype == 'DNase' or self.mtype == 'DNase_ctst': #we just need the first sequence, don't care about the useless stuff
             seq = ccre_list[0]
         else:
-            seq = ccre_list.squeeze()
+            seq = ccre_list.squeeze() #get rid f the embedding dimension
         token_list = [7,8,9,10] #tokenize this list first
+        mutations = {
+            7: np.array([8,9,10]),
+            8: np.array([7,9,10]),
+            9: np.array([7,8,10]),
+            10: np.array([7,8,9])
+        }
+        ccre_list_gpu = ccre_list.to(device)
 
         if progress_bar:
             iterator = tqdm(enumerate(seq), total = len(seq))
         else:
             iterator = enumerate(seq)
+
         with torch.no_grad():
             for idx, nucleotide in iterator: 
-                temp_token_list = token_list.copy() #we make a copy
-                # print(nucleotide)
-                if nucleotide not in temp_token_list:
+                if nucleotide not in token_list:
                     continue #basically skips this and none of it is updated, because is a weird tooken, whether permutation, ctst or something else
-                temp_token_list.remove(nucleotide)
-                temp_token_list = np.array(temp_token_list)
+                temp_token_list = mutations[nucleotide.item()]
+                class_list = []
                 results_list = []
-                for j in temp_token_list:
-                    temp_seq = ccre_list.clone() #never put on the gpu
-                    if self.mtype == 'DNase' or self.mtype == 'DNase_ctst':
-                        temp_seq[:,idx] = j
-                    else:
-                        temp_seq[idx] = j
-                    a,_ = backbone(temp_seq.to(device))
+                for idx2,j in enumerate(temp_token_list):
+                    temp_seq = ccre_list_gpu.clone() #already put on the gpu
+                    # if self.mtype in ['DNase', 'DNase_ctst']:
+                    #     temp_seq[:,idx] = j #should be 161x1024 or 1023. 
+                    # else:
+                    #     temp_seq[idx] = j #should be 1x1023 because we unsqueezed
+                        
+                    a,_ = backbone(temp_seq)
                     out = decoder(a)
-                    results_list.append(out.detach().cpu().numpy())
-                ISM_results[temp_token_list-7,idx,:] = np.array(results_list).squeeze()
-        #relatively slow on the CPU
-        #and now we subtract the out_gt from it
-        ISM_results_normalized = ISM_results - out_gt_np #is mutated - reference
-        
-        if return_out: #but this is optional
+                    if self.classification:
+                        class_list.append(out[:,:dim_out].detach()) #161 x 1 if ctst, 1x161 if multitasking, squeeze fixes it
+                        results_list.append(out[:,dim_out:].detach()) 
+                    else:
+                        results_list.append(out.detach())
+
+                ISM_results[temp_token_list-7,idx,:] = torch.stack(results_list).squeeze().to(device) #baasically turns to 3 x 1 x 161 or 3 x 161 x 1 then squeezes it
+                if self.classification:
+                    ISM_class[temp_token_list-7,idx,:] = torch.stack(class_list).squeeze().to(device)
+        ISM_results_normalized = (ISM_results - out_gt).detach().cpu().numpy() #is mutated - reference
+        if self.classification:
+            #first we do sigmoid then subtraction
+            ISM_class = torch.sigmoid(ISM_class)
+            out_class_gt = torch.sigmoid(out_class_gt)
+            ISM_class_normalized = (ISM_class-out_class_gt).detach().cpu().numpy()
+            # ISM_class_normalized = ISM_class.detach().cpu().numpy() - out_class_gt_np
+            # ISM_results_normalized *= mask
+        if self.classification and return_out:
+            return ISM_results_normalized, ISM_class_normalized, out_gt_np, out_class_gt_np
+        elif self.classification:
+            return ISM_results_normalized, ISM_class_normalized 
+        elif return_out: #but this is optional
             return ISM_results_normalized, out_gt_np
         return ISM_results_normalized
 
@@ -322,15 +375,17 @@ class ISMUtils():
     
     def find_ccre_type(self, idx):
         #this function will use the ccre id to find the specific type
-        #uses the index of the dataset, not the cCRE for the DNase model!!
+        #uses the ccre id, not the dataset index, just like for the var
         #first get the id
-        if self.mtype == 'DNase':        
-            seq_idx = int(idx/self.dataset.cell_types)
-        else:
-            seq_idx = idx
-        ccre_id = self.dataset.array[seq_idx][0]
-        line = np.where(self.bed[:,3] == ccre_id)
-        return self.bed[line[0][0], -1]
+        #actually, first it generates the dictionary of ids
+        if self.ccre_id_dict is None: #checks to see if the dictionary is none
+            self.ccre_id_dict = {}
+            for i,item in enumerate(self.bed[:,3]): #goes through 3rd column of bed file which is the ccre id, now instead of finding that index, goes into dict
+                self.ccre_id_dict[item] = i #now uses the ccre_id to find the line
+        ccre_id = self.dataset.array[idx][0]
+        # line = np.where(self.bed[:,3] == ccre_id)
+        line = self.ccre_id_dict[ccre_id]
+        return self.bed[line, -1]
 
 def multi_cluster_difference(utils_list, results_list, true_values, name_list, cluster_index = 0, return_vals = False):
     #utils_list is the list of utilities

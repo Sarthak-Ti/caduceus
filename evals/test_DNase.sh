@@ -5,11 +5,11 @@ source ~/.bashrc
 
 # LSF directives
 #BSUB -q gpuqueue
-#BSUB -n 2
+#BSUB -n 1
 #BSUB -gpu "num=1:j_exclusive=yes"
-#BSUB -R "rusage[mem=50]"
+#BSUB -R "rusage[mem=32]"
 #BSUB -sla llSC2
-#BSUB -W 5:00
+#BSUB -W 25:00
 #BSUB -o /data/leslie/sarthak/hyena/hyena-dna/jobs/%J.out
 #BSUB -e /data/leslie/sarthak/hyena/hyena-dna/jobs/%J.err
 
