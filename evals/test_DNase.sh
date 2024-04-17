@@ -6,7 +6,7 @@ source ~/.bashrc
 # LSF directives
 #BSUB -q gpuqueue
 #BSUB -n 1
-#BSUB -gpu "num=1:j_exclusive=yes"
+#BSUB -gpu "num=1"
 #BSUB -R "rusage[mem=32]"
 #BSUB -sla llSC2
 #BSUB -W 25:00

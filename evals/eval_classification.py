@@ -20,7 +20,7 @@ from evals_utils import Evals
 #now let's try the multitasking path
 multitasking_path1 = '/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-03-27/18-39-11-031863/checkpoints/25-val_loss=0.52186.ckpt'
 eval_multitasking = Evals('DNase_allcelltypes',multitasking_path1, classification=True)
-targets,predicts = eval_multitasking.evaluate(num_workers = 1, batch_size = 1024)
+targets,predicts = eval_multitasking.evaluate(num_workers = 1, batch_size = 512)
 targets_class,targets_reg = targets
 predicts_class,predicts_reg = predicts
 
@@ -34,7 +34,7 @@ del eval_multitasking
 
 multitasking_path2 = '/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-03-27/18-39-11-031863/checkpoints/last.ckpt' #the last epoch one
 eval_multitasking = Evals('DNase_allcelltypes',multitasking_path2, classification=True)
-targets,predicts = eval_multitasking.evaluate(num_workers = 1, batch_size = 1024)
+targets,predicts = eval_multitasking.evaluate(num_workers = 1, batch_size = 512)
 targets_class,targets_reg = targets
 predicts_class,predicts_reg = predicts
 
@@ -42,13 +42,13 @@ torch.save(targets_class,'/data/leslie/sarthak/hyena/hyena-dna/evals/results/mul
 torch.save(targets_reg,'/data/leslie/sarthak/hyena/hyena-dna/evals/results/multitasking_bestepoch_targets_reg.pt')
 torch.save(predicts_class,'/data/leslie/sarthak/hyena/hyena-dna/evals/results/multitasking_bestepoch_predicts_class.pt')
 torch.save(predicts_reg,'/data/leslie/sarthak/hyena/hyena-dna/evals/results/multitasking_bestepoch_predicts_reg.pt')
-print('done multitasking best epoch')   
+print('done multitasking best epoch')
 
 del eval_multitasking
 
 ctst_path = '/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-03-25/15-41-13-286486/checkpoints/last.ckpt'
 eval_ctst = Evals('DNase_ctst',ctst_path, classification=True)
-targets,predicts = eval_ctst.evaluate(num_workers = 1, batch_size = 1024)
+targets,predicts = eval_ctst.evaluate(num_workers = 1, batch_size = 512)
 targets_class,targets_reg = targets
 predicts_class,predicts_reg = predicts
 

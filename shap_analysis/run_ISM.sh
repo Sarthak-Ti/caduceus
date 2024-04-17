@@ -9,7 +9,7 @@ source ~/.bashrc
 #BSUB -gpu "num=1"
 #BSUB -R "A100 rusage[mem=50]"
 #BSUB -sla llSC2
-#BSUB -W 168:00
+#BSUB -W 68:00
 #BSUB -o jobs/%J.out
 #BSUB -e jobs/%J.err
 

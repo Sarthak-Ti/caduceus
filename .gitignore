@@ -9,6 +9,18 @@ data.tar.gz
 *.out
 *.pt
 *.err
+*.npz
+*.h5
+**/modisco/all_celltypes/*
+#includes the files not the things
+# !*/modisco/all_celltypes/*.*
+# */fimo_test/*
+**/modisco/testing_modisco/*
+**/modisco/fimo_motifs/*
+
+
+# *.tsv
+
 
 .DS_Store
 .idea/

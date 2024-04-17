@@ -209,7 +209,7 @@ class ISMUtils():
                     #     temp_seq[:,idx] = j #should be 161x1024 or 1023. 
                     # else:
                     #     temp_seq[idx] = j #should be 1x1023 because we unsqueezed
-                        
+                    temp_seq[:,idx] = j #now that it's unsqueezed, we can just do this, affects all the sequences or just the one sequence
                     a,_ = backbone(temp_seq)
                     out = decoder(a)
                     if self.classification:
@@ -386,6 +386,37 @@ class ISMUtils():
         # line = np.where(self.bed[:,3] == ccre_id)
         line = self.ccre_id_dict[ccre_id]
         return self.bed[line, -1]
+
+    def onehot_ism(self, idx, name = None, ism=None, split = 'train'):
+        #this function takes in an index, the index of the cCRE, not the dataset index
+        #also takes in either the name or the actual ism results that have been loaded, depend son if you use the same naming scheme or not
+        #It outputs the ISM results in one hot encoded format, tthe one hot encoded results, and the sequencing
+        seq_idx = idx #there's no difference, it's based on the ccre that's it! same self.dataset.array between them, idx is the ccre
+        if self.mtype == 'DNase' or self.mtype == 'DNase_ctst':
+            # seq_idx = int(idx/161)
+            start = 1
+        else:
+            # seq_idx = idx
+            start = 0
+        seq = self.dataset.array[seq_idx,2]
+        seq = seq[:-1].upper() #because it'ts length 1024, but we use 1023
+        mapping = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+        num_seq = np.array([mapping[nuc] for nuc in seq])
+        one_hot = np.zeros((len(seq), 4))
+        one_hot[np.arange(len(seq)), num_seq] = 1
+        one_hot_expanded = np.repeat(one_hot[np.newaxis,:,:], 161, axis=0)
+        if ism is None:
+            ism = np.load(f'/data/leslie/sarthak/hyena/hyena-dna/shap_analysis/most_variable_cCREs2/{split}/{name}_{idx}_reg.npy')
+        ism = ism[:,start:,:]
+        ismsum = np.sum(ism, axis=0)
+        ismsumt = ismsum.T
+        ismsumt = ismsumt[:,:, np.newaxis]
+        final = one_hot_expanded * ismsumt
+        #we now have to transpose both matrices to work with modiscolite, the above code makes it work for normal modisco which is one_hot last
+        #modiscolite is length last
+        final = np.transpose(final,(0,2,1))
+        one_hot_expanded = np.transpose(one_hot_expanded,(0,2,1))
+        return final, one_hot_expanded, seq
 
 def multi_cluster_difference(utils_list, results_list, true_values, name_list, cluster_index = 0, return_vals = False):
     #utils_list is the list of utilities
@@ -731,8 +762,8 @@ def celltype_logo(utils, ccre, celltype_idx, heights_all, startend=None, true_va
         for line in f:
             celltypes.append(line.strip())
     #first find global min and max
-    global_min = np.min(heights_all)
-    global_max = np.max(heights_all)
+    global_min = np.max(heights_all) #because positive and negative get flipped!!
+    global_max = np.min(heights_all)
     for j,i in enumerate(celltype_idx):
         #what we do is first get the sequence
         if utils.mtype == 'DNase' or utils.mtype == 'DNase_ctst':
@@ -780,5 +811,76 @@ def celltype_logo(utils, ccre, celltype_idx, heights_all, startend=None, true_va
         ax.flatten()[j].set_xticks(np.arange(0,end-start,int((end-start)/5)))
         ax.flatten()[j].set_xticklabels(np.arange(start,end,int((end-start)/5)))
         ax.flatten()[j].set_ylim(global_min,global_max)
+    plt.tight_layout()
+    return fig, ax
+
+#new function to compare them
+def celltype_compare_logo(utils_list, ccre, celltype_idx, heights_all_list, startend=None, true_values = None):
+    # utils is the list of utilities in order multitasking, ctst
+    # ccre is the ccre number of that split
+    # startend is the start and end of the sequence, if none, will use the middle 100. Note that it adjusts DNase and DNase_ctst slightly, it aligns to the multitasking model!
+    # heights_all is basically just the saved array of ISM values or can be something else
+    fig, ax = plt.subplots(len(celltype_idx),2, figsize = (15,len(celltype_idx)*3))
+    celltypesfile = '/data/leslie/sarthak/data/cCRE_celltype_matrices/cell_types_filtered.txt'
+    # if true_values is None:
+    #     utils.dataset[ccre][1]
+    #now load in the celltypes
+    celltypes = []
+    with open(celltypesfile) as f:
+        for line in f:
+            celltypes.append(line.strip())
+    #first find global min and max
+    heights_all = np.concatenate(heights_all_list, axis=0)
+    global_min = max(i.max() for i in heights_all_list) #because positive and negative get flipped!!
+    global_max = min(i.min() for i in heights_all_list)
+    # print(global_min, global_max)
+    for util_counter,utils in enumerate(utils_list):
+        heights_all = heights_all_list[util_counter]
+        for j,i in enumerate(celltype_idx):
+            #what we do is first get the sequence
+            if utils.mtype == 'DNase' or utils.mtype == 'DNase_ctst':
+                tempccre = 161*ccre
+            else:
+                tempccre = ccre
+            a,_ = utils.dataset[tempccre]
+            #now we will check to see if it's none, if so we will use the middle
+            if startend is None:
+                start = utils.middle-50
+                end = utils.middle+50
+            else:
+                start = startend[0]
+                end = startend[1]
+
+            if utils.mtype == 'DNase':
+                start = start+4
+                end = end+4
+            try:
+                seq=utils.dataset.tokenizer.decode(a)
+            except:
+                seq=utils.dataset.tokenizer.decode(a[1:])
+            cut_seq = seq[start:end]
+            #in this function heights is required, generally just the results used for ism
+
+            #now we define cut heights
+            heights = heights_all[start:end,i] #will be a matrix of values, we take just the row of the provided celltype_idx
+            heights = -heights
+            logo_df = pd.DataFrame(0, index=np.arange(len(cut_seq)), columns=list(set(cut_seq)), dtype=float)
+            # print(heights)
+
+            # Fill the DataFrame with heights, converting heights to float if necessary
+            
+            for k, symbol in enumerate(cut_seq):
+                logo_df.loc[k, symbol] = heights[k]
+
+            # Generate the sequence logo
+            logo = logomaker.Logo(logo_df, color_scheme='classic', flip_below = True, ax = ax[j, util_counter])
+            #now set the title
+            try:
+                ax[j,util_counter].set_title(f'{celltypes[i]}, true={true_values[i]}') #if you provide true values then it works
+            except:
+                ax[j,util_counter].set_title(f'{celltypes[i]}')
+            ax[j,util_counter].set_xticks(np.arange(0,end-start,int((end-start)/5)))
+            ax[j,util_counter].set_xticklabels(np.arange(start,end,int((end-start)/5)))
+            ax[j,util_counter].set_ylim(global_max,global_min)
     plt.tight_layout()
     return fig, ax
