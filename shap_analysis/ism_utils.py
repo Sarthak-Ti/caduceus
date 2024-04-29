@@ -414,6 +414,7 @@ class ISMUtils():
         final = one_hot_expanded * ismsumt
         #we now have to transpose both matrices to work with modiscolite, the above code makes it work for normal modisco which is one_hot last
         #modiscolite is length last
+        #note you can specifically see we don't multiply the attributions by negative 1!!
         final = np.transpose(final,(0,2,1))
         one_hot_expanded = np.transpose(one_hot_expanded,(0,2,1))
         return final, one_hot_expanded, seq
@@ -440,13 +441,14 @@ def multi_cluster_difference(utils_list, results_list, true_values, name_list, c
 
     #uses index to determine which model in results list is used for clustering, then we align the sequence accordingly
     i = results_list[cluster_index]
-    temp_values = i.sum(axis=0).T
+    temp_values = i.mean(axis=0).T
     if utils_list[cluster_index].mtype == 'DNase':
-        temp_values = temp_values[:,7:]
+        # temp_values = temp_values[:,7:]
+        raise NotImplementedError('This is not implemented yet, need to consider how to do ISM with the classification model')
     elif utils_list[cluster_index].mtype == 'DNase_allcelltypes':
-        temp_values = temp_values[:,3:-4]
+        temp_values = temp_values
     elif utils_list[cluster_index].mtype == 'DNase_ctst':
-        temp_values = temp_values[:,4:-4]
+        temp_values = temp_values[:,1:]
     
     g = sns.clustermap(temp_values, cmap = 'seismic', center = 0,col_cluster=False, vmin=global_min, vmax=global_max, figsize=(20,5), cbar_pos = (.02,.1,.05,.8))
     row_order = g.dendrogram_row.reordered_ind
@@ -612,7 +614,7 @@ def multi_cluster(results_list, true_values, name_list, utils_list = None, clust
 
     #uses index to determine which model in results list is used for clustering
     i = results_list[cluster_index]
-    g = sns.clustermap(i.sum(axis=0).T, cmap = 'seismic', center = 0,col_cluster=False, vmin=global_min, vmax=global_max, figsize=(20,5), cbar_pos = (.02,.1,.05,.8))
+    g = sns.clustermap(i.mean(axis=0).T, cmap = 'seismic', center = 0,col_cluster=False, vmin=global_min, vmax=global_max, figsize=(20,5), cbar_pos = (.02,.1,.05,.8))
     row_order = g.dendrogram_row.reordered_ind
     plt.close(g.figure)
 
@@ -626,8 +628,8 @@ def multi_cluster(results_list, true_values, name_list, utils_list = None, clust
     gap_between_heatmaps = 0.01
     height = 0.8/len(results_list)  # Adjust based on your preference for the subplot height
     vertical_gap = 0.2/len(results_list)  # Gap between rows
-    global_min = min([i.min() for i in results_list])
-    global_max = max([i.max() for i in results_list])
+    # global_min = min([i.min() for i in results_list])
+    # global_max = max([i.max() for i in results_list])
 
     main_left = 0.05  # Starting position of the main heatmap (left)
     secondary_left = main_left + main_heatmap_width + gap_between_heatmaps  # Starting position of secondary heatmap (left)
@@ -647,11 +649,12 @@ def multi_cluster(results_list, true_values, name_list, utils_list = None, clust
         temp_values = i.sum(axis=0).T
         if align_indices:
             if utils_list[j].mtype == 'DNase':
-                temp_values = temp_values[:,7:]
+                # temp_values = temp_values[:,7:]
+                raise NotImplementedError('This is not implemented yet, need to consider how to do handle these outputs and what we want to display')
             elif utils_list[j].mtype == 'DNase_allcelltypes':
-                temp_values = temp_values[:,3:-4]
+                temp_values = temp_values
             elif utils_list[j].mtype == 'DNase_ctst':
-                temp_values = temp_values[:,4:-4]
+                temp_values = temp_values[:,1:]
 
         if j == len(results_list)-1:
             continue
@@ -779,13 +782,13 @@ def celltype_logo(utils, ccre, celltype_idx, heights_all, startend=None, true_va
             start = startend[0]
             end = startend[1]
 
-        if utils.mtype == 'DNase':
-            start = start+4
-            end = end+4
+        # if utils.mtype == 'DNase':
+        #     start = start+4
+        #     end = end+4
         try:
             seq=utils.dataset.tokenizer.decode(a)
         except:
-            seq=utils.dataset.tokenizer.decode(a[1:])
+            seq=utils.dataset.tokenizer.decode(a[1:]) #this is done if we have our ctst celltype!
         cut_seq = seq[start:end]
         #in this function heights is required, generally just the results used for ism
 
@@ -831,11 +834,13 @@ def celltype_compare_logo(utils_list, ccre, celltype_idx, heights_all_list, star
             celltypes.append(line.strip())
     #first find global min and max
     heights_all = np.concatenate(heights_all_list, axis=0)
-    global_min = max(i.max() for i in heights_all_list) #because positive and negative get flipped!!
-    global_max = min(i.min() for i in heights_all_list)
+    global_max = max(i.max() for i in heights_all_list) #because positive and negative get flipped!!
+    global_min = min(i.min() for i in heights_all_list)
     # print(global_min, global_max)
     for util_counter,utils in enumerate(utils_list):
         heights_all = heights_all_list[util_counter]
+        if utils.mtype=='DNase_ctst':
+            heights_all = heights_all[1:,:]
         for j,i in enumerate(celltype_idx):
             #what we do is first get the sequence
             if utils.mtype == 'DNase' or utils.mtype == 'DNase_ctst':
@@ -851,13 +856,13 @@ def celltype_compare_logo(utils_list, ccre, celltype_idx, heights_all_list, star
                 start = startend[0]
                 end = startend[1]
 
-            if utils.mtype == 'DNase':
-                start = start+4
-                end = end+4
-            try:
-                seq=utils.dataset.tokenizer.decode(a)
-            except:
-                seq=utils.dataset.tokenizer.decode(a[1:])
+            # if utils.mtype == 'DNase':
+            #     start = start+4
+            #     end = end+4
+            if utils.mtype=='DNase_ctst':
+                seq = utils.dataset.tokenizer.decode(a[1:])
+            else:
+                seq = utils.dataset.tokenizer.decode(a)
             cut_seq = seq[start:end]
             #in this function heights is required, generally just the results used for ism
 
@@ -881,6 +886,6 @@ def celltype_compare_logo(utils_list, ccre, celltype_idx, heights_all_list, star
                 ax[j,util_counter].set_title(f'{celltypes[i]}')
             ax[j,util_counter].set_xticks(np.arange(0,end-start,int((end-start)/5)))
             ax[j,util_counter].set_xticklabels(np.arange(start,end,int((end-start)/5)))
-            ax[j,util_counter].set_ylim(global_max,global_min)
+            ax[j,util_counter].set_ylim(-global_max,-global_min)
     plt.tight_layout()
     return fig, ax
