@@ -103,7 +103,8 @@ class SequenceDecoder(Decoder):
             restrict = lambda x: x[..., -l_output:, :]
         elif self.mode == "first":
             restrict = lambda x: x[..., :l_output, :]
-        elif self.mode == "pool":
+        elif self.mode == "pool": #what we used for the poster, finds moving average cumsum, if l_out is 0 becomes 1 which is average
+            #unsure if mask is used
             if mask is None:
                 restrict = lambda x: (
                     torch.cumsum(x, dim=-2)
@@ -132,9 +133,11 @@ class SequenceDecoder(Decoder):
             assert lengths is not None, "lengths must be provided for ragged mode"
             # remove any additional padding (beyond max length of any sequence in the batch)
             restrict = lambda x: x[..., : max(lengths), :]
+        elif self.mode == 'mean': #useless, l_output = 0 turns to l_output = 1 which means pool is the average...
+            restrict = lambda x: torch.mean(x, dim=-2).unsqueeze(1)
         else:
             raise NotImplementedError(
-                "Mode must be ['last' | 'first' | 'pool' | 'sum']"
+                "Mode must be ['last' | 'first' | 'pool' | 'sum' | 'mean' | 'ragged']"
             )
 
         # Restrict to actual length of sequence
@@ -186,6 +189,96 @@ class TokenDecoder(Decoder):
         x = self.output_transform(x)
         return x
 
+class ProfileDecoder(Decoder):
+    '''Decoder for profile task and also coutns task'''
+    def __init__(self, d_model = 128, d_output = 1, l_output = 0, mode='pool', use_lengths=False):
+        super().__init__()
+        self.output_transform_counts = nn.Linear(d_model, d_output)
+        self.output_transform_profile = nn.Linear(d_model, 1) #maps the last dimension to the counts, so each sequence value gets its own
+        if l_output == 0:
+            l_output = 1
+            self.squeeze = True
+        else:
+            self.squeeze = False
+        self.l_output = l_output
+        self.mode = mode
+        self.use_lengths = use_lengths
+
+    def forward(self, x, state=None, lengths=None, l_output=None, mask=None):
+        x_profile = self.output_transform_profile(x)
+        if self.l_output is None:
+            if l_output is not None:
+                assert isinstance(l_output, int)  # Override by pass in
+            else:
+                # Grab entire output
+                l_output = x.size(-2)
+            squeeze = False
+        else:
+            l_output = self.l_output
+            squeeze = self.squeeze
+
+        if self.mode == "last":
+            restrict = lambda x: x[..., -l_output:, :]
+        elif self.mode == "first":
+            restrict = lambda x: x[..., :l_output, :]
+        elif self.mode == "pool": #what we used for the poster, finds moving average cumsum, if l_out is 0 becomes 1 which is average
+            #unsure if mask is used
+            if mask is None:
+                restrict = lambda x: (
+                    torch.cumsum(x, dim=-2)
+                    / torch.arange(
+                        1, 1 + x.size(-2), device=x.device, dtype=x.dtype
+                    ).unsqueeze(-1)
+                )[..., -l_output:, :]           
+            else:
+                # sum masks
+                mask_sums = torch.sum(mask, dim=-1).squeeze() - 1  # for 0 indexing
+
+                # convert mask_sums to dtype int
+                mask_sums = mask_sums.type(torch.int64)
+
+                restrict = lambda x: (
+                    torch.cumsum(x, dim=-2)
+                    / torch.arange(
+                        1, 1 + x.size(-2), device=x.device, dtype=x.dtype
+                    ).unsqueeze(-1)
+                )[torch.arange(x.size(0)), mask_sums, :].unsqueeze(1)  # need to keep original shape
+
+        elif self.mode == "sum":
+            restrict = lambda x: torch.cumsum(x, dim=-2)[..., -l_output:, :]
+            # TODO use same restrict function as pool case
+        elif self.mode == 'ragged':
+            assert lengths is not None, "lengths must be provided for ragged mode"
+            # remove any additional padding (beyond max length of any sequence in the batch)
+            restrict = lambda x: x[..., : max(lengths), :]
+        elif self.mode == 'mean': #useless, l_output = 0 turns to l_output = 1 which means pool is the average...
+            restrict = lambda x: torch.mean(x, dim=-2).unsqueeze(1)
+        else:
+            raise NotImplementedError(
+                "Mode must be ['last' | 'first' | 'pool' | 'sum' | 'mean' | 'ragged']"
+            )
+
+        # Restrict to actual length of sequence
+        if self.use_lengths:
+            assert lengths is not None
+            x = torch.stack(
+                [
+                    restrict(out[..., :length, :])
+                    for out, length in zip(torch.unbind(x, dim=0), lengths)
+                ],
+                dim=0,
+            )
+        else:
+            x = restrict(x)
+
+        if squeeze:
+            assert x.size(-2) == 1
+            x = x.squeeze(-2)
+
+        x = self.output_transform_counts(x)
+
+        return (x_profile,x)
+    
 
 class NDDecoder(Decoder):
     """Decoder for single target (e.g. classification or regression)"""
@@ -316,6 +409,7 @@ registry = {
     "state": StateDecoder,
     "pack": PackedDecoder,
     "token": TokenDecoder,
+    "profile": ProfileDecoder,
 }
 model_attrs = {
     "linear": ["d_output"],

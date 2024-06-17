@@ -11,6 +11,9 @@ data.tar.gz
 *.err
 *.npz
 *.h5
+*.bed
+*.bigWig
+# **/modisco/ENCODE_chip/*
 **/modisco/all_celltypes/*
 #includes the files not the things
 # !*/modisco/all_celltypes/*.*

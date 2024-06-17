@@ -58,6 +58,7 @@ class DNaseCtstDataset(): #when we have unique cell type specific tokens
         d_output = None,
         filter = False,
         classification = False,
+        single_cell_type = None, #if we want a single cell type, should be a single integer based on cell type number
     ):
         # print(filter)
         # import sys
@@ -81,6 +82,7 @@ class DNaseCtstDataset(): #when we have unique cell type specific tokens
         self.uppercase = uppercase
         self.filter = filter
         self.classification = classification
+        self.single_cell_type = single_cell_type
         # self.cell_types = cell_types
 
         #we load in based on the split
@@ -118,13 +120,18 @@ class DNaseCtstDataset(): #when we have unique cell type specific tokens
             #no longer the ugly workaround, let's just change the self.dnase_levels
             self.cell_dnase_levels = self.cell_dnase_levels[:,self.filtered_cell_types]
         self.cell_types = self.cell_dnase_levels.shape[1] #this is the number of cell types we have
+
+        #if we want to do just a singular cell type
+        if single_cell_type is not None:
+            self.cell_types = 1
+            self.cell_dnase_levels = self.cell_dnase_levels[:,single_cell_type, np.newaxis] #add a new axis to make it 2D still
         
         #and print the tokenizer vocab
         # print(self.tokenizer._vocab_str_to_int)
         
         
     def __len__(self):
-        return len(self.array) * self.cell_types
+        return len(self.array) * self.cell_types #automatically accounted for
 
     def replace_value(self, x, old_value, new_value):
         return torch.where(x == old_value, new_value, x)
@@ -135,7 +142,8 @@ class DNaseCtstDataset(): #when we have unique cell type specific tokens
             idx = len(self) + idx # negative indexing
         
         #we first find the specific cell type
-        celltype_idx = idx%self.cell_types #it's the remainder
+        celltype_idx = idx%self.cell_types #it's the remainder, which if we have self.cell_types = 1, will be 0
+        #this tells it only to go into the first cell type, but we only have a vector anyways
         cell_seq = celltype_idx+len(self.tokenizer) #int his dataset, we don't use th epermutation, but we do still use the celltype index from 0 to 161 and then add 12 so don't conflict with tokenizer
         #and now we index into the filtered indices with this if we will be filtering
         # if self.filter:
@@ -149,6 +157,7 @@ class DNaseCtstDataset(): #when we have unique cell type specific tokens
         
         #for the sequence index, we find the number of times it goes into that number of cell types
         seq_idx = int(idx/self.cell_types) #int will round down, equivalent to a//b for positive numbers
+        #if cell types is 1, then this will be the same as idx which is the sequence idx
         
         seq = self.array[seq_idx,2]
         # cCRE_id = self.array[seq_idx][0]
@@ -179,7 +188,7 @@ class DNaseCtstDataset(): #when we have unique cell type specific tokens
         
         #now we need to add our cell type tokens
         #we will add them to the left
-        seq = seq
+        # seq = seq
 
         if self.tokenizer_name == 'char': #will stick with this for sure
             seq = self.tokenizer(seq,
@@ -205,7 +214,8 @@ class DNaseCtstDataset(): #when we have unique cell type specific tokens
                 seq = seq["input_ids"][1:-1]  # remove both special tokens
         # print(seq)
         #now we will add the cell type token
-        seq.insert(0, cell_seq) #add the cell type token to the left, now ignore the tokenizer altogether
+        if self.single_cell_type is None:
+            seq.insert(0, cell_seq) #add the cell type token to the left, now ignore the tokenizer altogether
         # convert to tensor        
         seq = torch.LongTensor(seq)  # hack, remove the initial cls tokens for now
 

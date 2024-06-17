@@ -31,7 +31,7 @@ class BaseTask:
     encoder = None
     decoder = None
 
-    def __init__(self, dataset=None, model=None, loss=None, loss_val=None, metrics=None, torchmetrics=None):
+    def __init__(self, dataset=None, model=None, loss=None, loss_val=None, metrics=None, torchmetrics=None, bias_model=None):
         """ This class is allowed to grab attributes directly off a constructed dataset and model object """
         self.dataset = dataset
         self.model = model
@@ -59,6 +59,16 @@ class BaseTask:
         self.train_torchmetrics = torchmetrics.clone(prefix='train/')
         self.val_torchmetrics = torchmetrics.clone(prefix='val/')
         self.test_torchmetrics = torchmetrics.clone(prefix='test/')
+        
+        if bias_model == '/data/leslie/sarthak/data/chrombpnet_test/chrombpnet_model_1000/models/bias_model_scaled.h5':
+            self.bias_model = self.load_bias_model(bias_model)
+            #freeze bias model
+            for param in self.bias_model.parameters():
+                param.requires_grad = False
+            # device = next(self.model.parameters()).device
+            self.bias_model.to('cuda:0')
+        else:
+            self.bias_model = None
 
     def _init_torchmetrics(self):
         """
@@ -139,6 +149,15 @@ class BaseTask:
             for name in self.metric_names if name in M.loss_metric_fns
         }
         return {**output_metrics, **loss_metrics}
+    
+    def load_bias_model(self, path):
+        #we will load it as a pytorch model using jacob schrieber's code
+        import sys
+        sys.path.append('/data/leslie/sarthak/chrombpnet/')
+        from bpnetlite.bpnet import BPNet
+        #the location is /data/leslie/sarthak/chrombpnet/bpnetlite/bpnet.py
+        model = BPNet.from_chrombpnet(path,trimming=(1024-800)//2)
+        return model
 
     def forward(self, batch, encoder, model, decoder, _state):
         """Passes a batch through the encoder, backbone, and decoder"""
@@ -307,6 +326,47 @@ class RegClass(BaseTask):
         x[1] = torch.clamp(x[1], min=minimum)
         # print()
         
+        return x, y, w
+
+class ProfileClass(BaseTask):
+    def forward(self,batch,encoder,model,decoder,_state):
+        x, y, *z = batch
+        onehot_x = x[1]
+        x = x[0]
+        if len(z) == 0:
+            z = {}
+        else:
+            assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
+            z = z[0]
+        x, w = encoder(x)
+        x, state = model(x)
+        self._state = state
+        x, w = decoder(x, state=state, **z)
+        #now we need to center x[0] and get the middle 800
+        true_counts = y[0]
+        if x[0].shape[1] > true_counts.shape[1]:
+            #then we cut off from both ends until we get the same size
+            diff = x[0].shape[1] - true_counts.shape[1]
+            start = diff // 2
+            end = start + true_counts.shape[1]
+            profile_out = x[0][:, start:end].squeeze()
+        count_out = x[1]
+        # global bias_model
+        # print(self.bias_model)
+        if self.bias_model is not None:
+            # print('bias model worked!')
+            # import sys
+            # sys.exit()
+            # else:
+            # print('didn\'t work')
+            # import sys
+            # sys.exit()
+            bias_output = self.bias_model(onehot_x)
+            profile_out = profile_out + bias_output[0].squeeze()
+            #do log sum exp for count out
+            count_out = torch.logsumexp(torch.cat([count_out, bias_output[1]], dim=1), dim=1, keepdim=True) #need to test this shapes
+            #nn.Linear always preserves the last dimension, so we can just concatenate the two tensors and then do logsumexp
+        x = (profile_out, count_out)
         return x, y, w
 
 class MultiClass(BaseTask):
@@ -515,4 +575,5 @@ registry = {
     "masked_multiclass": MaskedMultiClass,
     'regression': Regression,
     'regclass': RegClass,
+    'profileclass': ProfileClass,
 }

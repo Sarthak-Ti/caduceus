@@ -15,24 +15,24 @@ from torch.utils.data import DataLoader
 from src.dataloaders.datasets.ccre_dataset import CcreDataset
 from src.models.sequence.long_conv_lm import ConvLMHeadModel
 
-#TODO we need to add a way to not need the config files, and to also make the classification targets a binary tensor to save memory
-
 class Evals():
-    def __init__(self, model_type, ckpt_path, filter=True, cfg = None, classification=True, split='test'):
+    def __init__(self, model_type, ckpt_path, filter=True, cfg = None, classification=True, split='test', single_cell_type=None, bias=None):
         #model type is like ccre, DNase, DNase_ctst etc.
         #ckpt_path is the path to the model checkpoint
         #filter is a boolean which is true if you want to filter the dataset to only include the cell types present in the training set
         #cfg is the path to the config file, if it's not provided, it will be inferred from the model type, but if you need a specific config, this is good to provide
         #classification is a boolean which is true if you want to evaluate a model that has a classification output
-        type_list = ['ccre', 'DNase_ctst', 'DNase_allcelltypes', 'DNase']
+        type_list = ['ccre', 'DNase_ctst', 'DNase_allcelltypes', 'DNase', 'Profile']
         if model_type not in type_list:
             raise ValueError('Model type not recognized')
         self.model_type = model_type   
         self.split = split
+        self.single_cell_type = single_cell_type
         self.filter = filter
         self.classification = classification
         self.ckpt_path = ckpt_path
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.bias = bias
         self.cfg = cfg #this is for if we want to define a separate one
         self.tokenizer = self.setup_tokenizer()
         self.setup_model()
@@ -41,7 +41,7 @@ class Evals():
         
     def setup_tokenizer(self):
         model_type = self.model_type
-        acgtn_list = ['ccre', 'DNase_ctst', 'DNase_allcelltypes']
+        acgtn_list = ['ccre', 'DNase_ctst', 'DNase_allcelltypes', 'Profile']
         extra_list = ['DNase']
         if model_type in acgtn_list:
             tokenizer = CharacterTokenizer( #make sure to fix the tokenizer too
@@ -83,6 +83,9 @@ class Evals():
             else:
                 cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/DNase.yaml'
             self.regression_head(cfg, adjust_embedding=True) #20 dimensional input but 16 output lm size
+        elif model_type == 'Profile':
+            cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/profile.yaml'
+            self.model = HG38Encoder(cfg, self.ckpt_path, 1024).eval()
     
     def setup_dataset(self):
         model_type = self.model_type
@@ -95,7 +98,7 @@ class Evals():
             return dataset
         elif model_type == 'DNase_ctst':
             from src.dataloaders.datasets.DNase_ctst_dataset import DNaseCtstDataset
-            dataset = DNaseCtstDataset(max_length = 1024, split = self.split, tokenizer=self.tokenizer, rc_aug = False, tokenizer_name='char', add_eos='True', filter = self.filter, classification=self.classification)
+            dataset = DNaseCtstDataset(max_length = 1024, split = self.split, tokenizer=self.tokenizer, rc_aug = False, tokenizer_name='char', add_eos='True', filter = self.filter, classification=self.classification, single_cell_type=self.single_cell_type)
             return dataset
         elif model_type == 'DNase_allcelltypes':
             from src.dataloaders.datasets.DNase_allcelltypes import DNaseAllCellTypeDataset
@@ -182,10 +185,16 @@ class Evals():
                         break
                     # if i == 5:
                     #     break
-            targets = targets_flat.reshape(-1, self.dataset.cell_types)
-            predicts = predicts_flat.reshape(-1, self.dataset.cell_types)
-            targets2 = targets_class_flat.reshape(-1, self.dataset.cell_types)
-            predicts2 = predicts_class_flat.reshape(-1, self.dataset.cell_types)
+            if self.single_cell_type is not None:
+                targets = targets_flat
+                predicts = predicts_flat
+                targets2 = targets_class_flat
+                predicts2 = predicts_class_flat
+            else:
+                targets = targets_flat.reshape(-1, self.dataset.cell_types)
+                predicts = predicts_flat.reshape(-1, self.dataset.cell_types)
+                targets2 = targets_class_flat.reshape(-1, self.dataset.cell_types)
+                predicts2 = predicts_class_flat.reshape(-1, self.dataset.cell_types)
             if self.classification:
                 targets = (targets2, targets)
                 predicts = (predicts2, predicts)

@@ -139,6 +139,13 @@ class SequenceLightningModule(pl.LightningModule):
         # Passing in config expands it one level, so can access by self.hparams.train instead of self.hparams.config.train
         self.save_hyperparameters(config, logger=False)
 
+        #here we check if our parameters say to load a bias model
+        if config.train.get("bias_model_path", None) is not None:
+            self.bias_model = torch.load(config.train.bias_model_path)
+            #freeze the weights
+            for param in self.bias_model.parameters():
+                param.requires_grad = False
+
         # Dataset arguments
         # print(self.hparams.dataset._name_) is cCRE or DNase depending on what you need
         # print(SequenceDataset.registry)
@@ -324,6 +331,8 @@ class SequenceLightningModule(pl.LightningModule):
         # print(self.decoder)
         # import sys
         # sys.exit()
+        # if hasattr(self, 'bias_model'):
+        #     return self.task.forward(batch, self.encoder, self.model, self.decoder, self._state, self.bias_model) #only for profile task
         return self.task.forward(batch, self.encoder, self.model, self.decoder, self._state)
 
     def step(self, x_t):
@@ -729,6 +738,7 @@ def train(config):
         pl.seed_everything(config.train.seed, workers=True)
     trainer = create_trainer(config)
     model = SequenceLightningModule(config)
+    # print(model)
     # print(model.model.backbone.load_old_embedding,'\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n')
     #this is fine now
     # check_gpu_status()
@@ -756,6 +766,7 @@ def train(config):
             strict=config.train.pretrained_model_strict_load,
             map_location='cpu',
         )
+        # print(model)
         #let's just go ahead and find the weights and save the embeddings
         # torch.save(ic(model.model.backbone.embeddings.word_embeddings), '/data/leslie/sarthak/data/og_embeddings.pt')
         # torch.save(ic(model.model.backbone.new_embeddings.word_embeddings), '/data/leslie/sarthak/data/new_embeddings.pt')

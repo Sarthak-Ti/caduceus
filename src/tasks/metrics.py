@@ -118,7 +118,6 @@ def last_k_ppl(logits, y, seq_len=1024, k=None):
     # get avg and put on cpu
     return F.cross_entropy(logits, y, reduction='none').view(y.shape[0], -1).mean().exp().cpu()
 
-
 def _student_t_map(mu, sigma, nu):
     sigma = F.softplus(sigma)
     nu = 2.0 + F.softplus(nu)
@@ -286,6 +285,10 @@ def mse(outs, y, len_batch=None):
     # ic(len_batch)
     # import sys
     # sys.exit()
+    #check if outs is a tuple
+    if isinstance(outs, tuple): #for profile prediction, it's the second output
+        outs = outs[1]
+        y = y[1]
     if len(y.shape) < len(outs.shape):
         assert outs.shape[-1] == 1
         outs = outs.squeeze(-1)
@@ -406,6 +409,66 @@ def custom_ce(outs, y, len_batch=None, ignore_index=-100, mask = True, weight = 
     ce_loss = binary_cross_entropy_with_logits(class_out, class_y, pos_weight=pos_weight)
     return ce_loss*(1-weight)
 
+def cbpnet_multinomial_nll(logits,true_counts, len_batch=None, ignore_index=-100, mask = True):
+
+    """A loss function based on the multinomial negative log-likelihood.
+    modified by me to include things like doing thE log softmax and deal with more complex tracking
+
+    This loss function takes in a tensor of normalized log probabilities such
+    that the sum of each row is equal to 1 (e.g. from a log softmax) and
+    an equal sized tensor of true counts and returns the probability of
+    observing the true counts given the predicted probabilities under a
+    multinomial distribution. Can accept tensors with 2 or more dimensions
+    and averages over all except for the last axis, which is the number
+    of categories.
+
+    Adapted from Alex Tseng.
+
+    Parameters
+    ----------
+    logps: torch.tensor, shape=(n, ..., L)
+        A tensor with `n` examples and `L` possible categories. 
+
+    true_counts: torch.tensor, shape=(n, ..., L)
+        A tensor with `n` examples and `L` possible categories.
+
+    Returns
+    -------
+    loss: float
+        The multinomial log likelihood loss of the true counts given the
+        predicted probabilities, averaged over all examples and all other
+        dimensions.
+    """
+    if isinstance(logits, tuple): #for wandb tracking, it inputs logits here, since then it's a tuple
+        logits = logits[0]
+        true_counts = true_counts[0]
+    #we also need to make sure that we have the right shape
+    logits = logits.squeeze(); true_counts = true_counts.squeeze()
+    # if logits.shape[1] > true_counts.shape[1]: #added it in the tasks instead
+    #     #then we cut off from both ends until we get the same size
+    #     diff = logits.shape[1] - true_counts.shape[1]
+    #     start = diff // 2
+    #     end = start + true_counts.shape[1]
+    #     logits = logits[:, start:end]
+        # logits = logits[:,diff//2:-diff//2]
+    logps = torch.log_softmax(logits, dim=-1)
+    log_fact_sum = torch.lgamma(torch.sum(true_counts, dim=-1) + 1)
+    log_prod_fact = torch.sum(torch.lgamma(true_counts + 1), dim=-1)
+    log_prod_exp = torch.sum(true_counts * logps, dim=-1)
+    return (-log_fact_sum + log_prod_fact - log_prod_exp).mean()
+    
+
+def custom_profile_loss(outs, y, len_batch=None, ignore_index=-100, mask = True, count_weight = 64.7):
+    '''
+    based on chrombpnet implementation of this loss
+    '''
+    profile = outs[0]
+    counts = outs[1]
+    label_profile = y[0]
+    label_counts = y[1]
+    mse_loss = mse(counts, label_counts, len_batch)
+    multinomial_loss = cbpnet_multinomial_nll(profile, label_profile)
+    return count_weight*mse_loss + multinomial_loss
 
 # Metrics that can depend on the loss
 def loss(x, y, loss_fn):
@@ -454,6 +517,8 @@ output_metric_fns = {
     "custom_mse_ce": custom_mse_ce,
     "custom_mse": custom_mse,
     "custom_ce": custom_ce,
+    'custom_profile_loss': custom_profile_loss,
+    'cbpnet_multinomial_nll': cbpnet_multinomial_nll,
 }
 
 loss_metric_fns = {
