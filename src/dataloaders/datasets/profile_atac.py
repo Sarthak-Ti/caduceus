@@ -161,6 +161,8 @@ class ProfileATAC(): #when we have unique cell type specific tokens
         output_len = None,
         input_len = None,
         single_cell_type = False,
+        train_bias = False,
+        data_path = None,
     ):
         
         self.max_length = max_length
@@ -181,48 +183,62 @@ class ProfileATAC(): #when we have unique cell type specific tokens
         self.rc_aug = rc_aug
         self.uppercase = uppercase
         self.jitter = jitter
+        self.train_bias = train_bias
         # self.cell_types = cell_types
 
         #we load in based on the split
         if split == 'val':
             split = 'valid' #chrombpnets way of calling the data for some reason???
-        data_path = f'/data/leslie/sarthak/data/chrombpnet_test/saved_data_1000/{split}/'
+        if data_path is None:
+            data_path = f'/data/leslie/sarthak/data/chrombpnet_test/saved_data_1000/{split}/'
+        else:
+            data_path = data_path+f'{split}/'
         #what we do is load in the numpy arrays
-        self.peak_seqs = np.load(data_path+'peak_seqs.npy')
-        self.peak_cts = np.load(data_path+'peak_cts.npy')
-        self.peak_coords = np.load(data_path+'peak_coords.npy')
+        if not self.train_bias:
+            self.peak_seqs = np.load(data_path+'peak_seqs.npy')
+            self.peak_cts = np.load(data_path+'peak_cts.npy')
+            self.peak_coords = np.load(data_path+'peak_coords.npy')
 
-        if split == 'train' or split == 'valid':
+            if split == 'train' or split == 'valid':
+                self.nonpeak_seqs = np.load(data_path+'nonpeak_seqs.npy') #nonpeaks only true for train and valid?
+                self.nonpeak_cts = np.load(data_path+'nonpeak_cts.npy')
+                self.nonpeak_coords = np.load(data_path+'nonpeak_coords.npy')
+
+                #now we subsample the nonpeaks. Probably done by chrombpnet for val but doesn't really hurt to check
+                num_nonpeak_samples = int(0.1 * self.peak_seqs.shape[0]) #now a 1:10 ratio
+                nonpeak_indices_to_keep = np.random.choice(len(self.nonpeak_seqs), size=num_nonpeak_samples, replace=False)
+                self.nonpeak_seqs = self.nonpeak_seqs[nonpeak_indices_to_keep]
+                self.nonpeak_cts = self.nonpeak_cts[nonpeak_indices_to_keep]
+                self.nonpeak_coords = self.nonpeak_coords[nonpeak_indices_to_keep]
+                # print(self.nonpeak_seqs.shape)
+                #and now we create a joint seqs, cts and coords
+                #now we get the middle center 1524 of the peaks data and random crop it, but only if it's training
+                if split == 'train':
+                    middle_seqs = self.peak_seqs.shape[1]//2
+                    self.peak_seqs = self.peak_seqs[:,middle_seqs-762:middle_seqs+762,:]
+                    #for the cts don't want the middle 1524 but subtract 24 from it because then we can predict the middle 1000
+                    middle_cts = self.peak_cts.shape[1]//2
+                    self.peak_cts = self.peak_cts[:,middle_cts-650:middle_cts+650]
+                    #now random crop
+                    self.peak_seqs, self.peak_cts, self.peak_coords = random_crop(self.peak_seqs, self.peak_cts, self.max_length, 800, self.peak_coords)
+
+                    #and get the middle 1024 of the nonpeaks data
+                    middle_seqs = self.nonpeak_seqs.shape[1]//2
+                    self.nonpeak_seqs = self.nonpeak_seqs[:,middle_seqs-512:middle_seqs+512,:]
+                    middle_cts = self.nonpeak_cts.shape[1]//2
+                    self.nonpeak_cts = self.nonpeak_cts[:,middle_cts-400:middle_cts+400] #this gives th emiddle 800
+            elif split == 'test':
+                self.nonpeak_seqs = np.empty((0,) + self.peak_seqs.shape[1:], dtype=self.peak_seqs.dtype)
+                self.nonpeak_cts = np.empty((0,) + self.peak_cts.shape[1:], dtype=self.peak_cts.dtype)
+                self.nonpeak_coords = np.empty((0,) + self.peak_coords.shape[1:], dtype=self.peak_coords.dtype)
+        
+        if self.train_bias: #here we only have nonpeak sequences that have already met the threshold!
             self.nonpeak_seqs = np.load(data_path+'nonpeak_seqs.npy') #nonpeaks only true for train and valid?
             self.nonpeak_cts = np.load(data_path+'nonpeak_cts.npy')
             self.nonpeak_coords = np.load(data_path+'nonpeak_coords.npy')
-
-            #now we subsample the nonpeaks. Probably done by chrombpnet for val but doesn't really hurt to check
-            num_nonpeak_samples = int(0.1 * self.peak_seqs.shape[0]) #now a 1:10 ratio
-            nonpeak_indices_to_keep = np.random.choice(len(self.nonpeak_seqs), size=num_nonpeak_samples, replace=False)
-            self.nonpeak_seqs = self.nonpeak_seqs[nonpeak_indices_to_keep]
-            self.nonpeak_cts = self.nonpeak_cts[nonpeak_indices_to_keep]
-            self.nonpeak_coords = self.nonpeak_coords[nonpeak_indices_to_keep]
-            # print(self.nonpeak_seqs.shape)
-            #and now we create a joint seqs, cts and coords
-            #now we get the middle center 1524 of the peaks data and random crop it, but only if it's training
-            middle_seqs = self.peak_seqs.shape[1]//2
-            self.peak_seqs = self.peak_seqs[:,middle_seqs-762:middle_seqs+762,:]
-            #for the cts don't want the middle 1524 but subtract 24 from it because then we can predict the middle 1000
-            middle_cts = self.peak_cts.shape[1]//2
-            self.peak_cts = self.peak_cts[:,middle_cts-650:middle_cts+650]
-            #now random crop
-            self.peak_seqs, self.peak_cts, self.peak_coords = random_crop(self.peak_seqs, self.peak_cts, self.max_length, 800, self.peak_coords)
-
-            #and get the middle 1024 of the nonpeaks data
-            middle_seqs = self.nonpeak_seqs.shape[1]//2
-            self.nonpeak_seqs = self.nonpeak_seqs[:,middle_seqs-512:middle_seqs+512,:]
-            middle_cts = self.nonpeak_cts.shape[1]//2
-            self.nonpeak_cts = self.nonpeak_cts[:,middle_cts-400:middle_cts+400] #this gives th emiddle 800
-        elif split == 'test':
-            self.nonpeak_seqs = np.empty((0,) + self.peak_seqs.shape[1:], dtype=self.peak_seqs.dtype)
-            self.nonpeak_cts = np.empty((0,) + self.peak_cts.shape[1:], dtype=self.peak_cts.dtype)
-            self.nonpeak_coords = np.empty((0,) + self.peak_coords.shape[1:], dtype=self.peak_coords.dtype)
+            self.peak_seqs = np.empty((0,) + self.nonpeak_seqs.shape[1:], dtype=self.nonpeak_seqs.dtype)
+            self.peak_cts = np.empty((0,) + self.nonpeak_cts.shape[1:], dtype=self.nonpeak_cts.dtype)
+            self.peak_coords = np.empty((0,) + self.nonpeak_coords.shape[1:], dtype=self.nonpeak_coords.dtype)
         # print(self.nonpeak_cts.shape)
         # print(middle_cts)
         # self.nonpeak_cts = self.nonpeak_cts[:,middle_cts-511:middle_cts+512]

@@ -458,7 +458,7 @@ def cbpnet_multinomial_nll(logits,true_counts, len_batch=None, ignore_index=-100
     return (-log_fact_sum + log_prod_fact - log_prod_exp).mean()
     
 
-def custom_profile_loss(outs, y, len_batch=None, ignore_index=-100, mask = True, count_weight = 64.7):
+def custom_profile_loss(outs, y, len_batch=None, ignore_index=-100, mask = True, count_weight = 3.6):
     '''
     based on chrombpnet implementation of this loss
     '''

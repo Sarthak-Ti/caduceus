@@ -574,7 +574,8 @@ class ProfileATACLoader(HG38): #for unique cell type tokens
                 padding_side='left', return_mask=False, val_ratio=0.0005, val_split_seed=2357, add_eos=False, 
                 detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
-                fast_forward_epochs=None, fast_forward_batches=None, single_cell_type = None, *args, **kwargs):
+                fast_forward_epochs=None, fast_forward_batches=None, single_cell_type = None,
+                train_bias=False, data_path=None, *args, **kwargs):
         self.dataset_name = dataset_name
         self.dest_path = dest_path
         self.tokenizer_name = tokenizer_name
@@ -598,6 +599,8 @@ class ProfileATACLoader(HG38): #for unique cell type tokens
         self.pin_memory = pin_memory
         self.drop_last = drop_last
         self.single_cell_type = single_cell_type
+        self.train_bias = train_bias
+        self.data_path = data_path
 
         if self.dest_path is None:
             self.dest_path = default_data_path / self._name_
@@ -643,6 +646,8 @@ class ProfileATACLoader(HG38): #for unique cell type tokens
                                 rc_aug=self.rc_aug,
                                 return_augs=False,
                                 single_cell_type = self.single_cell_type,
+                                data_path=self.data_path,
+                                train_bias=self.train_bias,
                                 # return_mask=self.return_mask,
             )
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])

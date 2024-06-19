@@ -139,12 +139,12 @@ class SequenceLightningModule(pl.LightningModule):
         # Passing in config expands it one level, so can access by self.hparams.train instead of self.hparams.config.train
         self.save_hyperparameters(config, logger=False)
 
-        #here we check if our parameters say to load a bias model
-        if config.train.get("bias_model_path", None) is not None:
-            self.bias_model = torch.load(config.train.bias_model_path)
-            #freeze the weights
-            for param in self.bias_model.parameters():
-                param.requires_grad = False
+        # #here we check if our parameters say to load a bias model
+        # if config.train.get("bias_model_path", None) is not None:
+        #     self.bias_model = torch.load(config.train.bias_model_path)
+        #     #freeze the weights
+        #     for param in self.bias_model.parameters():
+        #         param.requires_grad = False
 
         # Dataset arguments
         # print(self.hparams.dataset._name_) is cCRE or DNase depending on what you need
@@ -349,6 +349,8 @@ class SequenceLightningModule(pl.LightningModule):
 
         self._process_state(batch, batch_idx, train=(prefix == "train")) #does some state stuff
         x, y, w = self.forward(batch) #here the forward is gone through, x is actually y hat, and y is the output, w is the parameters
+        if self.hparams.train.get('count_weight', None) is not None:
+            w['count_weight'] = self.hparams.train.count_weight
         #expect x to be long x 16 since it's the logits
         # print("x shape", x.shape) #it is correct, as we expected
         # print("y shape", y.shape)

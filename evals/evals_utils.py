@@ -14,14 +14,17 @@ from src.models.sequence.dna_embedding import DNAEmbeddingModel
 from torch.utils.data import DataLoader
 from src.dataloaders.datasets.ccre_dataset import CcreDataset
 from src.models.sequence.long_conv_lm import ConvLMHeadModel
+from src.tasks.decoders import ProfileDecoder
+import numpy as np
 
 class Evals():
-    def __init__(self, model_type, ckpt_path, filter=True, cfg = None, classification=True, split='test', single_cell_type=None, bias=None):
+    def __init__(self, model_type, ckpt_path, filter=True, cfg = None, classification=True, split='test', single_cell_type=None, bias=None, profile_len=800):
         #model type is like ccre, DNase, DNase_ctst etc.
         #ckpt_path is the path to the model checkpoint
         #filter is a boolean which is true if you want to filter the dataset to only include the cell types present in the training set
         #cfg is the path to the config file, if it's not provided, it will be inferred from the model type, but if you need a specific config, this is good to provide
         #classification is a boolean which is true if you want to evaluate a model that has a classification output
+        #bias is whethehr or not we have a bias model, should be the path to it
         type_list = ['ccre', 'DNase_ctst', 'DNase_allcelltypes', 'DNase', 'Profile']
         if model_type not in type_list:
             raise ValueError('Model type not recognized')
@@ -34,6 +37,7 @@ class Evals():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.bias = bias
         self.cfg = cfg #this is for if we want to define a separate one
+        self.profile_len = profile_len
         self.tokenizer = self.setup_tokenizer()
         self.setup_model()
         self.dataset = self.setup_dataset()
@@ -85,7 +89,7 @@ class Evals():
             self.regression_head(cfg, adjust_embedding=True) #20 dimensional input but 16 output lm size
         elif model_type == 'Profile':
             cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/profile.yaml'
-            self.model = HG38Encoder(cfg, self.ckpt_path, 1024).eval()
+            self.profile_head(cfg)
     
     def setup_dataset(self):
         model_type = self.model_type
@@ -103,6 +107,10 @@ class Evals():
         elif model_type == 'DNase_allcelltypes':
             from src.dataloaders.datasets.DNase_allcelltypes import DNaseAllCellTypeDataset
             dataset = DNaseAllCellTypeDataset(max_length = 1024, split = self.split, tokenizer=self.tokenizer, rc_aug = False, tokenizer_name='char', add_eos='True', filter = self.filter, classification=self.classification)
+            return dataset
+        elif model_type == 'Profile':
+            from src.dataloaders.datasets.profile_atac import ProfileATAC
+            dataset = ProfileATAC(max_length = 1024, split = self.split, tokenizer=self.tokenizer, rc_aug = False, tokenizer_name='char', add_eos='False')
             return dataset
         
     def regression_head(self, cfg, adjust_embedding=False):
@@ -138,6 +146,48 @@ class Evals():
         backbone.load_state_dict(model_state_dict, strict=True)
         self.decoder = decoder.to(self.device).eval()
         self.backbone = backbone.to(self.device).eval()
+
+    def profile_head(self, cfg):
+        if self.cfg is None:
+            cfg = yaml.load(open(cfg, 'r'), Loader=yaml.FullLoader)
+        else:
+            cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/' + self.cfg
+            cfg = yaml.load(open(cfg, 'r'), Loader=yaml.FullLoader)
+        train_cfg = cfg['train']
+        model_cfg = cfg['model_config']
+        d_output = train_cfg['d_output']
+        backbone = DNAEmbeddingModel(**model_cfg)
+        decoder = ProfileDecoder(model_cfg['d_model'], d_output=d_output, l_output=0, mode='pool')
+        ckpt_path = self.ckpt_path
+        state_dict = torch.load(ckpt_path, map_location='cpu')
+        torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(
+            state_dict["state_dict"], "model."
+        )
+        model_state_dict = state_dict["state_dict"]
+        # need to remove torchmetrics. to remove keys, need to convert to list first
+        for key in list(model_state_dict.keys()):
+            if "torchmetrics" in key:
+                model_state_dict.pop(key)
+        # the state_dict keys slightly mismatch from Lightning..., so we fix it here
+        decoder_state_dict = {}
+        decoder_state_dict['output_transform_counts.weight'] = model_state_dict.pop('decoder.0.output_transform_counts.weight')
+        decoder_state_dict['output_transform_counts.bias'] = model_state_dict.pop('decoder.0.output_transform_counts.bias')
+        decoder_state_dict['output_transform_profile.weight'] = model_state_dict.pop('decoder.0.output_transform_profile.weight')
+        decoder_state_dict['output_transform_profile.bias'] = model_state_dict.pop('decoder.0.output_transform_profile.bias')
+        # now actually load the state dict to the decoder and backbone separately
+        decoder.load_state_dict(decoder_state_dict, strict=True)
+        backbone.load_state_dict(model_state_dict, strict=True)
+        self.decoder = decoder.to(self.device).eval()
+        self.backbone = backbone.to(self.device).eval()
+        if self.bias is not None:
+            import sys
+            sys.path.append('/data/leslie/sarthak/chrombpnet/')
+            from bpnetlite.bpnet import BPNet
+            #the location is /data/leslie/sarthak/chrombpnet/bpnetlite/bpnet.py
+            model = BPNet.from_chrombpnet(self.bias,trimming=(1024-800)//2)
+            #eval mode and move it
+            self.model = model.eval().to(self.device)
+
 #let's work on making that evaluation utils
     def evaluate(self, batch_size=4096, num_workers=4, stop = None):
         if self.model_type == 'ccre':
@@ -231,6 +281,43 @@ class Evals():
                 targets = (targets_class, targets)
                 predicts = (predicts_class, predicts)
             return targets, predicts
+        elif self.model_type == 'Profile':
+            targets_profile = torch.zeros((len(self.dataset), self.profile_len))
+            targets_counts = torch.zeros((len(self.dataset)))
+            predicts_profile = torch.zeros((len(self.dataset), self.profile_len))
+            predicts_counts = torch.zeros((len(self.dataset)))
+            loader = DataLoader(self.dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+            with torch.no_grad():
+                idx = 0
+                for i, batch in tqdm(enumerate(loader), total = len(loader)):
+                    (seq, seq_onehot), (profile,counts) = batch
+                    seq = seq.to(self.device)
+                    b_size = seq.shape[0]
+                    y_hat, _ = self.backbone(seq)
+                    y_hat = self.decoder(y_hat)
+                    counts_out = y_hat[1]
+                    if y_hat[0].shape[1] > profile.shape[1]:
+                        #then we cut off from both ends until we get the same size
+                        diff = y_hat[0].shape[1] - profile.shape[1]
+                        start = diff // 2
+                        end = start + profile.shape[1]
+                        profile_out = y_hat[0][:, start:end].squeeze()
+                    if self.bias:
+                        bias_out = self.model(seq_onehot.to(self.device))
+                        profile_out = profile_out + bias_out[0].squeeze()
+                        counts_out = torch.logsumexp(torch.cat([y_hat[1], bias_out[1]], dim=1), dim=1, keepdim=True)
+                    targets_profile[idx:b_size+idx,:] = profile.squeeze().cpu()
+                    targets_counts[idx:b_size+idx] = counts.squeeze().cpu()
+                    predicts_profile[idx:b_size+idx,:] = profile_out.detach().cpu()
+                    predicts_counts[idx:b_size+idx] = counts_out.detach().cpu().squeeze()
+                    idx += b_size
+                    if i == stop:
+                        break
+            targets = (targets_profile, targets_counts)
+            predicts = (predicts_profile, predicts_counts)
+            return targets, predicts
+            
+            
         
 class HG38Encoder:
     "Encoder inference for HG38 sequences"
@@ -271,3 +358,15 @@ class HG38Encoder:
         model.load_state_dict(state_dict["state_dict"])
 
         return model
+
+def pearsonr2(x, y):
+    # Compute Pearson correlation coefficient. We can't use `cov` or `corrcoef`
+    # because they want to compute everything pairwise between rows of a
+    # stacked x and y.
+    xm = x.mean(axis=-1, keepdims=True)
+    ym = y.mean(axis=-1, keepdims=True)
+    cov = np.sum((x - xm) * (y - ym), axis=-1)/(x.shape[-1]-1)
+    sx = np.std(x, ddof=1, axis=-1)
+    sy = np.std(y, ddof=1, axis=-1)
+    rho = cov/(sx * sy)
+    return rho
