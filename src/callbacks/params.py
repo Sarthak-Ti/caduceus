@@ -1,6 +1,7 @@
 """Callback to log the number of parameters of the model.
 
 """
+# from typing import Any #commented out didn't used to be
 
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_only

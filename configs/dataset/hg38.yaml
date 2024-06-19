@@ -12,3 +12,6 @@ num_workers: 4  # For preprocessing only
 shuffle: True
 __train_len: 34021
 __l_max: ${.max_length}
+# pin_memory: True
+# __train_len: ${div_up:1_000_000_000, ${.max_length}}
+# __l_max: ${.max_length}

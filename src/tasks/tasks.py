@@ -4,6 +4,7 @@ from typing import List
 import torch.nn as nn
 from einops import rearrange
 
+import torch
 import src.models.nn.utils as U
 import src.tasks.metrics as M
 import torchmetrics as tm
@@ -24,16 +25,14 @@ class BaseTask:
     encoder = None
     decoder = None
 
-    def __init__(self, dataset=None, model=None, loss=None, loss_val=None, metrics=None, torchmetrics=None):
+    def __init__(self, dataset=None, model=None, loss=None, loss_val=None, metrics=None, torchmetrics=None, bias_model=None):
         """ This class is allowed to grab attributes directly off a constructed dataset and model object """
         self.dataset = dataset
         self.model = model
-        if metrics is None:
-            metrics = []
+        if metrics is None: metrics = []
         self.metric_names = to_list(metrics)
 
-        if torchmetrics is None:
-            torchmetrics = []
+        if torchmetrics is None: torchmetrics = []
         self.torchmetric_names = to_list(torchmetrics)
         self._tracked_torchmetrics = {}
 
@@ -42,6 +41,9 @@ class BaseTask:
         # Wrap loss and metrics so that they accept kwargs and
 
         # Create loss function
+        # print(loss)
+        # import sys
+        # sys.exit()
         self.loss = instantiate(M.output_metric_fns, loss, partial=True)
         self.loss = U.discard_kwargs(self.loss)
         if loss_val is not None:
@@ -51,6 +53,16 @@ class BaseTask:
         self.train_torchmetrics = torchmetrics.clone(prefix='train/')
         self.val_torchmetrics = torchmetrics.clone(prefix='val/')
         self.test_torchmetrics = torchmetrics.clone(prefix='test/')
+        
+        if bias_model == '/data/leslie/sarthak/data/chrombpnet_test/chrombpnet_model_1000/models/bias_model_scaled.h5':
+            self.bias_model = self.load_bias_model(bias_model)
+            #freeze bias model
+            for param in self.bias_model.parameters():
+                param.requires_grad = False
+            # device = next(self.model.parameters()).device
+            self.bias_model.to('cuda:0')
+        else:
+            self.bias_model = None
 
     def _init_torchmetrics(self):
         """
@@ -139,11 +151,20 @@ class BaseTask:
             for name in self.metric_names if name in M.loss_metric_fns
         }
         return {**output_metrics, **loss_metrics}
+    
+    def load_bias_model(self, path):
+        #we will load it as a pytorch model using jacob schrieber's code
+        import sys
+        sys.path.append('/data/leslie/sarthak/chrombpnet/')
+        from bpnetlite.bpnet import BPNet
+        #the location is /data/leslie/sarthak/chrombpnet/bpnetlite/bpnet.py
+        model = BPNet.from_chrombpnet(path,trimming=(1024-800)//2)
+        return model
 
     def forward(self, batch, encoder, model, decoder, _state):
         """Passes a batch through the encoder, backbone, and decoder"""
         # z holds arguments such as sequence length
-        x, y, *z = batch  # z holds extra dataloader info such as resolution
+        x, y, *z = batch # z holds extra dataloader info such as resolution
         if len(z) == 0:
             z = {}
         else:
@@ -171,33 +192,195 @@ class LMTask(BaseTask):
     def forward(self, batch, encoder, model, decoder, _state):
         """Passes a batch through the encoder, backbone, and decoder"""
         # z holds arguments such as sequence length
-        x, y, *z = batch  # z holds extra dataloader info such as resolution
+        x, y, *z = batch # z holds extra dataloader info such as resolution
+        # print("x shape: ", x.shape)
+        # print("y shape: ", y.shape) #x and y shape seems to be 512 x 1023, not sure why since batch size is 256
+        # print("z shape: ", z) #is an empty dict for now, because not doing transformer
+        # print("x one sample", x[0,:])
+        # print("y one sample", y[0,:])
+        # print('test pad', x[0,0:25])
         if len(z) == 0:
-            z = {}
+            z = {} #sets to an exmpty dict, seems dataloader can have some other options, only for encoder and decoder
         else:
             assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
             z = z[0]
-        # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
-        x, w = encoder(x, **z)
-        # Needed for Mamba (open-source repo version)
+        x, w = encoder(x, **z) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        #the x output should be identical, not sure what w is, probably some options
+        # print('w: ', w)
+        # print("state before model: ", _state)
         if "state" in inspect.signature(model.forward).parameters.keys():
             x, state = model(x, **w, state=_state)
         else:
             x = model(x, **w)
             state = None
         self._state = state
+        # print("state after model: ", state) #both are none
         x, w = decoder(x, state=state, **z)
-
+        # print(torch.all(x.eq(w)))
+        # print("w after decoder: ", w) # just a dict with key state and value none
+        # print("x after decoder: ", x) #this is now a dict
         if hasattr(x, 'logits'):
             x = x.logits
         x = rearrange(x, '... C -> (...) C')
         y = rearrange(y, '... -> (...)')
-
+        # print("x shape after logit: ", x.shape) #is (512 x 1023) x 16 which doesn't make sense, but that is the network output
+        #it is 523776 x 16, and then y is just the labels, so it is 523776 x 1
+        
+        #let's visualize the output before rearranging
+        # print(x.shape) #is now 512 x 1023 x 16 for the logits. batch size, then for each of the values the prediction for the 16 classes
+        # print(y.shape)
+        # print('example 15')
+        # print(x[15,100:102,:])
+        # print(y[15, 100:102]) #the actual values
+        # print('example 16')
+        # print(x[16,100:102,:])
+        # print(y[16, 100:102]) #the actual values
+        #looks as you expect, the predicted logits and the actual values
+        
+               
+        # print("x shape after rearrange: ", x.shape)
+        # print("y shape before rearrange: ", y.shape)
+        # print("y shape after rearrange: ", y.shape)
+        # import sys
+        # sys.exit()
         return x, y, w
 
 
-class MultiClass(BaseTask):
+class Regression(BaseTask): #my custom defined task
+    # def __init__(self, batch, encoder, model, decoder, _state):
+    #     super().__init__(dataset, model, loss, loss_val, metrics, torchmetrics)
+    #     self.loss = nn.MSELoss()
+    def forward(self, batch, encoder, model, decoder, _state, minimum=-10):
+        """Passes a batch through the encoder, backbone, and decoder"""
+        # z holds arguments such as sequence length
+        x, y, *z = batch
+        
+        # ic(x.shape)
+        # # ic(y.shape)
+        # ic(y[0].shape)
+        # ic(y[1].shape)
+        # ic(y)
+        # ic(x)
+        # ic(z)
+        
+        if len(z) == 0:
+            z = {}
+        else:
+            assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
+            z = z[0]
+            
+        x, w = encoder(x) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        # ic(x)
+        # ic(x.shape)
+        # print(model)
+        x, state = model(x)
+        self._state = state
+        x, w = decoder(x, state=state, **z)
+        # print(x.shape, y.shape, w) #with d_output=1 we find that x is 1024 x 1, y is 1024 x 1, and w is none. This is perfect and what we need!
+        # import sys
+        # sys.exit()
+        
+        #what we will do is now clamp the data to at minimum be -10
+        x = torch.clamp(x, min=minimum)
+        # ic(x)
+        # import sys
+        # sys.exit()
+        # ic(y)
+        # ic(w)
+        return x, y, w
 
+
+    # def metrics(self, x, y, **kwargs):
+    #     output_metrics = {
+    #         name: U.discard_kwargs(M.output_metric_fns[name])(x, y, **kwargs)
+    #         for name in self.metric_names if name in M.output_metric_fns
+    #     }
+    #     loss_metrics = {
+    #         name: U.discard_kwargs(M.loss_metric_fns[name])(x, y, self.loss, **kwargs)
+    #         for name in self.metric_names if name in M.loss_metric_fns
+    #     }
+    #     return {**output_metrics, **loss_metrics}
+
+class RegClass(BaseTask):
+    #this class will separately calculate the loss for regression and classification
+    #note that since it's just the loss calculation, we can just use the same forward pass as the regression task
+    def forward(self, batch, encoder, model, decoder, _state, minimum=-10):
+        """Passes a batch through the encoder, backbone, and decoder"""
+        # z holds arguments such as sequence length
+        x, y, *z = batch
+        
+        # print("x shape: ", x.shape) # 1024 x 1023 as we expect
+        # print(x[:,0:7]) #it seems to just work... damn!
+        # # print("y shape: ", y.shape) #1024 x 1 again as expected!
+        # # print("z shape: ", z) #is empty
+        # import sys
+        # sys.exit()
+        # print('decoder:',decoder) #was identity until we set loose load, now it seems we can have a decoder, let's try again
+        #just set d_output and it's good
+        
+        if len(z) == 0:
+            z = {}
+        else:
+            assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
+            z = z[0]
+            
+        x, w = encoder(x) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        x, state = model(x)
+        self._state = state
+        x, w = decoder(x, state=state, **z)
+        # print(x.shape, y.shape, w) #with d_output=1 we find that x is 1024 x 1, y is 1024 x 1, and w is none. This is perfect and what we need!
+        # import sys
+        # sys.exit()
+        
+        #what we will do is now clamp the data to at minimum be -10
+        x[1] = torch.clamp(x[1], min=minimum)
+        # print()
+        
+        return x, y, w
+
+class ProfileClass(BaseTask):
+    def forward(self,batch,encoder,model,decoder,_state):
+        x, y, *z = batch
+        onehot_x = x[1]
+        x = x[0]
+        if len(z) == 0:
+            z = {}
+        else:
+            assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
+            z = z[0]
+        x, w = encoder(x)
+        x, state = model(x)
+        self._state = state
+        x, w = decoder(x, state=state, **z)
+        #now we need to center x[0] and get the middle 800
+        true_counts = y[0]
+        if x[0].shape[1] > true_counts.shape[1]:
+            #then we cut off from both ends until we get the same size
+            diff = x[0].shape[1] - true_counts.shape[1]
+            start = diff // 2
+            end = start + true_counts.shape[1]
+            profile_out = x[0][:, start:end].squeeze()
+        count_out = x[1]
+        # global bias_model
+        # print(self.bias_model)
+        if self.bias_model is not None:
+            # print('bias model worked!')
+            # import sys
+            # sys.exit()
+            # else:
+            # print('didn\'t work')
+            # import sys
+            # sys.exit()
+            bias_output = self.bias_model(onehot_x)
+            profile_out = profile_out + bias_output[0].squeeze()
+            #do log sum exp for count out
+            count_out = torch.logsumexp(torch.cat([count_out, bias_output[1]], dim=1), dim=1, keepdim=True) #need to test this shapes
+            #nn.Linear always preserves the last dimension, so we can just concatenate the two tensors and then do logsumexp
+        x = (profile_out, count_out)
+        return x, y, w
+
+class MultiClass(BaseTask):
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.continual_metrics = {}
@@ -241,10 +424,29 @@ class MultiClass(BaseTask):
                     self.continual_metrics[name + '_' + spec].reset()
 
 
+class MaskedMultiClass(MultiClass):
+
+    def forward(self, batch, encoder, model, decoder, _state):
+        """Passes a batch through the encoder, backbone, and decoder"""
+
+        # z holds arguments such as sequence length
+        x, y, *z = batch # z holds extra dataloader info such as resolution
+        if len(z) == 0:
+            z = {}
+        else:
+            assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
+            z = z[0]
+
+        x, w = encoder(x) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        x, state = model(x)
+        self._state = state
+        x, w = decoder(x, state=state, **z)
+        return x, y, w
+        
+
 class HG38Task(LMTask):
 
-    def __init__(self, dataset=None, model=None, loss=None, loss_val=None, metrics=None, torchmetrics=None,
-                 last_k_ppl=None, per_token_ppl=None):
+    def __init__(self, dataset=None, model=None, loss=None, loss_val=None, metrics=None, torchmetrics=None, last_k_ppl=None, per_token_ppl=None):
         """ Extending LMTask to add custom metrics for HG38 task 
         
         last_k_ppl: config for custom ppl, with hparams to pass with it
@@ -304,7 +506,6 @@ class HG38Task(LMTask):
         """
         Need to modify metrics to include custom metrics
         """
-
         output_metrics = {
             name: U.discard_kwargs(M.output_metric_fns[name])(x, y, **kwargs)
             for name in self.metric_names if name in M.output_metric_fns
@@ -327,6 +528,7 @@ class HG38Task(LMTask):
             # loop over ks to log metric
             for ind, k in enumerate(self.per_token_ppl["ks"]):
                 key_name = "ppl_at_{}".format(k)
+                # k = k-1  # 0 index in the background #commented out by caduceus
                 output_metrics[key_name] = per_k_ppl[ind]  # should be in order
 
         return {**output_metrics, **loss_metrics}
@@ -387,4 +589,8 @@ registry = {
     'multiclass': MultiClass,
     'lm': LMTask,
     'hg38': HG38Task,
+    "masked_multiclass": MaskedMultiClass,
+    'regression': Regression,
+    'regclass': RegClass,
+    'profileclass': ProfileClass,
 }

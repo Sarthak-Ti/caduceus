@@ -13,7 +13,7 @@ from transformers.tokenization_utils import AddedToken, PreTrainedTokenizer
 
 
 class CharacterTokenizer(PreTrainedTokenizer):
-    def __init__(self, characters: Sequence[str], model_max_length: int, padding_side: str = 'left', **kwargs):
+    def __init__(self, characters: Sequence[str], model_max_length: int, padding_side: str='left', **kwargs):
         """Character tokenizer for Hugging Face transformers.
         Args:
             characters (Sequence[str]): List of desired characters. Any character which
@@ -40,7 +40,7 @@ class CharacterTokenizer(PreTrainedTokenizer):
         unk_token = AddedToken("[UNK]", lstrip=False, rstrip=False)
 
         mask_token = AddedToken("[MASK]", lstrip=True, rstrip=False)
-
+        #this part is new where we have this complement map
         self._vocab_str_to_int = {
             "[CLS]": 0,
             "[SEP]": 1,
@@ -113,6 +113,7 @@ class CharacterTokenizer(PreTrainedTokenizer):
             )
 
         result = [1] + ([0] * len(token_ids_0)) + [1]
+        # result = ([0] * len(token_ids_0)) + [1]
         if token_ids_1 is not None:
             result += ([0] * len(token_ids_1)) + [1]
         return result

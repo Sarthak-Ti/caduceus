@@ -103,6 +103,66 @@ class DefaultCollateMixin:
 # class SequenceDataset(LightningDataModule):
 # [21-09-10 AG] Subclassing LightningDataModule fails due to trying to access _has_setup_fit. No idea why. So we just
 # provide our own class with the same core methods as LightningDataModule (e.g. setup)
+# class SequenceResolutionCollateMixin(DefaultCollateMixin):
+#     """self.collate_fn(resolution) produces a collate function that subsamples elements of the sequence"""
+
+#     @classmethod
+#     def _collate_callback(cls, x, resolution=None):
+#         if resolution is None:
+#             pass
+#         else:
+#             # Assume x is (B, L_0, L_1, ..., L_k, C) for x.ndim > 2 and (B, L) for x.ndim = 2
+#             assert x.ndim >= 2
+#             n_resaxes = max(1, x.ndim - 2) # [AG 22/07/02] this line looks suspicious... are there cases with 2 axes?
+#             # rearrange: b (l_0 res_0) (l_1 res_1) ... (l_k res_k) ... -> res_0 res_1 .. res_k b l_0 l_1 ...
+#             lhs = "b " + " ".join([f"(l{i} res{i})" for i in range(n_resaxes)]) + " ..."
+#             rhs = " ".join([f"res{i}" for i in range(n_resaxes)]) + " b " + " ".join([f"l{i}" for i in range(n_resaxes)]) + " ..."
+#             x = rearrange(x, lhs + " -> " + rhs, **{f'res{i}': resolution for i in range(n_resaxes)})
+#             x = x[tuple([0] * n_resaxes)]
+
+#         return x
+
+#     @classmethod
+#     def _return_callback(cls, return_value, resolution=None):
+#         return *return_value, {"rate": resolution}
+
+
+#     collate_args = ['resolution']
+
+# class ImageResolutionCollateMixin(SequenceResolutionCollateMixin):
+#     """self.collate_fn(resolution, img_size) produces a collate function that resizes inputs to size img_size/resolution"""
+
+#     _interpolation = torchvision.transforms.InterpolationMode.BILINEAR
+#     _antialias = True
+
+#     @classmethod
+#     def _collate_callback(cls, x, resolution=None, img_size=None, channels_last=True):
+#         if x.ndim < 4:
+#             return super()._collate_callback(x, resolution=resolution)
+#         if img_size is None:
+#             x = super()._collate_callback(x, resolution=resolution)
+#         else:
+#             x = rearrange(x, 'b ... c -> b c ...') if channels_last else x
+#             _size = round(img_size/resolution)
+#             x = torchvision.transforms.functional.resize(
+#                 x,
+#                 size=[_size, _size],
+#                 interpolation=cls._interpolation,
+#                 antialias=cls._antialias,
+#             )
+#             x = rearrange(x, 'b c ... -> b ... c') if channels_last else x
+#         return x
+
+#     @classmethod
+#     def _return_callback(cls, return_value, resolution=None, img_size=None, channels_last=True):
+#         return *return_value, {"rate": resolution}
+
+#     collate_args = ['resolution', 'img_size', 'channels_last']
+
+
+
+# class SequenceDataset(LightningDataModule):
+# [21-09-10 AG] Subclassing LightningDataModule fails due to trying to access _has_setup_fit. No idea why. So we just provide our own class with the same core methods as LightningDataModule (e.g. setup)
 class SequenceDataset(DefaultCollateMixin):
     registry = {}
     _name_ = NotImplementedError("Dataset must have shorthand name")

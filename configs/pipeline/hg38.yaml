@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - /trainer: default
-  - /loader: null
+  - /loader: null #was default
   - /dataset: hg38
   - /optimizer: adamw
   - /scheduler: cosine_warmup
@@ -15,7 +15,7 @@ task:
   _name_: lm
   loss:
     _name_: cross_entropy
-    ignore_index: 4  # Bake in tokenizer value for padding / EOS tokens
+    ignore_index: 4  # Bake in tokenizer value for padding / EOS tokens. new to caduceus
   torchmetrics: ['perplexity', 'num_tokens']
 
 encoder: null

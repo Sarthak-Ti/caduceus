@@ -54,8 +54,12 @@ def create_mixer_cls(
         {"process_group": process_group, "sequence_parallel": sequence_parallel}
         if process_group is not None
         else {}
-    )
-    if attn_layer_idx is not None and layer_idx in attn_layer_idx:
+    ) #will be empty dict
+    # print(attn_cfg) #this and the layer idx are both None, uses default
+    # print(attn_layer_idx)
+    # import sys
+    # sys.exit()
+    if attn_layer_idx is not None and layer_idx in attn_layer_idx: #this gets ignored cuz attn_layer_idx is None
         causal = True if attn_cfg is None else attn_cfg.pop("causal", True)
         fused_bias_fc = (
             False if attn_cfg is None else attn_cfg.get("fused_bias_fc", False)
@@ -76,9 +80,12 @@ def create_mixer_cls(
             **factory_kwargs,
         )
     else:
+        # print(layer) #the details of the layer
         fused_bias_fc = False if layer is None else layer.get("fused_bias_fc", False)
         if process_group is not None:
             assert fused_bias_fc, "TensorParallel SSM requires fused_bias_fc"
+        # print(registry.layer) #the options we will use
+        # print(layer_idx) #just 0 for the first 1, 1 for the 2nd etc.
         mixer_cls = instantiate(
             registry.layer,
             layer,
@@ -87,6 +94,9 @@ def create_mixer_cls(
             **factory_kwargs,
             **parallel_kwargs,
         )
+        # mixer_cls = partial(ssm_cls, layer_idx=layer_idx,
+        #                     **(ssm_cfg if ssm_cfg is not None else {}),
+        #                     **parallel_kwargs, **factory_kwargs)
     return mixer_cls
 
 
@@ -263,6 +273,8 @@ class LMBackbone(nn.Module):
         checkpoint_mixer=False,
         device=None,
         dtype=None,
+        adjust_embedding = False,
+        load_old_embedding = False,
         **kwargs,
     ) -> None:
         factory_kwargs = {"device": device, "dtype": dtype}
@@ -270,15 +282,26 @@ class LMBackbone(nn.Module):
         self.process_group = process_group
         self.sequence_parallel = sequence_parallel
         self.residual_in_fp32 = residual_in_fp32
+        self.load_old_embedding = load_old_embedding
+        
+        if not adjust_embedding: #this means will default to not adjusting the embedding dimension at all
+            adjust_embedding = vocab_size
 
+        if self.load_old_embedding: #shoudl never be true with adjust_embedding, both do separate things to embedding, but same goal
+            self.new_embeddings = GPT2Embeddings(
+                d_model, self.load_old_embedding, max_position_embeddings, **factory_kwargs
+            )
+        # else:
+        #     print(load_old_embedding)
+        #     raise NotImplementedError("This is not implemented yet")
         if process_group is None:
             self.embeddings = GPT2Embeddings(
-                d_model, vocab_size, max_position_embeddings, **factory_kwargs
+                d_model, adjust_embedding, max_position_embeddings, **factory_kwargs
             )
         else:
             self.embeddings = ParallelGPT2Embeddings(
                 d_model,
-                vocab_size,
+                adjust_embedding,
                 max_position_embeddings,
                 process_group=process_group,
                 sequence_parallel=self.sequence_parallel,
@@ -294,7 +317,6 @@ class LMBackbone(nn.Module):
         self.fused_dropout_add_ln = fused_dropout_add_ln
         if self.fused_dropout_add_ln and dropout_add_layer_norm is None:
             raise ImportError("dropout_add_layer_norm is not installed")
-
         self.layers = nn.ModuleList(
             [
                 create_block(
@@ -352,16 +374,19 @@ class LMBackbone(nn.Module):
         embedding_kwargs = (
             {"combine_batch_seqlen_dim": True}
             if self.process_group is not None and self.sequence_parallel
-            else {}
+            else {} #this is what is chosen
         )
         hidden_states = self.embeddings(
             input_ids, position_ids=position_ids, **embedding_kwargs
         )
+        # print('embedding:', hidden_states.shape)
+        # import sys
+        # sys.exit()
         residual = None
         mixer_kwargs = (
             {"seqlen": input_ids.shape[1]}
             if self.process_group is not None and self.sequence_parallel
-            else {}
+            else {} #is also none
         )
         if inference_params is not None:
             mixer_kwargs["inference_params"] = inference_params
@@ -369,6 +394,9 @@ class LMBackbone(nn.Module):
             hidden_states, residual = layer(
                 hidden_states, residual, mixer_kwargs=mixer_kwargs
             )
+        # print(hidden_states.shape) # only 1 layer and output is the same shape
+        # import sys
+        # sys.exit()
         if not self.fused_dropout_add_ln:
             dropped = self.drop_f(hidden_states)
             residual = (dropped + residual) if residual is not None else dropped
@@ -447,6 +475,12 @@ class ConvLMHeadModel(nn.Module, GenerationMixin):
             **factory_kwargs,
             **kwargs,
         )
+        # print("process_group", process_group)
+        # print("ColumnParallelLinear", ColumnParallelLinear)
+        # print("d model", d_model)
+        # print('vocab_size', vocab_size)
+        # import sys
+        # sys.exit()
         if process_group is None:
             self.lm_head = nn.Linear(d_model, vocab_size, bias=False, **factory_kwargs)
         else:
@@ -478,9 +512,15 @@ class ConvLMHeadModel(nn.Module, GenerationMixin):
     def forward(
         self, input_ids, position_ids=None, inference_params=None, state=None
     ):  # state for the repo interface
-        hidden_states = self.backbone(
+        # print('input_id',input_ids.shape) # is 512 x 1023, let's see if inputs are as we expect
+        # print(input_ids[0,:])
+        # print('position_id', position_ids.shape) #it is just none
+        hidden_states = self.backbone( #input ids is just the basic inputs
             input_ids, position_ids=position_ids, inference_params=inference_params
         )
+        # print(hidden_states.shape) this gives us a 512x1023x128 vector
+        # import sys
+        # sys.exit()
         lm_logits = self.lm_head(hidden_states)
         # During inference, we want the full logit for sampling
         if ColumnParallelLinear is not None and inference_params is not None:
@@ -491,3 +531,4 @@ class ConvLMHeadModel(nn.Module, GenerationMixin):
                 )
         CausalLMOutput = namedtuple("CausalLMOutput", ["logits"])
         return CausalLMOutput(logits=lm_logits), None
+

@@ -44,7 +44,6 @@ scheduler:
   warmup_t: ${eval:${div_up:${dataset.train_len}, ${train.global_batch_size}} * ${trainer.max_epochs} * 0.01}
   lr_min: ${eval:0.1 * ${optimizer.lr}}
 
-
 optimizer:
   lr: 6e-4
   weight_decay: 0.1

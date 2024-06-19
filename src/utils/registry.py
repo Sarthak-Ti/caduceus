@@ -35,6 +35,13 @@ model = {
 
     # Baseline for genomics benchmark
     "genomics_benchmark_cnn": "src.models.baseline.genomics_benchmark_cnn.GenomicsBenchmarkCNN",
+    # Backbones from this repo, old hyena backbones, use above
+    # "model": "src.models.sequence.SequenceModel",
+    # "lm": "src.models.sequence.long_conv_lm.ConvLMHeadModel",
+    # "lm_simple": "src.models.sequence.simple_lm.SimpleLMHeadModel",
+    # "vit_b_16": "src.models.baselines.vit_all.vit_base_patch16_224",
+    # "dna_embedding": "src.models.sequence.dna_embedding.DNAEmbeddingModel",
+    # "bpnet": "src.models.sequence.hyena_bpnet.HyenaBPNet"
 }
 
 layer = {
@@ -59,5 +66,5 @@ callbacks = {
 }
 
 model_state_hook = {
-    'load_backbone': 'src.models.sequence.dna_embedding.load_backbone',
+    'load_backbone': 'src.models.sequence.dna_embedding.load_backbone', #is 'src.models.sequence.long_conv_lm.load_backbone in hyena
 }

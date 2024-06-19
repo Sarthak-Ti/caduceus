@@ -36,7 +36,6 @@ registry = {
     "embedding": nn.Embedding,
     "linear": nn.Linear,
 }
-
 dataset_attrs = {
     "embedding": ["n_tokens"],
     "linear": ["d_input"],  # TODO make this d_data?
@@ -46,7 +45,6 @@ dataset_attrs = {
     "conv1d": ["d_input"],
     "patch2d": ["d_input"],
 }
-
 model_attrs = {
     "embedding": ["d_model"],
     "linear": ["d_model"],

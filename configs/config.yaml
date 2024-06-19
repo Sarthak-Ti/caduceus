@@ -4,6 +4,10 @@ defaults:
   - experiment: ???
   # - model: ???  # Model backbone
   # - pipeline: ???  # Specifies collection of configs, equivalent to next 5 lines
+#old hyena method
+  # - experiment: base # Specifies model and pipeline, equivalent to next two lines
+  # - model: s4 # Model backbone
+  # - pipeline: cifar # Specifies collection of configs, equivalent to next 5 lines
   # Pipelines should specify /loader, /dataset, /task, /encoder, /decoder (ideally in that order)
   # # - loader: default # Dataloader (e.g. handles batches)
   # # - dataset: cifar # Defines the data (x and y pairs)
@@ -25,7 +29,7 @@ train:
   debug: False # Special settings to make debugging more convenient
   ignore_warnings: False # Disable python warnings
 
-  optimizer_param_grouping:
+  optimizer_param_grouping: #added by caduceus for whatever reason? these next 3 lines
     bias_weight_decay: False
     normalization_weight_decay: False
 
@@ -36,7 +40,7 @@ train:
     n_context_eval: ${.n_context} # Context at evaluation time
   # Convenience keys to allow grouping runs
 
-  ckpt: checkpoints/last.ckpt # Resume training
+  ckpt: checkpoints/last.ckpt # Resume training. Was null in hyena
 
   disable_dataset: False # Disable dataset loading
   validate_at_start: false
@@ -51,6 +55,11 @@ train:
   layer_decay: # Used for ImageNet finetuning
     _name_: null
     decay: 0.7
+
+#removed by caducues
+# tolerance: # fault tolerance for training on preemptible machines
+#   logdir: ./resume
+#   id: null # must be set to resume training on preemption
 
 # We primarily use wandb so this is moved to top level in the config for convenience
 # Set `~wandb` or `wandb=null` or `wandb.mode=disabled` to disable logging

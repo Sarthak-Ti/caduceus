@@ -30,7 +30,6 @@ log = src.utils.train.get_logger(__name__)
 
 # Turn on TensorFloat32 (speeds up large model training substantially)
 import torch.backends
-
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
@@ -133,10 +132,19 @@ class SequenceLightningModule(pl.LightningModule):
             pass
 
         super().__init__()
-        # Passing in config expands it one level: access by self.hparams.train instead of self.hparams.config.train
+        # Passing in config expands it one level, so can access by self.hparams.train instead of self.hparams.config.train
         self.save_hyperparameters(config, logger=False)
 
+        # #here we check if our parameters say to load a bias model
+        # if config.train.get("bias_model_path", None) is not None:
+        #     self.bias_model = torch.load(config.train.bias_model_path)
+        #     #freeze the weights
+        #     for param in self.bias_model.parameters():
+        #         param.requires_grad = False
+
         # Dataset arguments
+        # print(self.hparams.dataset._name_) is cCRE or DNase depending on what you need
+        # print(SequenceDataset.registry)
         self.dataset = SequenceDataset.registry[self.hparams.dataset._name_](
             **self.hparams.dataset
         )
@@ -216,6 +224,10 @@ class SequenceLightningModule(pl.LightningModule):
         self.task = utils.instantiate(
             tasks.registry, self.hparams.task, dataset=self.dataset, model=self.model
         )
+        # print("Task:", self.task)
+        # import sys
+        # #and close out the file
+        # sys.exit()
 
         # Create encoders and decoders
         encoder = encoders.instantiate(
@@ -245,9 +257,12 @@ class SequenceLightningModule(pl.LightningModule):
                 partial=True,
             )
             state_dict = model_state_hook(self.model, state_dict)
-
+        # print(self.model.lm_head.weight.shape) #this is the wrong shape, could find some way to modify it here
         log.info("Custom load_state_dict function is running.")
-
+        # print("State dict keys:", state_dict.keys())
+        # print(state_dict['model.backbone.embeddings.word_embeddings.weight'].shape)
+        # print(state_dict['model.lm_head.weight'].shape)
+        # print(self.model) #all have an embedding size 20x128
         # strict==True will require all modules to match
         # strict==False can allow encoder/decoder to be loaded from scratch too
         return super().load_state_dict(state_dict, strict=strict)
@@ -323,22 +338,42 @@ class SequenceLightningModule(pl.LightningModule):
             else:
                 self._state = self._detach_state(self._state)
 
+
     def forward(self, batch):
+        # print(self.encoder)
+        # print(self.model)
+        # print(self.decoder)
+        # import sys
+        # sys.exit()
+        # if hasattr(self, 'bias_model'):
+        #     return self.task.forward(batch, self.encoder, self.model, self.decoder, self._state, self.bias_model) #only for profile task
         return self.task.forward(batch, self.encoder, self.model, self.decoder, self._state)
 
     def step(self, x_t):
-        x_t, *_ = self.encoder(x_t)  # Potential edge case for encoders that expect (B, L, H)?
+        x_t, *_ = self.encoder(x_t) # Potential edge case for encoders that expect (B, L, H)?
         x_t, state = self.model.step(x_t, state=self._state)
         self._state = state
         x_t, *_ = self.decoder.step(x_t, state=state)
         return x_t
 
     def _shared_step(self, batch, batch_idx, prefix="train"):
-        """Shared step logic between training, validation, and test"""
-        self._process_state(batch, batch_idx, training=(prefix == "train"))
-        x, y, w = self.forward(batch)
 
+        self._process_state(batch, batch_idx, training=(prefix == "train")) #does some state stuff
+        x, y, w = self.forward(batch) #here the forward is gone through, x is actually y hat, and y is the output, w is the parameters
+        if self.hparams.train.get('count_weight', None) is not None:
+            w['count_weight'] = self.hparams.train.count_weight
+        #expect x to be long x 16 since it's the logits
+        # print("x shape", x.shape) #it is correct, as we expected
+        # print("y shape", y.shape)
+        # print("w shape", w) #just empty dict with state none
+        # import sys
+        # sys.exit()
         # Loss
+        # print(self.loss) #both are the same of <function discard_kwargs.<locals>.f_ at 0x2aba86612c00>
+        #this is located at src.models.nn.utils
+        # print(self.loss_val)
+        # import sys
+        # sys.exit()
         if prefix == 'train':
             loss = self.loss(x, y, **w)
         else:
@@ -352,7 +387,6 @@ class SequenceLightningModule(pl.LightningModule):
         # Calculate torchmetrics
         torchmetrics = getattr(self, f'{prefix}_torchmetrics')
         torchmetrics(x, y, loss=loss)
-
         log_on_step = 'eval' in self.hparams and self.hparams.eval.get('log_on_step', False) and prefix == 'train'
 
         self.log_dict(
@@ -380,27 +414,29 @@ class SequenceLightningModule(pl.LightningModule):
         # Reset training torchmetrics
         self.task._reset_torchmetrics("train")
 
-    def training_epoch_end(self, outputs):
-        # Log training torchmetrics
-        super().training_epoch_end(outputs)
+    # def training_epoch_end(self, outputs):
+    #     # Log training torchmetrics
+    #     super().training_epoch_end(outputs)
+    #     #inherits the training_epoch_end of the parent class, which is the basic pl.lightningmodule.
+    #     #we will just comment it out since it doesn't seem to do anything using the basic values, doesn't seem to be called anywhere
 
     def on_validation_epoch_start(self):
         # Reset all validation torchmetrics
         for name in self.val_loader_names:
             self.task._reset_torchmetrics(name)
 
-    def validation_epoch_end(self, outputs):
-        # Log all validation torchmetrics
-        super().validation_epoch_end(outputs)
+    # def validation_epoch_end(self, outputs):
+    #     # Log all validation torchmetrics
+    #     super().validation_epoch_end(outputs)
 
     def on_test_epoch_start(self):
         # Reset all test torchmetrics
         for name in self.test_loader_names:
             self.task._reset_torchmetrics(name)
 
-    def test_epoch_end(self, outputs):
-        # Log all test torchmetrics
-        super().test_epoch_end(outputs)
+    # def test_epoch_end(self, outputs):
+    #     # Log all test torchmetrics
+    #     super().test_epoch_end(outputs)
 
     def training_step(self, batch, batch_idx, dataloader_idx=0):
         loss = self._shared_step(batch, batch_idx, prefix="train")
@@ -650,21 +686,146 @@ def fsspec_exists(filename):
     fs, _ = fsspec.core.url_to_fs(filename)
     return fs.exists(filename)
 
+# import subprocess
+
+# def check_gpu_status():
+#     try:
+#         # Execute the nvidia-smi command and get JSON output
+#         result = subprocess.run(['nvidia-smi', '-q', '-x'], capture_output=True, text=True)
+#         if result.returncode != 0:
+#             print("Failed to execute nvidia-smi")
+#             return
+        
+#         # Convert XML output to JSON for easier parsing
+#         # Using xml.etree.ElementTree to parse XML
+#         import xml.etree.ElementTree as ET
+#         root = ET.fromstring(result.stdout)
+        
+#         # Parse and print GPU information
+#         for gpu in root.findall('gpu'):
+#             gpu_id = gpu.find('minor_number').text
+#             gpu_name = gpu.find('product_name').text
+#             gpu_util = gpu.find('utilization').find('gpu_util').text
+#             memory_total = gpu.find('fb_memory_usage').find('total').text
+#             memory_used = gpu.find('fb_memory_usage').find('used').text
+#             memory_free = gpu.find('fb_memory_usage').find('free').text
+#             print(f"GPU {gpu_id} - {gpu_name}: Utilization {gpu_util}, Memory Usage {memory_used}/{memory_total} ({memory_free} free)")
+#     except Exception as e:
+#         print(f"An error occurred: {e}")
 
 def train(config):
     if config.train.seed is not None:
         pl.seed_everything(config.train.seed, workers=True)
     trainer = create_trainer(config)
     model = SequenceLightningModule(config)
+    # print(model)
+    # print(model.model.backbone.load_old_embedding,'\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n')
+    #this is fine now
+    # check_gpu_status()
+    
+    #check which device the model is on
+    # param = next(model.parameters())
+    # print(param.device)
+    # if isinstance(model, torch.nn.DataParallel):
+    #     print(model.device_ids)
+    #it appears to be cpu and not data parallel yet
+    # model = model.to('cuda:0')
 
     # Load pretrained_model if specified
     if config.train.get("pretrained_model_path", None) is not None:
         # PTL style.  Note, method returns a new model object, and need to pass config.
+        # print(config)
+        #first check if ddp
+        #the model doesn't like having the load_old_embeddings for some reason, so let's remove it
+        # temp_config = config
+        # if temp_config.train.pretrained_model_state_hook.get('load_old_embedding', None) is not None:
+        #     temp_config.train.pretrained_model_state_hook.pop('load_old_embedding')
         model = SequenceLightningModule.load_from_checkpoint(
             config.train.pretrained_model_path,
             config=config,
             strict=config.train.pretrained_model_strict_load,
+            map_location='cpu'
         )
+        
+        # print(model)
+        #let's just go ahead and find the weights and save the embeddings
+        # torch.save(ic(model.model.backbone.embeddings.word_embeddings), '/data/leslie/sarthak/data/og_embeddings.pt')
+        # torch.save(ic(model.model.backbone.new_embeddings.word_embeddings), '/data/leslie/sarthak/data/new_embeddings.pt')
+        # try:
+        #     load_old_embeddings = config.train['pretrained_model_state_hook']['load_old_embedding'] #a better hack to load the old embeddings
+        # except:
+        #     load_old_embeddings = False
+        
+        load_old_embeddings =  config.train['pretrained_model_state_hook'].get('load_old_embedding', False)
+            # load_old_embeddings = config.train['pretrained_model_state_hook']['load_old_embedding']
+        #much better than the one below
+        if load_old_embeddings: #for all intents and purposes, is 12!
+            #now we replace the embeddings with the old ones
+            old_embeddings = model.model.backbone.embeddings.word_embeddings
+            new_embeddings = model.model.backbone.new_embeddings.word_embeddings
+            new_embeddings.weight.data[:load_old_embeddings] = old_embeddings.weight.data[:load_old_embeddings] #this should be the important ones
+            model.model.backbone.embeddings.word_embeddings = new_embeddings
+            model.model.lm_head = new_embeddings #so we can load the model, we never use this for downstream finetuned tasks
+            #now let's set the unused embeddings to None
+            model.model.backbone.new_embeddings = None #doesn't affect the rest now new_embeddings references None, they reference old new_embedding
+            # old_embeddings = None
+            #the other issue is that old_embeddings 
+            
+        print('model successfully loaded!!')
+        # print(model)
+        # print(model.model.backbone.embeddings.word_embeddings)
+    # print(model)
+    #below is a hack to access the embeddings, we will save it out once, then can randomly access it
+    #set seed, so should be repeatable, and honestly not the worst thing, just grabbing them all
+    #you set the ignore_embeddings to true, and then you can access the embeddings and save them out
+    # embeddings = model.model.backbone.embeddings.word_embeddings
+    # #and save them out
+    # torch.save(embeddings, '/data/leslie/sarthak/data/saved_embeddings.pt')
+    # import sys
+    # sys.exit()
+    
+                
+    # word_embeddings_layer = self.model.backbone.embeddings.word_embeddings #this accesses the embeddings
+    # print(self.hparams.model) #dict of the stuff under model in the experiment
+    # print(self.hparams.train) # this is what we need to decide to add embeddings or not
+    # print("Model:", self.model)
+    # print(word_embeddings_layer) #class Embedding(20,128), we know how to modify that and access the embeddings
+
+    #note that this approach is not great, as it just uses the already saved embeddings. terrible coding practice, not flexible at all
+    # '''A hack to ensure that we can add embeddings to the modle while keeping the old embeddings
+    # This approach is useful to increase the vocabulary size of the model
+    # No longer used, as the embeddings don't really matter, can be retrained, but the option remains
+    # Requres saving out the old embeddings manually, then it loads them in here
+    # Also, we have a better method below, where we don't need this anymore
+    # Actually this method is wrong, so we will be taking it out and commenting it, not useful!!'''
+    # if config.train['pretrained_model_state_hook']['add_embeddings']:
+    #     # keep = config.train['pretrained_model_state_hook']['add_embeddings']
+    #     #we add the number of embeddings equal to the model
+    #     original_embeddings = model.model.backbone.embeddings.word_embeddings
+    #     # new_vocab_size = original_embeddings.num_embeddings + add_embeddings
+    #     # new_embedding_layer = torch.nn.Embedding(new_vocab_size, original_embeddings.embedding_dim)
+    #     # nn.init.normal_(module.weight, std=initializer_range) #no need to use since we grabbed their values
+    #     saved_embeddings = torch.load('/data/leslie/sarthak/data/saved_embeddings.pt')
+    #     saved_embeddings.weight.data[:12] = original_embeddings.weight.data[:12] #because it's set by what was saved
+    #     model.model.backbone.embeddings.word_embeddings = saved_embeddings
+    #     print(saved_embeddings)
+    
+    # import sys
+    # sys.exit()
+    #we will now test to see if our data matches
+    # ic(model.model.backbone.embeddings.word_embeddings)
+    #now load in embeddings with torch
+    # old = torch.load('/data/leslie/sarthak/data/saved_embeddings.pt') #based on wrong ones so does give false, but ours is correct
+    # ic(old)
+    #and now make sure that all of it is the same
+    # weights1 = model.model.backbone.embeddings.word_embeddings.weight.data[:12]
+    # weights2 = old.weight.data[:12]
+    # a = ic(torch.allclose(weights1.detach().cpu(), weights2.detach().cpu()))
+    # ic(a)
+    #save out the new embeddings
+    # torch.save(model.model.backbone.embeddings.word_embeddings, '/data/leslie/sarthak/data/saved_embeddings_new.pt')
+    # import sys
+    # sys.exit()
 
     # Run initial validation epoch (useful for debugging, fine-tuning)
     if config.train.validate_at_start:
@@ -713,6 +874,7 @@ def main(config: OmegaConf):
     utils.train.print_config(config, resolve=True)
 
     train(config)
+    print('model trained')
 
 
 if __name__ == "__main__":
