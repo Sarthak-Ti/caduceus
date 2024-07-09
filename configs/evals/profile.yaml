@@ -24,6 +24,7 @@ model_config:
     lr: 6e-4
     wd: 0.0
     lr_pos_emb: 0.0
+  bidirectional: false
     
 train:
   d_output: 1  # number of classes

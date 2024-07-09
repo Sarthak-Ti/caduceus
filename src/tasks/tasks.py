@@ -14,6 +14,17 @@ from src.utils.config import to_list, instantiate
 from torchmetrics import MetricCollection
 
 
+class BackboneDecoder(nn.Module):
+    def __init__(self, model1, model2):
+        super(BackboneDecoder, self).__init__()
+        self.model1 = model1
+        self.model2 = model2
+
+    def forward(self, x):
+        x,_ = self.model1(x)
+        x = self.model2(x) #because state is also passed, but this is to ignore it
+        return x
+
 class BaseTask:
     """ Abstract class that takes care of:
     - loss function
@@ -53,16 +64,6 @@ class BaseTask:
         self.train_torchmetrics = torchmetrics.clone(prefix='train/')
         self.val_torchmetrics = torchmetrics.clone(prefix='val/')
         self.test_torchmetrics = torchmetrics.clone(prefix='test/')
-        
-        if bias_model == '/data/leslie/sarthak/data/chrombpnet_test/chrombpnet_model_1000/models/bias_model_scaled.h5':
-            self.bias_model = self.load_bias_model(bias_model)
-            #freeze bias model
-            for param in self.bias_model.parameters():
-                param.requires_grad = False
-            # device = next(self.model.parameters()).device
-            self.bias_model.to('cuda:0')
-        else:
-            self.bias_model = None
 
     def _init_torchmetrics(self):
         """
@@ -151,15 +152,6 @@ class BaseTask:
             for name in self.metric_names if name in M.loss_metric_fns
         }
         return {**output_metrics, **loss_metrics}
-    
-    def load_bias_model(self, path):
-        #we will load it as a pytorch model using jacob schrieber's code
-        import sys
-        sys.path.append('/data/leslie/sarthak/chrombpnet/')
-        from bpnetlite.bpnet import BPNet
-        #the location is /data/leslie/sarthak/chrombpnet/bpnetlite/bpnet.py
-        model = BPNet.from_chrombpnet(path,trimming=(1024-800)//2)
-        return model
 
     def forward(self, batch, encoder, model, decoder, _state):
         """Passes a batch through the encoder, backbone, and decoder"""
@@ -339,31 +331,134 @@ class RegClass(BaseTask):
         return x, y, w
 
 class ProfileClass(BaseTask):
+    def __init__(self, dataset=None, model=None, loss=None, loss_val=None, metrics=None, torchmetrics=None, bias_model=None):
+        super().__init__(dataset, model, loss, loss_val, metrics, torchmetrics)
+        self.bias_model = None
+        self.backbone = None
+        self.decoder_bias = None
+        self.bias_model_pt = None
+        if bias_model.endswith('.h5'):
+        # if bias_model == '/data/leslie/sarthak/data/chrombpnet_test/chrombpnet_model_1000/models/bias_model_scaled.h5':
+            self.bias_model = self.load_bias_modeltf(bias_model)
+            #freeze bias model
+            for param in self.bias_model.parameters():
+                param.requires_grad = False
+            # device = next(self.model.parameters()).device
+            self.bias_model.to('cuda:0')
+            print('using tensorflow bias model')
+        elif bias_model.endswith('.ckpt') and bias_model.startswith('hs_'):
+            #it's called hs_path when want to add it to hidden states or just path for standard chrombpnet way
+            bias_model = bias_model[3:]
+            #load it via torch and it runs through 2 
+            print('using hyena bias model with hidden states')
+            self.backbone, self.decoder_bias = self.load_bias_modelpt(bias_model)
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+            for param in self.decoder_bias.parameters():
+                param.requires_grad = False
+            self.backbone.to('cuda:0').eval()
+            self.decoder_bias.to('cuda:0').eval()
+        elif bias_model.endswith('.ckpt'):
+            print('using hyena bias model on output')
+            backbone, decoder_bias = self.load_bias_modelpt(bias_model)
+            for param in backbone.parameters():
+                param.requires_grad = False
+            for param in decoder_bias.parameters():
+                param.requires_grad = False
+            self.bias_model_pt = BackboneDecoder(backbone,decoder_bias) #this will make it so that the output of the backbone is fed into the decoder
+            self.bias_model_pt.to('cuda:0').eval()
+        else:
+            print('no bias model')
+            
+    def load_bias_modeltf(self, path):
+        #we will load it as a pytorch model using jacob schrieber's code
+        import sys
+        sys.path.append('/data/leslie/sarthak/chrombpnet/')
+        from bpnetlite.bpnet import BPNet
+        #the location is /data/leslie/sarthak/chrombpnet/bpnetlite/bpnet.py
+        model = BPNet.from_chrombpnet(path,trimming=(1024-800)//2)
+        return model
+
+    def load_bias_modelpt(self, path):
+        #load the pytorch model, a bit harder
+        import yaml
+        from src.models.sequence.dna_embedding import DNAEmbeddingModel
+        from src.tasks.decoders import ProfileDecoder
+        cfg = '/data/leslie/sarthak/hyena/hyena-dna/configs/evals/profile.yaml'
+        cfg = yaml.load(open(cfg, 'r'), Loader=yaml.FullLoader)
+        train_cfg = cfg['train']
+        model_cfg = cfg['model_config']
+        d_output = train_cfg['d_output']
+        backbone = DNAEmbeddingModel(**model_cfg)
+        decoder = ProfileDecoder(model_cfg['d_model'], d_output=d_output, l_output=0, mode='pool')
+        state_dict = torch.load(path, map_location='cpu')
+        torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(
+            state_dict["state_dict"], "model."
+        )
+        model_state_dict = state_dict["state_dict"]
+        # need to remove torchmetrics. to remove keys, need to convert to list first
+        for key in list(model_state_dict.keys()):
+            if "torchmetrics" in key:
+                model_state_dict.pop(key)
+        # the state_dict keys slightly mismatch from Lightning..., so we fix it here
+        decoder_state_dict = {}
+        decoder_state_dict['output_transform_counts.weight'] = model_state_dict.pop('decoder.0.output_transform_counts.weight')
+        decoder_state_dict['output_transform_counts.bias'] = model_state_dict.pop('decoder.0.output_transform_counts.bias')
+        decoder_state_dict['output_transform_profile.weight'] = model_state_dict.pop('decoder.0.output_transform_profile.weight')
+        decoder_state_dict['output_transform_profile.bias'] = model_state_dict.pop('decoder.0.output_transform_profile.bias')
+        # now actually load the state dict to the decoder and backbone separately
+        decoder.load_state_dict(decoder_state_dict, strict=True)
+        backbone.load_state_dict(model_state_dict, strict=True)
+        return backbone, decoder
+    
     def forward(self,batch,encoder,model,decoder,_state):
         x, y, *z = batch
+        #check if y is a tensor or a tuple
+        #this is primarily for the onehot encoding and bias later on
         onehot_x = x[1]
         x = x[0]
+        x_og = x #cuz it's batch x len, but test it
+        true_counts = y[0]
+        # else:
+        #     true_counts = y[:,:-1]
         if len(z) == 0:
             z = {}
         else:
             assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
             z = z[0]
         x, w = encoder(x)
-        x, state = model(x)
-        self._state = state
+        x, state = model(x) #check what this state is and if we need to add it
+        # if self.reverse: #doesn't really work, because idea makes no sense, only works for RC!
+        #     x2, _ = encoder(x_reversed)
+        #     x2, _ = model(x2)
+        #     x = (x+x2)/2
+        self._state = state #check state, check the backbone and decodder are correct
+        #so state is none, backbone and decoder are correct when we have the hyena bias model
+        if self.backbone is not None:
+            x_backbone, _ = self.backbone(x_og)
+            x = x + x_backbone
         x, w = decoder(x, state=state, **z)
         #now we need to center x[0] and get the middle 800
-        true_counts = y[0]
-        if x[0].shape[1] > true_counts.shape[1]:
+        profile_out = x[0]
+        count_out = x[1]
+        if self.bias_model_pt is not None: #added here for the cropping
+            bias_output = self.bias_model_pt(x_og)
+            profile_out = profile_out + bias_output[0]
+            count_out = torch.logsumexp(torch.cat([x[1], bias_output[1]], dim=1), dim=1, keepdim=True)
+        # true_counts = y[0]
+        if profile_out.shape[1] > true_counts.shape[1]:
             #then we cut off from both ends until we get the same size
-            diff = x[0].shape[1] - true_counts.shape[1]
+            diff = profile_out.shape[1] - true_counts.shape[1]
             start = diff // 2
             end = start + true_counts.shape[1]
-            profile_out = x[0][:, start:end].squeeze()
-        count_out = x[1]
+            profile_out = profile_out[:, start:end].squeeze()
         # global bias_model
         # print(self.bias_model)
-        if self.bias_model is not None:
+        # if self.bias_model is None:
+            # import sys
+            # print('this shit sucks')
+            # sys.exit()
+        if self.bias_model is not None: #added here because it's after cropping
             # print('bias model worked!')
             # import sys
             # sys.exit()
@@ -371,12 +466,35 @@ class ProfileClass(BaseTask):
             # print('didn\'t work')
             # import sys
             # sys.exit()
+            #need to now separate between bias models
             bias_output = self.bias_model(onehot_x)
             profile_out = profile_out + bias_output[0].squeeze()
             #do log sum exp for count out
             count_out = torch.logsumexp(torch.cat([count_out, bias_output[1]], dim=1), dim=1, keepdim=True) #need to test this shapes
             #nn.Linear always preserves the last dimension, so we can just concatenate the two tensors and then do logsumexp
         x = (profile_out, count_out)
+        return x, y, w
+
+class EnformerTask(BaseTask):
+    #This task is very basic but requires inputting the desired output length into the decoder
+    def forward(self, batch, encoder, model, decoder, _state, minimum=-10):
+        """Passes a batch through the encoder, backbone, and decoder"""
+        # z holds arguments such as sequence length
+        x, y, *z = batch
+        
+        if len(z) == 0:
+            z = {}
+        else:
+            assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
+            z = z[0]
+            
+        x, w = encoder(x) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        x, state = model(x) #this part can be quite slow on the cpu especially!
+        #x shape after model is batch x seqlen x d_model in this case d_model is 256
+        #y shape is batch x 896 x 5313 where the 896 corresponds to 128*896=114688 which is the number of nucleotides we predict over
+        self._state = state
+        x, w = decoder(x, state=state, **z)
+        
         return x, y, w
 
 class MultiClass(BaseTask):
@@ -593,4 +711,5 @@ registry = {
     'regression': Regression,
     'regclass': RegClass,
     'profileclass': ProfileClass,
+    'enformer': EnformerTask,
 }

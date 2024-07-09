@@ -30,7 +30,7 @@ from src.utils import instantiate
 import src.utils.registry as registry
 
 
-class CheckpointedModule(torch.nn.Module):
+class CheckpointedModule(torch.nn.Module): #essentially just makes it so we recompute things during the backward pass, more computation, more memory efficient
     def __init__(self, layer):
         super().__init__()
         self.layer = layer
@@ -284,7 +284,7 @@ class LMBackbone(nn.Module):
         self.residual_in_fp32 = residual_in_fp32
         self.load_old_embedding = load_old_embedding
         
-        if not adjust_embedding: #this means will default to not adjusting the embedding dimension at all
+        if not adjust_embedding: #this means will default to not adjusting the embedding dimension at all, just uses old vocab size!
             adjust_embedding = vocab_size
 
         if self.load_old_embedding: #shoudl never be true with adjust_embedding, both do separate things to embedding, but same goal

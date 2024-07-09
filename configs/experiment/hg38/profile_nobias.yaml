@@ -65,7 +65,7 @@ dataset:
   replace_N_token: false  # replace N (uncertain token) with pad tokens in dataloader
   pad_interval: false  # handle uncertain tokens within the FastaInteral class  
   single_cell_type: None #this is what is overrided using dataset.sincle_cell_type, look at train_sct.sh
-  train_bias: false
+  train_bias: false #whether we are training a bias model or not
   dataset_path: '/data/leslie/sarthak/data/chrombpnet_test/saved_data_1000/'
 
 
@@ -96,4 +96,4 @@ train:
     #keeps the number of embeddings that you tell it to keep, and adds new ones for new tokens, the new amount is the difference.
     #between this number and the number in the config.dataset
   #bias model chrombpnet_model_1000/models/bias_model_scaled.h5
-  count_weight: None
+  count_weight: 64.7

@@ -41,7 +41,7 @@ class FFTConvFuncv2(torch.autograd.Function):
         u_f, k_f = ctx.saved_tensors
         seqlen = dout.shape[-1]
         fft_size = 2 * seqlen
-
+    
         dout_f = torch.fft.rfft(dout, n=fft_size)
         du = torch.fft.irfft(dout_f * k_f.conj(), n=fft_size, norm="forward")[
             ..., :seqlen
