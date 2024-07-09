@@ -1,0 +1,24 @@
+# @package _global_
+defaults:
+  - /trainer: default
+  - /loader: default
+  - /dataset: enformer_dataset
+  # - /task: regression #one of the options, uses mse loss
+  - /optimizer: adamw
+  - /scheduler: plateau
+  - /callbacks: [base, model_every_epoch]
+
+train:
+  monitor: val/loss # the metric to monitor for early stopping
+  mode: min
+
+task:
+  _name_: enformer
+  loss: poisson_loss
+  #/data/leslie/sarthak/data/chrombpnet_test/chrombpnet_model_1000/models/bias_model_scaled.h5
+  # torchmetrics: ['mse'] no need for this I don't think like perplexity, we just care about mse
+
+encoder: id
+decoder:
+  _name_: enformer
+  mode: pool #to average the embeddings

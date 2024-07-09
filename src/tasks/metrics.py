@@ -286,9 +286,12 @@ def mse(outs, y, len_batch=None):
     # import sys
     # sys.exit()
     #check if outs is a tuple
-    if isinstance(outs, tuple): #for profile prediction, it's the second output
+    if isinstance(outs, tuple) or isinstance(outs,list): #for profile prediction, it's the second output
         outs = outs[1]
         y = y[1]
+    # if y.shape[1] > outs.shape[1]: #then we cut off from both ends until we get the same size because of wandb again
+    #     y = y[:,-1] #this might need some fixing as y.shape[1] doesn't exist if we already separated it out...
+    #     outs = outs[1]
     if len(y.shape) < len(outs.shape):
         assert outs.shape[-1] == 1
         outs = outs.squeeze(-1)
@@ -439,9 +442,12 @@ def cbpnet_multinomial_nll(logits,true_counts, len_batch=None, ignore_index=-100
         predicted probabilities, averaged over all examples and all other
         dimensions.
     """
-    if isinstance(logits, tuple): #for wandb tracking, it inputs logits here, since then it's a tuple
+    if isinstance(logits, tuple) or isinstance(logits,list): #for wandb tracking, it inputs logits here, since then it's a tuple
         logits = logits[0]
         true_counts = true_counts[0]
+    # if true_counts.shape[1] > logits.shape[1]: #then we cut off from both ends until we get the same size because of wandb again
+    #     true_counts = true_counts[:,:-1] #because we appended the counts to the end, so remove it for this loss
+    #     logits = logits[0]
     #we also need to make sure that we have the right shape
     logits = logits.squeeze(); true_counts = true_counts.squeeze()
     # if logits.shape[1] > true_counts.shape[1]: #added it in the tasks instead
@@ -457,6 +463,16 @@ def cbpnet_multinomial_nll(logits,true_counts, len_batch=None, ignore_index=-100
     log_prod_exp = torch.sum(true_counts * logps, dim=-1)
     return (-log_fact_sum + log_prod_fact - log_prod_exp).mean()
     
+def poisson_loss_nll(profile, label_profile, len_batch=None, ignore_index=-100, mask = True, count_weight = 3.6):
+    '''
+    simply provides a poisson loss
+    '''
+    if isinstance(profile, tuple) or isinstance(profile,list):
+        profile = profile[0].squeeze()
+        label_profile = label_profile[0]
+    # profile = torch.exp(profile)
+    poisson_loss = F.poisson_nll_loss(profile, label_profile, log_input=True, full=False) #gotta test this
+    return poisson_loss
 
 def custom_profile_loss(outs, y, len_batch=None, ignore_index=-100, mask = True, count_weight = 3.6):
     '''
@@ -464,11 +480,34 @@ def custom_profile_loss(outs, y, len_batch=None, ignore_index=-100, mask = True,
     '''
     profile = outs[0]
     counts = outs[1]
-    label_profile = y[0]
-    label_counts = y[1]
+    if isinstance(y,tuple) or isinstance(y,list):
+        label_profile = y[0]
+        label_counts = y[1]
+    # else:
+    #     label_profile = y[:,:-1]
+    #     label_counts = y[:,-1]
     mse_loss = mse(counts, label_counts, len_batch)
     multinomial_loss = cbpnet_multinomial_nll(profile, label_profile)
     return count_weight*mse_loss + multinomial_loss
+
+
+def custom_profile_poisson_loss(outs,y,len_batch=None, ignore_index=-100, mask = True, count_weight = 3.6):
+    '''
+    not based on chrombpnet
+    '''
+    profile = outs[0]
+    counts = outs[1]
+    if isinstance(y,tuple) or isinstance(y,list):
+        label_profile = y[0]
+        label_counts = y[1]
+    mse_loss = mse(counts, label_counts, len_batch)
+    poisson_loss = poisson_loss_nll(profile, label_profile, len_batch)
+    return count_weight*mse_loss + poisson_loss
+
+# def poisson_loss(outs, y, len_batch=None, ignore_index=-100, mask = True): #is just poisson nll
+#     #very basic implementation of poisson loss
+#     loss = outs - y * torch.log(outs)
+#     return loss.mean()
 
 # Metrics that can depend on the loss
 def loss(x, y, loss_fn):
@@ -519,6 +558,8 @@ output_metric_fns = {
     "custom_ce": custom_ce,
     'custom_profile_loss': custom_profile_loss,
     'cbpnet_multinomial_nll': cbpnet_multinomial_nll,
+    'poisson_loss': poisson_loss_nll,
+    'custom_profile_poisson_loss': custom_profile_poisson_loss,
 }
 
 loss_metric_fns = {

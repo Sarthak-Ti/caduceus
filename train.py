@@ -181,6 +181,9 @@ class SequenceLightningModule(pl.LightningModule):
         decoder_cfg = utils.to_list(
             self.hparams.model.pop("decoder", None)
         ) + utils.to_list(self.hparams.decoder)
+        #this is solely because there might be times where we cut down the output, so we modify the decoder as such!
+        if self.dataset.dataset_train.d_output is not None:
+            decoder_cfg[1]['d_output'] = self.dataset.dataset_train.d_output
 
         # Instantiate model
         self.model = utils.instantiate(registry.model, self.hparams.model)
@@ -211,6 +214,7 @@ class SequenceLightningModule(pl.LightningModule):
         # Extract the modules so they show up in the top level parameter count
         self.encoder = U.PassthroughSequential(self.task.encoder, encoder)
         self.decoder = U.PassthroughSequential(decoder, self.task.decoder)
+        #actually had defined a task.decoder, this was the issue! so renamed it
         self.loss = self.task.loss
         self.loss_val = self.task.loss
         if hasattr(self.task, 'loss_val'):

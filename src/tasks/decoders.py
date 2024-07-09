@@ -191,10 +191,17 @@ class TokenDecoder(Decoder):
 
 class ProfileDecoder(Decoder):
     '''Decoder for profile task and also coutns task'''
-    def __init__(self, d_model = 128, d_output = 1, l_output = 0, mode='pool', use_lengths=False):
+    def __init__(self, d_model = 128, d_output = 1, l_output = 0, mode='pool', use_lengths=False, linear_profile=True,):
         super().__init__()
         self.output_transform_counts = nn.Linear(d_model, d_output)
-        self.output_transform_profile = nn.Linear(d_model, 1) #maps the last dimension to the counts, so each sequence value gets its own
+        if linear_profile:
+            self.output_transform_profile = nn.Linear(d_model, 1) #maps the last dimension to the counts, so each sequence value gets its own
+        else:
+            self.output_transform_profile = nn.Sequential(
+                nn.Linear(d_model, 64),
+                nn.ReLU(),  # Adding a non-linearity is a common practice, though it's optional
+                nn.Linear(64, 1)
+            )
         if l_output == 0:
             l_output = 1
             self.squeeze = True
@@ -279,6 +286,97 @@ class ProfileDecoder(Decoder):
 
         return (x_profile,x)
     
+
+class EnformerDecoder(Decoder):
+    '''Decoder for profile task and also coutns task'''
+    def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False, yshape=114688, bin_size=128):
+        super().__init__()
+        # if d_output is None:
+        #     d_output = yshape//bin_size
+            
+        self.convolutions = convolutions
+        if convolutions:
+            self.conv1 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=12)
+            self.conv2 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=6)
+            self.conv3 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=3)
+            self.pool1 = nn.MaxPool1d(kernel_size=8)
+            self.pool2 = nn.MaxPool1d(kernel_size=6)
+            self.pool3 = nn.MaxPool1d(kernel_size=3)
+        
+        self.output_transform = nn.Linear(d_model, d_output)
+        self.pool = nn.AvgPool1d(kernel_size=bin_size) #default stride is kernel size
+
+        if l_output == 0:
+            l_output = 1
+            self.squeeze = True
+        else:
+            self.squeeze = False
+        self.l_output = l_output
+        self.mode = mode
+        self.use_lengths = use_lengths
+        self.yshape = yshape
+        self.bin_size = bin_size
+
+    def forward(self, x, state=None, lengths=None, l_output=None, mask=None):
+        """
+        Forward pass for the EnformerDecoder.
+
+        Args:
+            x (Tensor): Input tensor of shape (batch_size, seq_len, d_model).
+            state (optional): Not used.
+            lengths (optional): Not used.
+            l_output (optional): Not used.
+            mask (optional): Not used.
+
+        Returns:
+            Tensor: Output tensor of shape (batch_size, num_bins, d_output).
+        """
+        #the first option is we pool it based on the 128 bp and just do some sort of average pool
+        #the second option is we do a convolution and then pool it
+
+        
+        if self.convolutions is False:
+            #we first take just the middle elements of the sequence
+            # x = x[:,int(x.shape[1]/2)-int(self.yshape/2):int(x.shape[1]/2)+int(self.yshape/2),:]
+            startidx = x.shape[1]//2 - self.yshape//2
+            endidx = startidx + self.yshape
+            x = x[:,startidx:endidx,:]
+            x_permute = x.permute(0,2,1)
+            # x_pooled = F.avg_pool1d(x_permute, kernel_size=self.bin_size, stride=self.bin_size)
+            x_pooled = self.pool(x_permute)
+            x = x_pooled.permute(0,2,1)
+        else:
+            #now we need to do the convolution and then either pol it or figure something else out
+            x = x.permute(0, 2, 1)
+            
+            x = self.conv1(x)
+            x = F.relu(x)
+            x = self.pool1(x)
+            
+            x = self.conv2(x)
+            x = F.relu(x)
+            x = self.pool2(x)
+
+            x = self.conv3(x)
+            x = F.relu(x)
+            x = self.pool3(x)
+
+            #with our max pooling, the data is already quite small
+            #so just crop it to be the right shape now
+            binlen = self.yshape // self.bin_size
+            startidx = x.shape[2]//2 - binlen//2
+            endidx = startidx + binlen
+            x = x[:,:,startidx:endidx]
+            
+            # Apply pooling
+            # x = self.pool(x)
+            # Apply the final linear layer
+            # x now has shape (batch_size, 256, num_bins)
+            x = x.permute(0, 2, 1)  # Change shape to (batch_size, num_bins, 256) for the linear layer
+            
+        x = self.output_transform(x)
+
+        return x
 
 class NDDecoder(Decoder):
     """Decoder for single target (e.g. classification or regression)"""
@@ -410,6 +508,7 @@ registry = {
     "pack": PackedDecoder,
     "token": TokenDecoder,
     "profile": ProfileDecoder,
+    'enformer': EnformerDecoder,
 }
 model_attrs = {
     "linear": ["d_output"],
