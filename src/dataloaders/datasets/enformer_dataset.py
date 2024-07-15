@@ -78,6 +78,10 @@ class EnformerDataset():
             self.labels = h5py.File(data_path.replace('_seq.npz', '_label.h5'),'r')['labels']
         
         self.keep = None
+        if self.d_output is None and self.return_CAGE:
+            self.d_output = self.labels.shape[-1]
+        else:
+            self.d_output = 4675
         
         if cell_type is not None:
             targets = '/data/leslie/sarthak/data/enformer/data/human/targets.txt'

@@ -778,6 +778,35 @@ def train(config):
         print('model successfully loaded!!')
         # print(model)
         # print(model.model.backbone.embeddings.word_embeddings)
+    
+    if config.train.get('pretrained_safetensors_model_path', None) is not None:
+        from safetensors import safe_open
+        safetensors_path = config.train.pretrained_safetensors_model_path
+        with safe_open(safetensors_path, framework="pt") as f:
+            state_dict = {}
+            for key in f.keys():
+                state_dict[key] = f.get_tensor(key)
+        #the other thing we need to do is make sure that because of weight sharing if we are doing weight sharing, then we should define the reverse to be the same as forward for in proj and out proj
+        if config.model.config.get('bidirectional_weight_tie', False):
+            print("Bidirectional weight tie is true, so we will be adding the reverse keys")
+            original_keys = list(state_dict.keys())
+            for layer in original_keys:
+                if 'in_proj' in layer:
+                    reverse_key = layer.replace('fwd.in_proj', 'rev.in_proj')
+                    state_dict[reverse_key] = state_dict[layer]
+                    print(f"Added {reverse_key} from {layer}")
+                if 'out_proj' in layer:
+                    reverse_key = layer.replace('fwd.out_proj', 'rev.out_proj')
+                    state_dict[reverse_key] = state_dict[layer]
+                    print(f"Added {reverse_key} from {layer}")
+            #I manually checked, the weights are still tied
+            #layer = model.model.caduceus.backbone.layers[0].mixer.submodule
+            #in_proj_tied = layer.mamba_fwd.in_proj.weight.data_ptr() == layer.mamba_rev.in_proj.weight.data_ptr()
+            #print(f"in_proj weights tied: {in_proj_tied}"). returns true, same for out_proj
+
+        model.load_state_dict(state_dict, strict=config.train.pretrained_model_strict_load)
+        
+    
     # print(model)
     #below is a hack to access the embeddings, we will save it out once, then can randomly access it
     #set seed, so should be repeatable, and honestly not the worst thing, just grabbing them all

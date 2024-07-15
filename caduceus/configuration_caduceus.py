@@ -6,6 +6,24 @@ from typing import Optional, Union
 
 from transformers import PretrainedConfig
 
+complement_map_default = {
+                    "0": 0,
+                    "1": 1,
+                    "2": 2,
+                    "3": 3,
+                    "4": 4,
+                    "5": 5,
+                    "6": 6,
+                    "7": 10,
+                    "8": 9,
+                    "9": 8,
+                    "10": 7,
+                    "11": 11,
+                    "12": 12,
+                    "13": 13,
+                    "14": 14,
+                    "15": 15
+                }
 
 class CaduceusConfig(PretrainedConfig):
     """Config that extends the original MambaConfig with params relevant to bi-directionality and RC equivariance."""
@@ -53,3 +71,5 @@ class CaduceusConfig(PretrainedConfig):
         self.bidirectional_weight_tie = bidirectional_weight_tie
         self.rcps = rcps
         self.complement_map = complement_map
+        if self.complement_map is None:
+            self.complement_map = complement_map_default

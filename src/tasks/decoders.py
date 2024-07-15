@@ -64,6 +64,9 @@ class SequenceDecoder(Decoder):
 
         if mode == 'ragged':
             assert not use_lengths
+        
+        self.conjoin_train = conjoin_train
+        self.conjoin_test = conjoin_test
             
         # print(f"SequenceDecoder: mode={mode}, l_output={l_output}, use_lengths={use_lengths}, d_output={d_output}, d_model={d_model}")
         # import sys
@@ -287,11 +290,14 @@ class ProfileDecoder(Decoder):
 
 class EnformerDecoder(Decoder):
     '''Decoder for profile task and also coutns task'''
-    def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False, yshape=114688, bin_size=128):
+    def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False, yshape=114688, bin_size=128, conjoin_train=True, conjoin_test=False):
         super().__init__()
         # if d_output is None:
         #     d_output = yshape//bin_size
-            
+        
+        self.conjoin_train = conjoin_train
+        self.conjoin_test = conjoin_test
+        
         self.convolutions = convolutions
         if convolutions:
             self.conv1 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=12)
@@ -320,7 +326,7 @@ class EnformerDecoder(Decoder):
         Forward pass for the EnformerDecoder.
 
         Args:
-            x (Tensor): Input tensor of shape (batch_size, seq_len, d_model).
+            x (Tensor): Input tensor of shape (batch_size, seq_len, d_model) or (batch_size, seq_len, d_model, 2) if conjoining it.
             state (optional): Not used.
             lengths (optional): Not used.
             l_output (optional): Not used.
@@ -330,9 +336,19 @@ class EnformerDecoder(Decoder):
             Tensor: Output tensor of shape (batch_size, num_bins, d_output).
         """
         #the first option is we pool it based on the 128 bp and just do some sort of average pool
-        #the second option is we do a convolution and then pool it
+        #the second option is we do a convolution and then pool it        
+            
+        if self.conjoin_train or (self.conjoin_test and not self.training):
+            x, x_rc = x.chunk(2, dim=-1)
+            x = self.evaluate_forward(x.squeeze(-1))
+            x_rc = self.evaluate_forward(x_rc.squeeze(-1))
+            x = (x + x_rc) / 2 #this is how we keep it rc, otherwise it would separate, unsure why the hiddne states differ, thought those would be identical tho
+        else:
+            x = self.evaluate_forward(x)
 
-        
+        return x
+
+    def evaluate_forward(self, x):
         if self.convolutions is False:
             #we first take just the middle elements of the sequence
             # x = x[:,int(x.shape[1]/2)-int(self.yshape/2):int(x.shape[1]/2)+int(self.yshape/2),:]
@@ -373,8 +389,8 @@ class EnformerDecoder(Decoder):
             x = x.permute(0, 2, 1)  # Change shape to (batch_size, num_bins, 256) for the linear layer
             
         x = self.output_transform(x)
-
         return x
+        
 
 class NDDecoder(Decoder):
     """Decoder for single target (e.g. classification or regression)"""

@@ -1,43 +1,45 @@
 # @package _global_
 defaults:
   - /pipeline: enformer_pipeline
+  - /model: ???
   # - override /dataset: profile_atac_long now already done with pipeline
   # - default model/layer: mha
   # - override /scheduler: constant
 
-model: # alot of this is based on the config.json file that came along with it
-  _name_: dna_embedding
-  d_model: 256
-  n_layer: 8 #was 2
-  d_inner: ${eval:4 * ${.d_model}} #is 512, need to keep it that way
-  vocab_size: 16 #to be consistent, but adding embeddings will fix this
-  resid_dropout: 0.0
-  embed_dropout: 0.1
-  fused_mlp: False # figure out how to use fused MLP, maybe only with bf16 + a100
-  fused_dropout_add_ln: False #false for short or if we don't have package installed!
-  checkpoint_mixer: False  # set true for memory reduction, might cause issues?
-  checkpoint_mlp: False  # set true for memory reduction
-  residual_in_fp32: True
-  pad_vocab_size_multiple: 1
-  # load_old_embedding: 180 #used in lmbackbone to say the size of the new one, and how many elements to make it
-  layer:
-    _name_: hyena
-    emb_dim: 5
-    filter_order: 64
-    short_filter_order: 3
-    l_max: ${eval:${dataset.max_length}+2}
-    modulate: True
-    w: 10
-    lr: ${optimizer.lr}
-    wd: 0.0
-    lr_pos_emb: 0.0
+#for mamba we don't do this rather we override it, so here we put arguments if we use the dna embedding model like it's model size and num layers, but don't care about that now
+# model: # alot of this is based on the config.json file that came along with it
+  # _name_: dna_embedding
+  # d_model: 256
+  # n_layer: 16 #was 2
+  # d_inner: ${eval:4 * ${.d_model}} #is 512, need to keep it that way
+  # vocab_size: 16 #to be consistent, but adding embeddings will fix this
+  # resid_dropout: 0.0
+  # embed_dropout: 0.1
+  # fused_mlp: False # figure out how to use fused MLP, maybe only with bf16 + a100
+  # fused_dropout_add_ln: False #false for short or if we don't have package installed!
+  # checkpoint_mixer: False  # set true for memory reduction, might cause issues?
+  # checkpoint_mlp: False  # set true for memory reduction
+  # residual_in_fp32: True
+  # pad_vocab_size_multiple: 1
+  # # load_old_embedding: 180 #used in lmbackbone to say the size of the new one, and how many elements to make it
+  # layer:
+  #   _name_: hyena
+  #   emb_dim: 5
+  #   filter_order: 64
+  #   short_filter_order: 3
+  #   l_max: ${eval:${dataset.max_length}+2}
+  #   modulate: True
+  #   w: 10
+  #   lr: ${optimizer.lr}
+  #   wd: 0.0
+  #   lr_pos_emb: 0.0
 
 task:
   metrics:
     - poisson_loss
 
 decoder:
-  d_model: 256
+  d_model: ${model.config.d_model}
   d_output: ${dataset.d_output}
 
 trainer:
@@ -51,11 +53,12 @@ trainer:
   strategy: auto
   limit_train_batches: 1.0   # train on full dataset, can be used to toggle quick run
   limit_val_batches: 1.0     # validate on full dataset, can be used to toggle quick run
+  num_sanity_val_steps: 0
 
 dataset:
   # batch_size: 32  # Per GPU
-  batch_size: 32
-  max_length: 160000 # 262144, 524288
+  batch_size: 2
+  max_length: 131072 # 262144, 524288
   # optional, default is max_length
   max_length_val: ${dataset.max_length}
   max_length_test: ${dataset.max_length}
@@ -86,7 +89,8 @@ train:
   gpu_mem: ${eval:"round(float(__import__('subprocess').check_output('nvidia-smi -i 0 --query-gpu=memory.total --format=csv,noheader,nounits', shell=True).strip().decode()) / 1000)"}
   seed: 2222
   global_batch_size: ${dataset.batch_size}
-  pretrained_model_path: /data/leslie/sarthak/hyena/hyena-dna/hyenadna-medium-160k-seqlen/weights.ckpt #the path for the fine tuned model
+  # pretrained_model_path: /data/leslie/sarthak/caduceus/caduceus-ps_seqlen-131k_d_model-256_n_layer-16/weights.ckpt #the path for the fine tuned model
+  pretrained_safetensors_model_path: /data/leslie/sarthak/caduceus/caduceus-ps_seqlen-131k_d_model-256_n_layer-16/model.safetensors #the path for the fine tuned model
   pretrained_model_strict_load: False  # false allows encoder/decoder to be used if new model uses it, which downstream fineituning does
   pretrained_model_state_hook: #note all of these are passed to the load_backbone function
     _name_: load_backbone
@@ -95,6 +99,6 @@ train:
     add_embeddings: false #initially was 4
     ignore_embeddings: false #tells it to reset embeddings if true, completely reinitializes them
     # load_old_embedding: 12 #tells it to load the old embeddings from the pretrained model, then to add new ones for new tokens.
-    #keeps the number of embeddings that you tell it to keep, and adds new ones for new tokens, the new amount is the difference.
+    # keeps the number of embeddings that you tell it to keep, and adds new ones for new tokens, the new amount is the difference.
     #between this number and the number in the config.dataset
   #bias model chrombpnet_model_1000/models/bias_model_scaled.h5
