@@ -12,6 +12,8 @@ import src.utils as utils
 import src.utils.config
 from src.models.sequence.block import SequenceResidualBlock
 from src.models.nn.components import Normalization
+from src.utils.enformer_pytorch import exponential_linspace_int, MaxPool, AttentionPool, ConvBlock, Residual
+
 
 class Encoder(nn.Module):
     """Encoder abstraction
@@ -286,6 +288,58 @@ class Conv2DPatchEncoder(Encoder):
         x = rearrange(x, 'b c h w -> b (h w) c')
         return x
 
+class EnformerEncoder(Encoder):
+    def __init__(self, d_input=None, d_model=256, filter_sizes=None, flat=False,
+                num_downsamples = 7,    # genetic sequence is downsampled 2 ** 7 == 128x in default Enformer - can be changed for higher resolution
+                dim_divisible_by = 128,
+                pool_type = 'max',
+                conv_tower = False,
+                **kwargs,
+             ):
+        super().__init__()
+        
+        self.dim = d_model
+        self.num_downsamples = num_downsamples
+        self.dim_divisible_by = dim_divisible_by
+        self.pool_type = pool_type
+        self.use_conv_tower = conv_tower
+        if not self.use_conv_tower:
+            self.dim = 2*self.dim #basically if we only use the stem, it outputs the model at half the dim, so we fix that!
+        
+        Pool = MaxPool if self.pool_type == 'max' else AttentionPool
+        half_dim = self.dim // 2
+        twice_dim = self.dim * 2
+        
+        self.stem = nn.Sequential(
+            nn.Conv1d(4, half_dim, 15, padding = 7),
+            Residual(ConvBlock(half_dim)),
+            Pool(half_dim, pool_size = 2)
+        )
+
+        filter_list = exponential_linspace_int(half_dim, self.dim, num = (self.num_downsamples - 1), divisible_by = self.dim_divisible_by)
+        filter_list = [half_dim, *filter_list]
+
+        conv_layers = []
+        for dim_in, dim_out in zip(filter_list[:-1], filter_list[1:]):
+            conv_layers.append(nn.Sequential(
+                ConvBlock(dim_in, dim_out, kernel_size = 5),
+                Residual(ConvBlock(dim_out, dim_out, 1)),
+                Pool(dim_out, pool_size = 2)
+            ))
+
+        self.conv_tower = nn.Sequential(*conv_layers)
+    
+    def forward(self, x):
+        #first we one hot encode
+        x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 2) #need to make sure it is the right order
+        if 11 in x:
+            indices = torch.where(x == 11)
+            for idx in range(len(indices[0])):
+                x_onehot[indices[0][idx], 0, indices[1][idx]] = 0 #modify 0 because if it's N that's 11 which means after %4 it is 0, so that was orignally 1000 set it to 0000
+        x = self.stem(x_onehot)
+        if self.use_conv_tower:
+            x = self.conv_tower(x)
+        return x.transpose(1,2), True
 
 # For every type of encoder/decoder, specify:
 # - constructor class
@@ -307,6 +361,7 @@ registry = {
     "patch2d": Conv2DPatchEncoder,
     "timestamp_embedding": TimestampEmbeddingEncoder,
     "layer": LayerEncoder,
+    "enformer": EnformerEncoder,
 }
 dataset_attrs = {
     "embedding": ["n_tokens"],

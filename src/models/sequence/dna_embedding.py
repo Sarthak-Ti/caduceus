@@ -72,9 +72,10 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin): #this is the actual model t
         if self.process_group is not None:
             sync_shared_params(self, self.process_group)
 
-    def forward(self, input_ids, position_ids=None, inference_params=None, state=None): # state for the repo interface
+    def forward(self, input_ids, position_ids=None, inference_params=None, state=None, skip_embedding=False): # state for the repo interface
         hidden_states = self.backbone(input_ids, position_ids=position_ids,
-                                      inference_params=inference_params)
+                                      inference_params=inference_params,
+                                      skip_embedding=skip_embedding)
         # we only need the last hidden state for embeddings (decoder head will predict classification task)
         #lm head will NOT use the downstream task
         return hidden_states, None

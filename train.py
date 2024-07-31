@@ -860,6 +860,7 @@ def train(config):
         trainer.validate(model)
 
     if config.train.ckpt is not None:
+        print('restoring checkpoint')
         trainer.fit(model, ckpt_path=config.train.ckpt)
     else:
         trainer.fit(model)

@@ -471,7 +471,7 @@ def poisson_loss_nll(profile, label_profile, len_batch=None, ignore_index=-100, 
         profile = profile[0].squeeze()
         label_profile = label_profile[0]
     # profile = torch.exp(profile)
-    poisson_loss = F.poisson_nll_loss(profile, label_profile, log_input=True, full=False) #gotta test this
+    poisson_loss = F.poisson_nll_loss(profile, label_profile, log_input=False, full=False) #gotta test this
     return poisson_loss
 
 def custom_profile_loss(outs, y, len_batch=None, ignore_index=-100, mask = True, count_weight = 3.6):

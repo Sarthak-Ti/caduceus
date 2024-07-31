@@ -79,7 +79,7 @@ dataset:
 #   lr_min: ${eval:0.1 * ${optimizer.lr}}  # flatlines with this
 
 optimizer:
-  lr: 8e-4  # peak
+  lr: 8e-5  # peak
   weight_decay: 0.1
 
 train:

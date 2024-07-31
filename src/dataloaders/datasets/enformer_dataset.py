@@ -43,7 +43,7 @@ class EnformerDataset():
         d_output = None,
         data_path = None, #the path for the numpy arrays of the data, should contain chroomosome and summit locations
         return_CAGE = False, #doesn't return cage data
-        load_into_memory = False, #if you have the RAM, load it all into memory
+        load_into_memory = None, #if you have the RAM, load it all into memory
         cell_type = None, #whether to just do one specific cell type
     ):
         
@@ -60,7 +60,6 @@ class EnformerDataset():
         self.uppercase = uppercase
         self.return_CAGE = return_CAGE
 
-
         if data_path is None:
             data_path=f'/data/leslie/sarthak/data/enformer/data/{split}_seq.npz'
         seq_data = np.load(data_path)
@@ -69,8 +68,13 @@ class EnformerDataset():
         #close the file
         seq_data.close()
 
+        #so we automatically load the test and val into memory, but not train
+        if load_into_memory is None and split == 'train':
+            load_into_memory = False
+        elif load_into_memory is None:
+            load_into_memory = True
+            
         #now we need to load the labels
-        
         if load_into_memory:
             with h5py.File(data_path.replace('_seq.npz', '_label.h5'),'r') as f:
                 self.labels = f['labels'][:]
@@ -83,16 +87,29 @@ class EnformerDataset():
         else:
             self.d_output = 4675
         
-        if cell_type is not None:
+        if isinstance(cell_type,str):
             targets = '/data/leslie/sarthak/data/enformer/data/human/targets.txt'
             targets = pd.read_csv(targets, sep='\t')
             #nah let's just do it properly, we'll have overlap, but it's fine!
             #get the indices to keep
-            self.keep = targets[targets['description'].str.endswith('K562', na=False)]['index'].to_numpy()
+            self.keep = targets[targets['description'].str.endswith(cell_type, na=False)]['index'].to_numpy()
             if not self.return_CAGE:
                 self.keep = self.keep[self.keep < 4675]
+                assert(len(self.keep) > 0)
+            # self.d_output = len(self.keep)
+        elif isinstance(cell_type, list):
+            self.keep = np.array(cell_type)
+        elif isinstance(cell_type, int):
+            # self.keep = np.array([cell_type])
+            self.labels = np.array(self.labels[:, :, cell_type:cell_type+1])
+            # self.labels = self.labels[:, :, cell_type:cell_type+1]
+            self.keep = None #we just limited the data and loaded it into memory
+            self.d_output=1
+        elif cell_type is not None:
+            raise ValueError('Cell type not implemented')
+        if self.keep is not None:
             self.d_output = len(self.keep)
-            
+        
             #here we could find a way to actually implement it and find all the k562 ones, but in my case we want just a few
             #so we can manually define it for k562
             # if cell_type != 'K562':
@@ -128,11 +145,10 @@ class EnformerDataset():
         
         #and gather the data
         targets = self.labels[idx]
-        
         seq = torch.LongTensor(seq)
         # print(counts)
         targets = torch.FloatTensor(targets)
-        if not self.return_CAGE:
+        if not self.return_CAGE and len(self.labels.shape) == 3: #otherwise we already filtered it
             targets = targets[:, :4675]
         if flip: #this flips each column independently
             targets = targets.flip(dims=[0])
@@ -147,7 +163,7 @@ Can run in the terminal using these commands
 cd /data/leslie/sarthak/hyena/hyena-dna/
 python
 import src.dataloaders.datasets.enformer_dataset as enformer_dataset
-dataset = enformer_dataset.EnformerDataset('train', 160_000, rc_aug = True, cell_type = 'K562')
+dataset = enformer_dataset.EnformerDataset('test', 131_072, rc_aug = True, cell_type = 121)
 out = dataset[0]
 out[0] #the input data tokenized
 '''
