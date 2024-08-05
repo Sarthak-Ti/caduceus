@@ -791,7 +791,7 @@ class EnformerLoader(HG38): #for unique cell type tokens
                 detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
                 fast_forward_epochs=None, fast_forward_batches=None, data_path=None,return_CAGE = False,
-                cell_type = None, *args, **kwargs):
+                cell_type = None, kmer_len=None, *args, **kwargs):
         self.dataset_name = dataset_name
         self.dest_path = dest_path
         self.tokenizer_name = tokenizer_name
@@ -817,6 +817,7 @@ class EnformerLoader(HG38): #for unique cell type tokens
         self.data_path = data_path
         self.return_CAGE = return_CAGE
         self.cell_type = cell_type
+        self.kmer_len = kmer_len
 
         if self.dest_path is None:
             self.dest_path = default_data_path / self._name_
@@ -864,6 +865,7 @@ class EnformerLoader(HG38): #for unique cell type tokens
                                 data_path=self.data_path,
                                 return_CAGE = self.return_CAGE,
                                 cell_type=self.cell_type,
+                                kmer_len=self.kmer_len,
                                 # return_mask=self.return_mask,
             )
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])

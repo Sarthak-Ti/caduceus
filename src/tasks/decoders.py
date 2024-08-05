@@ -293,12 +293,12 @@ class EnformerDecoder(Decoder):
     '''Decoder for profile task and also coutns task'''
     def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False,
                  yshape=114688, bin_size=128, downsampled=False, dropout_rate=0.1,
-                 num_downsamples=7, dim_divisible_by=128):
+                 num_downsamples=7, dim_divisible_by=128, kmer_len=None):
         super().__init__()
         # if d_output is None:
         #     d_output = yshape//bin_size
         #yshape is the size in nucleotides of the region you are looking at, independent of how downsampled it is, that's adjusted for later
-            
+        self.kmer_len = kmer_len
         self.convolutions = convolutions
         
         if downsampled: #a number like 2 tells it how much it is already downsampled, so then only average pool with size 64
@@ -367,8 +367,12 @@ class EnformerDecoder(Decoder):
         if self.convolutions is False:
             #we first take just the middle elements of the sequence
             # x = x[:,int(x.shape[1]/2)-int(self.yshape/2):int(x.shape[1]/2)+int(self.yshape/2),:]
+            # if self.kmer_len is not None:
+            #     x = x[:,self.kmer_len:] #because we cropped that many elements from the right already when we did kmer encoding
+            #this approach for kmer_len is no longer used, now tokenized the whole genome instead
             startidx = x.shape[1]//2 - self.yshape//2
             endidx = startidx + self.yshape
+            
             x = x[:,startidx:endidx,:]
             x_permute = x.permute(0,2,1)
             # x_pooled = F.avg_pool1d(x_permute, kernel_size=self.bin_size, stride=self.bin_size)
@@ -376,7 +380,11 @@ class EnformerDecoder(Decoder):
             x = x_pooled.permute(0,2,1)
         else:
             #enformer style convolutions
+            # print(x.shape)
             x = self.final_pointwise(x)
+            # if self.kmer_len is not None:
+            #     x = x[:,self.kmer_len:] #because we cropped that many elements from the right already when we did kmer encoding
+            #again this feature is deprecated, no longer used
             x = self.crop_final(x)
             #my implementation of a separate approach
             # #now we need to do the convolution and then either pol it or figure something else out
