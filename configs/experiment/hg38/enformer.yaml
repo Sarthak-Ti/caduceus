@@ -72,6 +72,7 @@ dataset:
   replace_N_token: false  # replace N (uncertain token) with pad tokens in dataloader
   pad_interval: false  # handle uncertain tokens within the FastaInteral class  
   return_cage: false  # return cage data in dataloader
+  # batch_size_eval: ${dataset.batch_size}  # just make it the same as train to ensure it fits in memory
 
 
 # scheduler:

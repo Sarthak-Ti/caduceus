@@ -868,7 +868,8 @@ def train(config):
     log.info(f'{config.train.ckpt=} {fsspec_exists(config.train.ckpt)=}')
     # if config.train.get("compile_model", False):
     #     model = torch.compile(model, mode="reduce-overhead")
-    if config.train.ckpt is not None and fsspec_exists(config.train.ckpt):
+    if config.train.ckpt is not None and fsspec_exists(config.train.ckpt): #makes sure it's a real path!
+        print('restoring checkpoint!!')
         trainer.fit(model, ckpt_path=config.train.ckpt)
     else:
         trainer.fit(model)

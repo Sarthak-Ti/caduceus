@@ -320,6 +320,7 @@ class EnformerDecoder(Decoder):
         self.use_lengths = use_lengths
         self.yshape = yshape
         self.bin_size = bin_size
+        self.softplus = nn.Softplus()
 
     def forward(self, x, state=None, lengths=None, l_output=None, mask=None):
         """
@@ -387,6 +388,9 @@ class EnformerDecoder(Decoder):
             # Apply the final linear layer
             # x now has shape (batch_size, 256, num_bins)
             x = x.permute(0, 2, 1)  # Change shape to (batch_size, num_bins, 256) for the linear layer
+
+        #softplus activation
+        x = self.softplus(x)
             
         x = self.output_transform(x)
         return x

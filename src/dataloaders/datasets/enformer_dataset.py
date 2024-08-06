@@ -69,8 +69,13 @@ class EnformerDataset():
         #close the file
         seq_data.close()
 
-        #now we need to load the labels
-        
+        #so we automatically load the test and val into memory, but not train
+        if load_into_memory is None and split == 'train':
+            load_into_memory = False
+        elif load_into_memory is None:
+            load_into_memory = True
+
+        #now we need to load the labels        
         if load_into_memory:
             with h5py.File(data_path.replace('_seq.npz', '_label.h5'),'r') as f:
                 self.labels = f['labels'][:]
@@ -83,14 +88,23 @@ class EnformerDataset():
         else:
             self.d_output = 4675
         
-        if cell_type is not None:
+        if isinstance(cell_type,str):
             targets = '/data/leslie/sarthak/data/enformer/data/human/targets.txt'
             targets = pd.read_csv(targets, sep='\t')
             #nah let's just do it properly, we'll have overlap, but it's fine!
             #get the indices to keep
-            self.keep = targets[targets['description'].str.endswith('K562', na=False)]['index'].to_numpy()
+            self.keep = targets[targets['description'].str.endswith(cell_type, na=False)]['index'].to_numpy()
             if not self.return_CAGE:
                 self.keep = self.keep[self.keep < 4675]
+                assert(len(self.keep) > 0)
+            # self.d_output = len(self.keep)
+        elif isinstance(cell_type, list):
+            self.keep = np.array(cell_type)
+        elif isinstance(cell_type, int):
+            self.keep = np.array([cell_type])
+        elif cell_type is not None:
+            raise ValueError('Cell type not implemented')
+        if self.keep is not None:
             self.d_output = len(self.keep)
             
             #here we could find a way to actually implement it and find all the k562 ones, but in my case we want just a few
