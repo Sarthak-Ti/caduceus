@@ -477,6 +477,7 @@ class ProfileClass(BaseTask):
 
 class EnformerTask(BaseTask):
     #This task is very basic but requires inputting the desired output length into the decoder
+    #also we can do the embedding by skipping it based on w, which is if we have CNN layers as encodder
     def forward(self, batch, encoder, model, decoder, _state, minimum=-10):
         """Passes a batch through the encoder, backbone, and decoder"""
         # z holds arguments such as sequence length
@@ -487,9 +488,16 @@ class EnformerTask(BaseTask):
         else:
             assert len(z) == 1 and isinstance(z[0], dict), "Dataloader must return dictionary of extra arguments"
             z = z[0]
-            
-        x, w = encoder(x) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
-        x, state = model(x) #this part can be quite slow on the cpu especially!
+        #the size of x is batch x seqlen which in this case is 160000
+        skip_embedding = None #set it to none, so that we can check if we should skip embedding
+        x,w = encoder(x) # w can model-specific constructions such as key_padding_mask for transformers or state for RNNs
+        #encoder might return information about the fact that we should skip embedding!
+        if isinstance(x,tuple):
+            skip_embedding = x[1]
+            x = x[0]
+        skip_embedding = skip_embedding is not None #if it is None then skip embedding is False, that means encoder was identity so don't skip embedding
+        #but if encoder returns true for w, then we should skip embedding
+        x, state = model(x, skip_embedding=skip_embedding) #this part can be quite slow on the cpu especially!
         #x shape after model is batch x seqlen x d_model in this case d_model is 256
         #y shape is batch x 896 x 5313 where the 896 corresponds to 128*896=114688 which is the number of nucleotides we predict over
         self._state = state

@@ -367,18 +367,21 @@ class LMBackbone(nn.Module):
         if self.process_group is not None:
             sync_shared_params(self, self.process_group)
 
-    def forward(self, input_ids, position_ids=None, inference_params=None):
+    def forward(self, input_ids, position_ids=None, inference_params=None, skip_embedding=False):
         # If using Tensor Parallel with sequence parallel, we combine the batch and the seqlen
         # dimensions so that we can split on it easily, in case of small batch size.
         # Only the attention/SSM layers need to know the seqlen.
-        embedding_kwargs = (
-            {"combine_batch_seqlen_dim": True}
-            if self.process_group is not None and self.sequence_parallel
-            else {} #this is what is chosen
-        )
-        hidden_states = self.embeddings(
-            input_ids, position_ids=position_ids, **embedding_kwargs
-        )
+        if not skip_embedding:
+            embedding_kwargs = (
+                {"combine_batch_seqlen_dim": True}
+                if self.process_group is not None and self.sequence_parallel
+                else {} #this is what is chosen
+            )
+            hidden_states = self.embeddings(
+                input_ids, position_ids=position_ids, **embedding_kwargs
+            )
+        else:
+            hidden_states = input_ids #basically we have a convolutional model that is directly inputting the hidden states
         # print('embedding:', hidden_states.shape)
         # import sys
         # sys.exit()

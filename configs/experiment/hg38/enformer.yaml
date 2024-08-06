@@ -41,6 +41,7 @@ task:
 decoder:
   d_model: ${model.config.d_model}
   d_output: ${dataset.d_output}
+  kmer_len: ${dataset.kmer_len}
 
 trainer:
   accelerator: gpu
@@ -65,14 +66,14 @@ dataset:
   tokenizer_name: char
   pad_max_length: null  # needed for bpe tokenizer
   add_eos: false
-  rc_aug: true #was false
+  rc_aug: false #was false
   d_output: 4675 #have to manually define this
   num_workers: 1
   use_fixed_len_val: false  # placing a fixed length val here, but it's really the test
   replace_N_token: false  # replace N (uncertain token) with pad tokens in dataloader
   pad_interval: false  # handle uncertain tokens within the FastaInteral class  
   return_cage: false  # return cage data in dataloader
-  # batch_size_eval: ${dataset.batch_size}  # just make it the same as train to ensure it fits in memory
+  kmer_len: null  # kmer length for kmer tokenization
 
 
 # scheduler:
@@ -83,7 +84,7 @@ dataset:
 #   lr_min: ${eval:0.1 * ${optimizer.lr}}  # flatlines with this
 
 optimizer:
-  lr: 8e-4  # peak
+  lr: 8e-5  # peak
   weight_decay: 0.1
 
 train:

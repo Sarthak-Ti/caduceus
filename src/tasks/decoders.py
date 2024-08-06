@@ -13,6 +13,20 @@ import src.utils.train
 
 log = src.utils.train.get_logger(__name__)
 
+import inspect
+from einops.layers.torch import Rearrange
+from src.utils.enformer_pytorch import exponential_linspace_int, MaxPool, AttentionPool, ConvBlock, Residual, GELU, TargetLengthCrop
+
+# def trace_call():
+#     stack = inspect.stack()
+#     # Adjust the index to 2 to get the caller of the function that called trace_call
+#     #let's print a few of the values
+#     for i in range(1,len(stack)-1):
+#         caller_frame = stack[i]  # This goes two levels up in the call stack
+#         frame_info = inspect.getframeinfo(caller_frame[0])
+
+#         print(f"Called from {frame_info.filename} at line {frame_info.lineno} in function {frame_info.function}")
+
 
 class Decoder(nn.Module):
     """This class doesn't do much but just signals the interface that Decoders are expected to adhere to
@@ -290,22 +304,48 @@ class ProfileDecoder(Decoder):
 
 class EnformerDecoder(Decoder):
     '''Decoder for profile task and also coutns task'''
-    def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False, yshape=114688, bin_size=128, conjoin_train=True, conjoin_test=False):
+    def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False,
+                 yshape=114688, bin_size=128, downsampled=False, dropout_rate=0.1,
+                 num_downsamples=7, dim_divisible_by=128, kmer_len=None, conjoin_train=True, conjoin_test=False):
         super().__init__()
         # if d_output is None:
         #     d_output = yshape//bin_size
-        
+        #yshape is the size in nucleotides of the region you are looking at, independent of how downsampled it is, that's adjusted for later
         self.conjoin_train = conjoin_train
         self.conjoin_test = conjoin_test
-        
+        self.kmer_len = kmer_len
         self.convolutions = convolutions
+        
+        if downsampled: #a number like 2 tells it how much it is already downsampled, so then only average pool with size 64
+            bin_size = bin_size//downsampled #if it's downsampled to size 1, then it doesn't need pooling, but kernel size of 1 means it is just nn.Identity
+            self.downsampled = downsampled
+        else:
+            self.downsampled = 1
+        
+        self.yshape = yshape//self.downsampled #the point of this is downsampling makes it so that each input represents multiple nucleotides, so when we account for that in the linear layers have to look at the central amount that is relative to the original size
+        # if convolutions:
+        #     if downsampled:
+        #         raise NotImplementedError("Downsampled convolutional EnformerDecoder not implemented")
+        #     self.conv1 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=12)
+        #     self.conv2 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=6)
+        #     self.conv3 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=3)
+        #     self.pool1 = nn.MaxPool1d(kernel_size=8)
+        #     self.pool2 = nn.MaxPool1d(kernel_size=6)
+        #     self.pool3 = nn.MaxPool1d(kernel_size=3)
         if convolutions:
-            self.conv1 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=12)
-            self.conv2 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=6)
-            self.conv3 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=3)
-            self.pool1 = nn.MaxPool1d(kernel_size=8)
-            self.pool2 = nn.MaxPool1d(kernel_size=6)
-            self.pool3 = nn.MaxPool1d(kernel_size=3)
+            half_dim = d_model//2
+            twice_dim = d_model*2
+            filter_list = exponential_linspace_int(half_dim, d_model, num = (num_downsamples - 1), divisible_by = dim_divisible_by)
+            filter_list = [half_dim, *filter_list]
+            self.final_pointwise = nn.Sequential(
+                Rearrange('b n d -> b d n'),
+                ConvBlock(filter_list[-1], twice_dim, 1),
+                Rearrange('b d n -> b n d'),
+                nn.Dropout(dropout_rate / 2),
+                GELU()
+            )
+            self.crop_final = TargetLengthCrop(self.yshape)
+            d_model = twice_dim
         
         self.output_transform = nn.Linear(d_model, d_output)
         self.pool = nn.AvgPool1d(kernel_size=bin_size) #default stride is kernel size
@@ -318,7 +358,6 @@ class EnformerDecoder(Decoder):
         self.l_output = l_output
         self.mode = mode
         self.use_lengths = use_lengths
-        self.yshape = yshape
         self.bin_size = bin_size
         self.softplus = nn.Softplus()
 
@@ -353,46 +392,59 @@ class EnformerDecoder(Decoder):
         if self.convolutions is False:
             #we first take just the middle elements of the sequence
             # x = x[:,int(x.shape[1]/2)-int(self.yshape/2):int(x.shape[1]/2)+int(self.yshape/2),:]
+            # if self.kmer_len is not None:
+            #     x = x[:,self.kmer_len:] #because we cropped that many elements from the right already when we did kmer encoding
+            #this approach for kmer_len is no longer used, now tokenized the whole genome instead
             startidx = x.shape[1]//2 - self.yshape//2
             endidx = startidx + self.yshape
+            
             x = x[:,startidx:endidx,:]
             x_permute = x.permute(0,2,1)
             # x_pooled = F.avg_pool1d(x_permute, kernel_size=self.bin_size, stride=self.bin_size)
             x_pooled = self.pool(x_permute)
             x = x_pooled.permute(0,2,1)
         else:
-            #now we need to do the convolution and then either pol it or figure something else out
-            x = x.permute(0, 2, 1)
+            #enformer style convolutions
+            # print(x.shape)
+            x = self.final_pointwise(x)
+            # if self.kmer_len is not None:
+            #     x = x[:,self.kmer_len:] #because we cropped that many elements from the right already when we did kmer encoding
+            #again this feature is deprecated, no longer used
+            x = self.crop_final(x)
+            #my implementation of a separate approach
+            # #now we need to do the convolution and then either pol it or figure something else out
+            # x = x.permute(0, 2, 1)
             
-            x = self.conv1(x)
-            x = F.relu(x)
-            x = self.pool1(x)
+            # x = self.conv1(x)
+            # x = F.relu(x)
+            # x = self.pool1(x)
             
-            x = self.conv2(x)
-            x = F.relu(x)
-            x = self.pool2(x)
+            # x = self.conv2(x)
+            # x = F.relu(x)
+            # x = self.pool2(x)
 
-            x = self.conv3(x)
-            x = F.relu(x)
-            x = self.pool3(x)
+            # x = self.conv3(x)
+            # x = F.relu(x)
+            # x = self.pool3(x)
 
-            #with our max pooling, the data is already quite small
-            #so just crop it to be the right shape now
-            binlen = self.yshape // self.bin_size
-            startidx = x.shape[2]//2 - binlen//2
-            endidx = startidx + binlen
-            x = x[:,:,startidx:endidx]
+            # #with our max pooling, the data is already quite small
+            # #so just crop it to be the right shape now
+            # binlen = self.yshape // self.bin_size
+            # startidx = x.shape[2]//2 - binlen//2
+            # endidx = startidx + binlen
+            # x = x[:,:,startidx:endidx]
             
-            # Apply pooling
-            # x = self.pool(x)
-            # Apply the final linear layer
-            # x now has shape (batch_size, 256, num_bins)
-            x = x.permute(0, 2, 1)  # Change shape to (batch_size, num_bins, 256) for the linear layer
+            # # Apply pooling
+            # # x = self.pool(x)
+            # # Apply the final linear layer
+            # # x now has shape (batch_size, 256, num_bins)
+            # x = x.permute(0, 2, 1)  # Change shape to (batch_size, num_bins, 256) for the linear layer
+            
+        x = self.output_transform(x)
 
         #softplus activation
         x = self.softplus(x)
-            
-        x = self.output_transform(x)
+
         return x
         
 

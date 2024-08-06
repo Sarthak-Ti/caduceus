@@ -82,10 +82,10 @@ class DNAEmbeddingModel(nn.Module, GenerationMixin):
         self.apply(partial(_init_weights, n_layer=n_layer,
                            **(initializer_cfg if initializer_cfg is not None else {})))
 
-    def forward(self, input_ids, position_ids=None, inference_params=None, state=None):  # state for the repo interface
-        """DNA Embedding Model forward pass."""
+    def forward(self, input_ids, position_ids=None, inference_params=None, state=None, skip_embedding=False): # state for the repo interface
         hidden_states = self.backbone(input_ids, position_ids=position_ids,
-                                      inference_params=inference_params)
+                                      inference_params=inference_params,
+                                      skip_embedding=skip_embedding)
         # we only need the last hidden state for embeddings (decoder head will predict classification task)
 #below are things removed in caduceus
     #     self.load_old_embedding = load_old_embedding

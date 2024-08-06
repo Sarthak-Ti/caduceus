@@ -1,7 +1,16 @@
+import torch
 from torch import nn
+import torch.nn.functional as F
+from einops import rearrange, repeat
+
+import math
 
 import src.models.nn.utils as U
 import src.utils as utils
+import src.utils.config
+from src.models.sequence.block import SequenceResidualBlock
+from src.models.nn.components import Normalization
+from src.utils.enformer_pytorch import exponential_linspace_int, MaxPool, AttentionPool, ConvBlock, Residual, NoPool
 
 
 class Encoder(nn.Module):
@@ -24,6 +33,321 @@ class Encoder(nn.Module):
         """
         return x, {}
 
+class PositionalIDEncoder(Encoder):
+    def forward(self, x):
+        position_ids = torch.arange(x.shape[-1], dtype=torch.long, device=x.device)
+        position_ids = repeat(position_ids, 'l -> b l', b=x.shape[0])
+        return x, { 'position_ids': position_ids }
+
+# Adapted from https://github.com/pytorch/examples/blob/master/word_language_model/model.py
+class PositionalEncoder(Encoder):
+    r"""Inject some information about the relative or absolute position of the tokens
+        in the sequence. The positional encodings have the same dimension as
+        the embeddings, so that the two can be summed. Here, we use sine and cosine
+        functions of different frequencies.
+    .. math::
+        \text{PosEncoder}(pos, 2i) = sin(pos/10000^(2i/d_model))
+        \text{PosEncoder}(pos, 2i+1) = cos(pos/10000^(2i/d_model))
+        \text{where pos is the word position and i is the embed idx)
+    Args:
+        d_model: the embed dim (required).
+        dropout: the dropout value (default=0.1).
+        max_len: the max. length of the incoming sequence (default=5000).
+    Examples:
+        >>> pos_encoder = PositionalEncoder(d_model)
+    """
+
+    def __init__(self, d_model, dropout=0.1, max_len=16384, pe_init=None):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        if pe_init is not None:
+            self.pe = nn.Parameter(torch.empty(max_len, 1, d_model))
+            nn.init.normal_(self.pe, 0, pe_init)
+            # self.pe = pe.unsqueeze(1)
+        else:
+            pe = torch.zeros(max_len, d_model)
+            position = torch.arange(0.0, max_len).unsqueeze(1)
+            div_term = torch.exp(
+                -math.log(10000.0) * torch.arange(0.0, d_model, 2.0) / d_model
+            )
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
+            self.register_buffer("pe", pe)
+
+        self.attn_mask = None
+
+    def forward(self, x):
+        r"""Inputs of forward function
+        Args:
+            x: the sequence fed to the positional encoder model (required).
+            lens: actual lengths of sequences
+        Shape:
+            x: [l_sequence, n_batch, d_model]
+            Returns: [l_sequence, n_batch, d_model]
+            attn_mask: [l_sequence, l_sequence]
+            padding_mask:
+        """
+
+        x = x + self.pe[: x.size(-2)]
+        return self.dropout(x)
+
+
+class ClassEmbedding(Encoder):
+    # Should also be able to define this by subclassing Embedding
+    def __init__(self, n_classes, d_model):
+        super().__init__()
+        self.embedding = nn.Embedding(n_classes, d_model)
+
+    def forward(self, x, y):
+        x = x + self.embedding(y).unsqueeze(-2)  # (B, L, D)
+        return x
+
+
+class Conv1DEncoder(Encoder):
+    def __init__(self, d_input, d_model, kernel_size=25, stride=1, padding='same'):
+        super().__init__()
+        self.conv = nn.Conv1d(
+            in_channels=d_input,
+            out_channels=d_model,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+        )
+
+    def forward(self, x):
+        # BLD -> BLD
+        x = self.conv(x.transpose(1, 2)).transpose(1, 2)
+        return x
+
+class LayerEncoder(Encoder):
+    """Use an arbitrary SequenceModule layer"""
+
+    def __init__(self, d_model, prenorm=False, norm='layer', layer=None):
+        super().__init__()
+
+        # Simple stack of blocks
+        layer["transposed"] = False
+        self.layer = SequenceResidualBlock(
+            d_input=d_model,
+            prenorm=prenorm,
+            layer=layer,
+            residual='R',
+            norm=norm,
+            pool=None,
+        )
+
+    def forward(self, x):
+        x, _ = self.layer(x) # Discard state
+        return x
+
+
+class TimestampEmbeddingEncoder(Encoder):
+    """
+    General time encoder for Pandas Timestamp objects (encoded as torch tensors).
+    See MonashDataset for an example of how to return time features as 'z's.
+    """
+
+    cardinalities = {
+        'day': (1, 31),
+        'hour': (0, 23),
+        'minute': (0, 59),
+        'second': (0, 59),
+        'month': (1, 12),
+        'year': (1950, 2010), # (1800, 3000) used to be (1970, datetime.datetime.now().year + 1) but was not enough for all datasets in monash
+        'dayofweek': (0, 6),
+        'dayofyear': (1, 366),
+        'quarter': (1, 4),
+        'week': (1, 53),
+        'is_month_start': (0, 1),
+        'is_month_end': (0, 1),
+        'is_quarter_start': (0, 1),
+        'is_quarter_end': (0, 1),
+        'is_year_start': (0, 1),
+        'is_year_end': (0, 1),
+        'is_leap_year': (0, 1),
+    }
+
+    def __init__(self, d_model, table=False, features=None):
+        super().__init__()
+        self.table = table
+        self.ranges = {k: max_val - min_val + 2 for k, (min_val, max_val) in self.cardinalities.items()} # padding for null included
+
+        if features is None:
+            pass
+        else:
+            self.cardinalities = {k: v for k, v in self.cardinalities.items() if k in features}
+
+        if table:
+            self.embedding = nn.ModuleDict({
+                attr: nn.Embedding(maxval - minval + 2, d_model, padding_idx=0)
+                for attr, (minval, maxval) in self.cardinalities.items()
+            })
+        else:
+            self.embedding = nn.ModuleDict({
+                attr: nn.Linear(1, d_model)
+                for attr in self.cardinalities
+            })
+
+
+
+    def forward(self, x, timestamps=None):
+        for attr in timestamps:
+            mask = timestamps[attr] == -1
+            timestamps[attr] = timestamps[attr] - self.cardinalities[attr][0]
+            timestamps[attr][mask] = 0
+            if self.table:
+                x = x + self.embedding[attr](timestamps[attr].to(torch.long))
+            else:
+                x = x + self.embedding[attr]((2 * timestamps[attr] / self.ranges[attr] - 1).unsqueeze(-1))
+
+            #x = x + self.embedding(timestamps[attr].to(torch.float)).unsqueeze(1)
+        return x
+
+
+class TimeEncoder(Encoder):
+    def __init__(self, n_tokens_time, d_model, timeenc=0):
+        super().__init__()
+
+        self.timeenc = timeenc
+        if self.timeenc == 0:
+            self.encoders = nn.ModuleList(
+                [nn.Embedding(v, d_model) for v in n_tokens_time]
+            )
+        else:
+            self.encoders = nn.Linear(len(n_tokens_time), d_model)
+        self.mask_embed = nn.Embedding(2, d_model)
+
+    def forward(self, x, mark=None, mask=None):
+        assert mark is not None and mask is not None, "Extra arguments should be returned by collate function"
+        if self.timeenc == 0:
+            assert mark.size(-1) == len(self.encoders)
+            embeddings = [
+                embed(z) for embed, z in zip(self.encoders, torch.unbind(mark, dim=-1))
+            ]
+            time_encode = torch.sum(torch.stack(embeddings), dim=0)
+        else:
+            time_encode = self.encoders(mark)
+        mask_encode = self.mask_embed(mask.squeeze(-1))
+        return x + time_encode + mask_encode  # (B, L, d_model)
+
+
+class PackedEncoder(Encoder):
+    def forward(self, x, len_batch=None):
+        assert len_batch is not None
+        x = nn.utils.rnn.pack_padded_sequence(
+            x, len_batch.cpu(), enforce_sorted=False, batch_first=True,
+        )
+        return x
+
+
+class OneHotEncoder(Encoder):
+    def __init__(self, n_tokens, d_model):
+        super().__init__()
+        assert n_tokens <= d_model
+        self.d_model = d_model
+
+    def forward(self, x):
+        return F.one_hot(x.squeeze(-1), self.d_model).float()
+
+
+class Conv2DPatchEncoder(Encoder):
+
+    """
+    For encoding images into a sequence of patches.
+    """
+
+    def __init__(self, d_input, d_model, filter_sizes, flat=False):
+
+        """
+        d_input: dim of encoder input (data dimension)
+        d_model: dim of encoder output (model dimension)
+        filter_sizes: tuple with fh, fw
+        flat: if image is flattened from dataloader (like in cifar),
+            then we need to reshape back to 2D before conv
+        """
+
+        fh, fw = filter_sizes
+        self.flat = flat
+
+        super().__init__()
+        assert len(filter_sizes) == 2
+
+        self.encoder = nn.Conv2d(d_input, d_model, kernel_size=(fh, fw), stride=(fh, fw))
+
+    def forward(self, x):
+
+        """
+        x shape expected = [b, h, w, c]
+        returns tuple with x, with new shape = [b, seq_len, c_out]
+
+        """
+
+        x = rearrange(x, 'b h w c -> b c h w')
+        x = self.encoder(x)
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        return x
+
+class EnformerEncoder(Encoder):
+    def __init__(self, d_input=None, d_model=256, filter_sizes=None, flat=False,
+                num_downsamples = 7,    # genetic sequence is downsampled 2 ** 7 == 128x in default Enformer - can be changed for higher resolution
+                dim_divisible_by = 128,
+                pool_type = 'max',
+                conv_tower = False,
+                **kwargs,
+             ):
+        super().__init__()
+        
+        self.dim = d_model
+        self.num_downsamples = num_downsamples
+        self.dim_divisible_by = dim_divisible_by
+        self.pool_type = pool_type
+        self.use_conv_tower = conv_tower
+        if not self.use_conv_tower:
+            self.dim = 2*self.dim #basically if we only use the stem, it outputs the model at half the dim, so we fix that!
+        
+        if self.pool_type == 'max':
+            Pool = MaxPool
+        elif self.pool_type == 'attention':
+            Pool = AttentionPool
+        elif self.pool_type == 'none':
+            Pool = NoPool
+        else:
+            raise ValueError(f"Unknown pool type {self.pool_type}")
+        # Pool = MaxPool if self.pool_type == 'max' else AttentionPool
+        half_dim = self.dim // 2
+        twice_dim = self.dim * 2
+        
+        self.stem = nn.Sequential(
+            nn.Conv1d(4, half_dim, 15, padding = 7),
+            Residual(ConvBlock(half_dim)),
+            Pool(half_dim, pool_size = 2)
+        )
+
+        filter_list = exponential_linspace_int(half_dim, self.dim, num = (self.num_downsamples - 1), divisible_by = self.dim_divisible_by) #with default options, get [128,128,128,256,256,256]
+        filter_list = [half_dim, *filter_list] #appends a 128 in front if default options
+        #it's a list of number of filters which tells you how many channels you have, length should be constant
+
+        conv_layers = []
+        for dim_in, dim_out in zip(filter_list[:-1], filter_list[1:]):
+            conv_layers.append(nn.Sequential(
+                ConvBlock(dim_in, dim_out, kernel_size = 5),
+                Residual(ConvBlock(dim_out, dim_out, 1)),
+                Pool(dim_out, pool_size = 2)
+            ))
+
+        self.conv_tower = nn.Sequential(*conv_layers)
+    
+    def forward(self, x):
+        #first we one hot encode
+        x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 2) #need to make sure it is the right order
+        if 11 in x:
+            indices = torch.where(x == 11)
+            for idx in range(len(indices[0])):
+                x_onehot[indices[0][idx], 0, indices[1][idx]] = 0 #modify 0 because if it's N that's 11 which means after %4 it is 0, so that was orignally 1000 set it to 0000
+        x = self.stem(x_onehot)
+        if self.use_conv_tower:
+            x = self.conv_tower(x)
+        return x.transpose(1,2), True
 
 # For every type of encoder/decoder, specify:
 # - constructor class
@@ -35,6 +359,17 @@ registry = {
     "id": nn.Identity,
     "embedding": nn.Embedding,
     "linear": nn.Linear,
+    "position": PositionalEncoder,
+    "position_id": PositionalIDEncoder,
+    "class": ClassEmbedding,
+    "pack": PackedEncoder,
+    "time": TimeEncoder,
+    "onehot": OneHotEncoder,
+    "conv1d": Conv1DEncoder,
+    "patch2d": Conv2DPatchEncoder,
+    "timestamp_embedding": TimestampEmbeddingEncoder,
+    "layer": LayerEncoder,
+    "enformer": EnformerEncoder,
 }
 dataset_attrs = {
     "embedding": ["n_tokens"],
