@@ -72,6 +72,13 @@ class AttentionPool(nn.Module):
 
         return (x * attn).sum(dim = -1) #applies the attention weights to the pooled values and sums over last dim to get pool
 
+class NoPool(nn.Module):
+    def __init__(self, dim = None, pool_size = 2, padding = 'same'):
+        super().__init__()
+
+    def forward(self, x):
+        return x
+
 class Residual(nn.Module):
     def __init__(self, fn):
         super().__init__()

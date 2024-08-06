@@ -29,4 +29,4 @@ python -m train wandb.group=enformer wandb.name=enformer_cnn_fulldata_1 experime
 #train.pretrained_model_path=null \
 #train.ckpt=/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-07-08/17-59-32-315467/checkpoints/last.ckpt
 
-#enformer cnn
+#enformer linear

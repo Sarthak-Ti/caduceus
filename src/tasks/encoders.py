@@ -12,7 +12,7 @@ import src.utils as utils
 import src.utils.config
 from src.models.sequence.block import SequenceResidualBlock
 from src.models.nn.components import Normalization
-from src.utils.enformer_pytorch import exponential_linspace_int, MaxPool, AttentionPool, ConvBlock, Residual
+from src.utils.enformer_pytorch import exponential_linspace_int, MaxPool, AttentionPool, ConvBlock, Residual, NoPool
 
 
 class Encoder(nn.Module):
@@ -306,7 +306,15 @@ class EnformerEncoder(Encoder):
         if not self.use_conv_tower:
             self.dim = 2*self.dim #basically if we only use the stem, it outputs the model at half the dim, so we fix that!
         
-        Pool = MaxPool if self.pool_type == 'max' else AttentionPool
+        if self.pool_type == 'max':
+            Pool = MaxPool
+        elif self.pool_type == 'attention':
+            Pool = AttentionPool
+        elif self.pool_type == 'none':
+            Pool = NoPool
+        else:
+            raise ValueError(f"Unknown pool type {self.pool_type}")
+        # Pool = MaxPool if self.pool_type == 'max' else AttentionPool
         half_dim = self.dim // 2
         twice_dim = self.dim * 2
         
@@ -316,8 +324,9 @@ class EnformerEncoder(Encoder):
             Pool(half_dim, pool_size = 2)
         )
 
-        filter_list = exponential_linspace_int(half_dim, self.dim, num = (self.num_downsamples - 1), divisible_by = self.dim_divisible_by)
-        filter_list = [half_dim, *filter_list]
+        filter_list = exponential_linspace_int(half_dim, self.dim, num = (self.num_downsamples - 1), divisible_by = self.dim_divisible_by) #with default options, get [128,128,128,256,256,256]
+        filter_list = [half_dim, *filter_list] #appends a 128 in front if default options
+        #it's a list of number of filters which tells you how many channels you have, length should be constant
 
         conv_layers = []
         for dim_in, dim_out in zip(filter_list[:-1], filter_list[1:]):

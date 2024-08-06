@@ -103,27 +103,27 @@ class EnformerDataset():
         seqs = pd.read_csv('/data/leslie/sarthak/data/enformer/data/human/sequences.bed', sep='\t', header=None)
         self.seqs_bed = seqs[seqs[3] == split]
         self.seq = np.zeros((len(self.seqs_bed), max_length), dtype=self.genome['chr1'].dtype) #note with 16 bit it takes a lo;t of space, can migrate to not preallocating, just get when we need it
-        length = 131072 #the length of the sequences form enformer
-        seqs_np = self.seqs_bed.to_numpy()
-        for i in range(seqs_np.shape[0]):
-            row = seqs_np[i]
-            chrom = row[0]
-            start = row[1]
-            end = row[2]
-            diff = (self.max_length - length)//2 #note this works even if we want a shorter length!
-            start = start - diff
-            end = end + diff
-            leftpad = np.zeros(0)
-            rightpad = np.zeros(0)
-            if start < 0:
-                leftpad = np.ones(-start)*11
-                start = 0
-            chromlen = chrom_info[chrom][1]
-            if end > chromlen:
-                rightpad = np.ones(end-chromlen)*11
-                end = chromlen
-            seq = np.concatenate([leftpad, self.genome[chrom][start:end], rightpad])
-            self.seq[i] = seq
+        self.length = 131072 #the length of the sequences form enformer
+        self.seqs_np = self.seqs_bed.to_numpy()
+        # for i in range(self.seqs_np.shape[0]):
+        #     row = self.seqs_np[i]
+        #     chrom = row[0]
+        #     start = row[1]
+        #     end = row[2]
+        #     diff = (self.max_length - length)//2 #note this works even if we want a shorter length!
+        #     start = start - diff
+        #     end = end + diff
+        #     leftpad = np.zeros(0)
+        #     rightpad = np.zeros(0)
+        #     if start < 0:
+        #         leftpad = np.ones(-start)*11
+        #         start = 0
+        #     chromlen = chrom_info[chrom][1]
+        #     if end > chromlen:
+        #         rightpad = np.ones(end-chromlen)*11
+        #         end = chromlen
+        #     seq = np.concatenate([leftpad, self.genome[chrom][start:end], rightpad])
+        #     self.seq[i] = seq
         
         #this makes it so we have loaded the whole sequence information into memory
         
@@ -173,7 +173,7 @@ class EnformerDataset():
 
         
     def __len__(self):
-        return self.seq.shape[0]
+        return self.seqs_np.shape[0]
 
     def replace_value(self, x, old_value, new_value):
         return torch.where(x == old_value, new_value, x)
@@ -185,17 +185,38 @@ class EnformerDataset():
 
         #simply access the sequences and labels
         #first determine if rc
-        if self.rc_aug and coin_flip():
-            seq = self.seq_rc[idx]
-            flip = True
-        else:
-            seq = self.seq[idx]
-            flip = False
-        if len(seq) < self.max_length:
-            #pad with 11s on both sides
-            pad_left = (self.max_length - len(seq)) // 2
-            pad_right = self.max_length - len(seq) - pad_left
-            seq = np.concatenate([np.ones(pad_left)*11, seq, np.ones(pad_right)*11])
+        
+        flip = False
+        row = self.seqs_np[idx]
+        chrom = row[0]
+        start = row[1]
+        end = row[2]
+        diff = (self.max_length - self.length)//2 #note this works even if we want a shorter length!
+        start = start - diff
+        end = end + diff
+        leftpad = np.zeros(0)
+        rightpad = np.zeros(0)
+        if start < 0:
+            leftpad = np.ones(-start)*11
+            start = 0
+        chromlen = chrom_info[chrom][1]
+        if end > chromlen:
+            rightpad = np.ones(end-chromlen)*11
+            end = chromlen
+        seq = np.concatenate([leftpad, self.genome[chrom][start:end], rightpad])
+        
+        #no longer have rc aug and padding is dealt with above. Note will pad with real sequence if it exists instead of N
+        # if self.rc_aug and coin_flip():
+        #     seq = self.seq_rc[idx]
+        #     flip = True
+        # else:
+        #     seq = self.seq[idx]
+        #     flip = False
+        # if len(seq) < self.max_length:
+        #     #pad with 11s on both sides
+        #     pad_left = (self.max_length - len(seq)) // 2
+        #     pad_right = self.max_length - len(seq) - pad_left
+        #     seq = np.concatenate([np.ones(pad_left)*11, seq, np.ones(pad_right)*11])
         
         #and gather the data
         targets = self.labels[idx]
@@ -217,7 +238,7 @@ Can run in the terminal using these commands
 cd /data/leslie/sarthak/hyena/hyena-dna/
 python
 import src.dataloaders.datasets.enformer_dataset as enformer_dataset
-dataset = enformer_dataset.EnformerDataset('test', 131_072, rc_aug = True, cell_type = 121)
+dataset = enformer_dataset.EnformerDataset('test', 196608, return_CAGE=True)
 out = dataset[0]
 out[0] #the input data tokenized
 '''
