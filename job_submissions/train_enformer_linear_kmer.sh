@@ -25,7 +25,7 @@ cd /data/leslie/sarthak/hyena/hyena-dna/
 
 python -m train wandb.group=enformer wandb.name=enformer_cnn_kmer_1 experiment=hg38/enformer dataset.batch_size=2 \
  trainer.precision=bf16 dataset.num_workers=4 train.pretrained_model_path=null +decoder.convolutions=false \
- dataset.max_length=196608 dataset.kmer_len=6 dataset.rc_aug=false model.vocab_size=15625
+ dataset.max_length=196608 dataset.kmer_len=6 dataset.rc_aug=false model.vocab_size=15625 model.pad_vocab_size_multiple=1 \
 #key is have ot have max length be input -7 because have the last 7 nucleotides chopped off
 #then when we pool have to cut off first 7 then crop and pool
 #train.ckpt=/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-07-08/17-59-32-315467/checkpoints/last.ckpt

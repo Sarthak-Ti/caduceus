@@ -235,7 +235,7 @@ class DNAEmbeddingModelCaduceus(DNAEmbeddingModel):
                 [hidden_states[..., :num_chan // 2], torch.flip(hidden_states[..., num_chan // 2:], dims=[1, 2])],
                 dim=-1
             ), None
-        if self.conjoin_train or (self.conjoin_test and not self.training):  # For conjoining / post-hoc conjoining
+        if self.conjoin_train or (self.conjoin_test and not self.training):  # For conjoining / post-hoc conjoining, not run if rcps because then does shared weight input
             assert input_ids.ndim == 3, "Input must be 3D tensor, where channels corresponds to forward and rc strands"
             hidden_states = self.caduceus(input_ids[..., 0], return_dict=False)
             hidden_states_rc = self.caduceus(input_ids[..., 1], return_dict=False)

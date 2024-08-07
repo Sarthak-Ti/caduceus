@@ -333,6 +333,8 @@ class Caduceus(CaduceusPreTrainedModel):
         # Adjust vocab size and complement maps if vocab padding is set.
         if config.vocab_size % config.pad_vocab_size_multiple != 0:
             config.vocab_size += config.pad_vocab_size_multiple - (config.vocab_size % config.pad_vocab_size_multiple)
+        #if you have a complement map that isn't as large as your vocab, set the others to map to themselves
+        #particularly useful if you increase the vocab size by padding, need to add more above
         if config.complement_map is not None and config.vocab_size > len(config.complement_map):
             for i in range(len(config.complement_map), config.vocab_size):
                 config.complement_map[i] = i

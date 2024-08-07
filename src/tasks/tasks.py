@@ -497,7 +497,7 @@ class EnformerTask(BaseTask):
             x = x[0]
         skip_embedding = skip_embedding is not None #if it is None then skip embedding is False, that means encoder was identity so don't skip embedding
         #but if encoder returns true for w, then we should skip embedding
-        x, state = model(x, skip_embedding=skip_embedding) #this part can be quite slow on the cpu especially!
+        x, state = model(x) #this part can be quite slow on the cpu especially!
         #x shape after model is batch x seqlen x d_model in this case d_model is 256
         #y shape is batch x 896 x 5313 where the 896 corresponds to 128*896=114688 which is the number of nucleotides we predict over
         self._state = state

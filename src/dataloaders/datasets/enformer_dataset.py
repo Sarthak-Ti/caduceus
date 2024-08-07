@@ -8,6 +8,7 @@ import numpy as np
 # import h5py
 import pandas as pd
 import zarr
+import json
 
 """
 
@@ -42,6 +43,31 @@ chrom_info= {'chr1': [10000, 248946422],
  'chrX': [10000, 156030895],
  'chrY': [2781479, 56887902],}
 
+class Tokenizer():
+    #a super basic class that literally just stores the complement map
+    def __init__(self, kmer_len):
+        if kmer_len is None:
+            self.complement_map = {
+                "0": 0,
+                "1": 1,
+                "2": 2,
+                "3": 3,
+                "4": 4,
+                "5": 5,
+                "6": 6,
+                "7": 10,
+                "8": 9,
+                "9": 8,
+                "10": 7,
+                "11": 11,
+                "12": 12,
+                "13": 13,
+                "14": 14,
+                "15": 15
+            }
+        else:
+            with open(f'/data/leslie/sarthak/data/enformer/data/complement_map_{kmer_len}mer.json', 'r') as f:
+                self.complement_map = json.load(f)
 
 # helper functions
 
@@ -169,6 +195,7 @@ class EnformerDataset():
             # if cell_type != 'K562':
             #     raise ValueError('Cell type not implemented')
             # indices_keep = np.array(121, 
+        self.tokenizer = Tokenizer(kmer_len)
             
 
         
