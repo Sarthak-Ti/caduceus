@@ -98,6 +98,7 @@ class EnformerDataset():
         load_into_memory = None, #if you have the RAM, load it all into memory
         cell_type = None, #whether to just do one specific cell type
         kmer_len = None,
+        return_target = True,
     ):
         
         self.max_length = max_length
@@ -112,6 +113,7 @@ class EnformerDataset():
         self.rc_aug = rc_aug
         self.uppercase = uppercase
         self.return_CAGE = return_CAGE
+        self.return_target = return_target
         
         if self.rc_aug:
             raise NotImplementedError('rc_aug not implemented with this, but would be easy following profile dataset')
@@ -120,15 +122,29 @@ class EnformerDataset():
         if kmer_len is not None:
             genome_np = f'/data/leslie/sarthak/data/chrombpnet_test/hg38_tokenized_kmer_{kmer_len}.npz'
             print(f'Using kmer genome with length {kmer_len}')
+             #RC will be implemented by loading the json file and then mapping every element to the reverse complement and reversing order
+            with open(f'/data/leslie/sarthak/data/enformer/data/complement_map_{kmer_len}mer.json', 'r') as f:
+                complement_map = json.load(f)
+            max_key = int(list(complement_map.keys())[-1])
+        else:
+            genome_np = '/data/leslie/sarthak/data/chrombpnet_test/hg38_tokenized.npz'
+            complement_map = {"7": 10, "8": 9, "9": 8, "10": 7, "11": 11}
+        
+        #load in the tokenized genome
         with np.load(genome_np) as data:
             self.genome = {key: np.array(data[key]) for key in data}
+
+        #create the complement array to do RC augmentation
+        self.complement_array = np.zeros(max_key + 1, dtype=int)
+        for k, v in complement_map.items():
+            self.complement_array[int(k)] = v
             
 
         if split == 'val':
             split = 'valid'
         seqs = pd.read_csv('/data/leslie/sarthak/data/enformer/data/human/sequences.bed', sep='\t', header=None)
         self.seqs_bed = seqs[seqs[3] == split]
-        self.seq = np.zeros((len(self.seqs_bed), max_length), dtype=self.genome['chr1'].dtype) #note with 16 bit it takes a lo;t of space, can migrate to not preallocating, just get when we need it
+        # self.seq = np.zeros((len(self.seqs_bed), max_length), dtype=self.genome['chr1'].dtype) #note with 16 bit it takes a lo;t of space, can migrate to not preallocating, just get when we need it
         self.length = 131072 #the length of the sequences form enformer
         self.seqs_np = self.seqs_bed.to_numpy()
         # for i in range(self.seqs_np.shape[0]):
@@ -210,10 +226,6 @@ class EnformerDataset():
         if idx < 0:
             idx = len(self) + idx # negative indexing
 
-        #simply access the sequences and labels
-        #first determine if rc
-        
-        flip = False
         row = self.seqs_np[idx]
         chrom = row[0]
         start = row[1]
@@ -232,18 +244,13 @@ class EnformerDataset():
             end = chromlen
         seq = np.concatenate([leftpad, self.genome[chrom][start:end], rightpad])
         
-        #no longer have rc aug and padding is dealt with above. Note will pad with real sequence if it exists instead of N
-        # if self.rc_aug and coin_flip():
-        #     seq = self.seq_rc[idx]
-        #     flip = True
-        # else:
-        #     seq = self.seq[idx]
-        #     flip = False
-        # if len(seq) < self.max_length:
-        #     #pad with 11s on both sides
-        #     pad_left = (self.max_length - len(seq)) // 2
-        #     pad_right = self.max_length - len(seq) - pad_left
-        #     seq = np.concatenate([np.ones(pad_left)*11, seq, np.ones(pad_right)*11])
+        if self.rc_aug and coin_flip():
+            seq = self.complement_array[seq[::-1]]
+            flip = True
+        else:
+            flip = False
+        if not self.return_target:
+            return torch.LongTensor(seq)
         
         #and gather the data
         targets = self.labels[idx]

@@ -1,9 +1,10 @@
 #this file contains an evaluation helper class which will contain the data loader and the model, and enables quick evaluation of the model on the test set
 import sys
-sys.path.append('/data/leslie/sarthak/hyena/hyena-dna/')
-from src.models.sequence.dna_embedding import DNAEmbeddingModel
+sys.path.append('/data/leslie/sarthak/caduceus/')
+from src.models.sequence.dna_embedding import DNAEmbeddingModelCaduceus
 from src.tasks.decoders import EnformerDecoder
-from src.tasks.encoders import EnformerEncoder
+# from src.tasks.encoders import EnformerEncoder
+from caduceus.configuration_caduceus import CaduceusConfig
 import torch
 import numpy as np
 import src.dataloaders.datasets.enformer_dataset as enformer_dataset
@@ -11,10 +12,16 @@ import yaml
 from omegaconf import OmegaConf
 import os
 import matplotlib.pyplot as plt
-import seaborn as sns
+# import seaborn as sns
+from tqdm import tqdm
 
-OmegaConf.register_new_resolver('eval', eval)
-OmegaConf.register_new_resolver('div_up', lambda x, y: (x + y - 1) // y)
+try:
+    OmegaConf.register_new_resolver('eval', eval)
+    OmegaConf.register_new_resolver('div_up', lambda x, y: (x + y - 1) // y)
+except ValueError as e:
+    if "Resolver already registered" in str(e):
+            print(f"Resolver already exists, skipping registration.")
+    
 
 class IdentityNet(torch.nn.Module):
     def __init__(self):
@@ -26,6 +33,7 @@ class IdentityNet(torch.nn.Module):
 class Evals():
     def __init__(self,
                  ckpt_path,
+                 model_type = 'Enformer',
                  dataset=None,
                  split = 'test',
                  ) -> None:
@@ -37,6 +45,8 @@ class Evals():
         self.cfg = OmegaConf.to_container(cfg, resolve=True)
         state_dict = torch.load(ckpt_path, map_location='cpu')
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model_type = model_type
+        self.split = split
 
         #now set up dataset
         if dataset is None:
@@ -66,7 +76,11 @@ class Evals():
             if "encoder" in key:
                 encoder_state_dict[key[10:]] = model_state_dict.pop(key)
         
-        self.backbone = DNAEmbeddingModel(**self.cfg['model'])
+        cfg['model']['config'].pop('_target_')
+        cfg['model']['config']['complement_map'] = self.dataset.tokenizer.complement_map
+        caduceus_cfg = CaduceusConfig(**cfg['model']['config'])
+        
+        self.backbone = DNAEmbeddingModelCaduceus(config=caduceus_cfg)
         self.backbone.load_state_dict(model_state_dict, strict=True)
         
         #remove self.cfg['decoder']['_name_']
@@ -74,12 +88,15 @@ class Evals():
         self.decoder = EnformerDecoder(**self.cfg['decoder']) #could do with instantiating, but that is rather complex
         self.decoder.load_state_dict(decoder_state_dict, strict=True)
         
-        if encoder_state_dict: #if it's emtpy, means no encoder, so just use identity!
+        if encoder_state_dict: #if it's emtpy, means no encoder, so just use identity! This should never be true for caduceus
+            raise NotImplementedError('Encoder not implemented for Caduceus')
             del self.cfg['encoder']['_name_']
             self.encoder = EnformerEncoder(**self.cfg['encoder'])
             self.encoder.load_state_dict(encoder_state_dict, strict=True)
+            self.skip_embedding = True
         else:
             self.encoder = IdentityNet()
+            self.skip_embedding = False
         
         self.encoder.to(self.device).eval()
         self.backbone.to(self.device).eval()
@@ -100,25 +117,29 @@ class Evals():
     
     def evaluate(self, batch_size=8):
         #now evaluate the model on the entire dataset
-        loader = torch.utils.data.DataLoader(self.dataset, batch_size=batch_size, shuffle=False)
+        dataset_args = self.cfg['dataset'] #get the dataset args
+        dataset = enformer_dataset.EnformerDataset(self.split, dataset_args['max_length'], rc_aug = dataset_args['rc_aug'],
+                                                            return_CAGE=dataset_args['return_cage'], cell_type=dataset_args.get('cell_type', None),
+                                                            kmer_len=dataset_args['kmer_len'], return_target=False)
+        loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
         results = []
-        for data in loader:
-            data = data[0]
+        for data in tqdm(loader, total=len(loader)):
+            # data = data[0]
             x = self(data=data)
-            results.append(x)
-        return results
+            results.append(x.cpu().numpy().astype(np.float16))
+        return np.concatenate(results, axis=0)
     
-    def plot_track(self, idx, track=121, model_type='Enformer'):
+    def plot_track(self, idx, track=121):
         '''
         given an index, plots one track and compares it to the real results
         '''
         #now plot the track
-        seq, label = self.dataset[idx][0]
+        seq, label = self.dataset[idx]
         # data = data.cpu().numpy()
-        x = self(data = seq).cpu().numpy()
+        x = self(data = seq).cpu().squeeze().numpy()
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
         
-        ax1.plot(x[:, track].cpu(), label='Predicted Coverage', color='b')
+        ax1.plot(x[:, track], label='Predicted Coverage', color='b')
         ax1.set_title('Predicted Coverage')
         ax1.legend()
         
@@ -127,9 +148,12 @@ class Evals():
         ax2.legend()
         
         ax2.set_xlabel('Position')
-        fig.suptitle(f'{model_type} Model Coverage Comparison')
+        fig.suptitle(f'{self.model_type} Model Coverage Comparison')
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
+    
+    def test(self):
+        print('test worked')
 
         
 
