@@ -194,7 +194,7 @@ python -m train \
     callbacks.model_checkpoint_every_n_steps.every_n_train_steps=5000 \
     dataset.dataset_name="dummy_mouse_enhancers_ensembl" \
     dataset.train_val_split_seed=1 \
-    dataset.batch_size=128 \
+    dataset.batch_size=256 \
     dataset.rc_aug=false \
     +dataset.conjoin_train=false \
     +dataset.conjoin_test=false \
@@ -220,7 +220,7 @@ This will be saved to the run directory of the pre-training experiment.
 - `dataset.conjoin_test` is the same as above, but for inference (e.g., validation / test).
 - `decoder.conjoin_train` determines whether the prediction head (a mean pooling and linear projection in the case of the Genomics Benchmark) is expecting an input tensor of shape `(batch_size, seq_len, d_model)` or `(batch_size, seq_len, d_model, 2)` during downstream fine-tuning training.
 When set to `true` the decoder is run on `input[..., 0]` and `input[..., 1]` and the results are averaged to produce the final prediction.
-- `dataset.conjoin_test` is the same as above, but for inference (e.g., validation / test).
+- `decoder.conjoin_test` is the same as above, but for inference (e.g., validation / test).
 
 Note this benchmark only contains a training and test split for each task.
 Therefore, to have a more principled evaluation, we randomly split the training data into training and validation sets (90/10) using the `dataset.train_val_split_seed` argument.
