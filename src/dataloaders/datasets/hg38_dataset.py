@@ -128,7 +128,7 @@ class HG38Dataset(torch.utils.data.Dataset):
         self.add_eos = add_eos
 
         if max_length <= MAX_ALLOWED_LENGTH:
-            assert MAX_ALLOWED_LENGTH % max_length == 0, f"`max_length` must be a power of 2!"
+            assert MAX_ALLOWED_LENGTH % max_length == 0, "`max_length` must be a power of 2!"
             self.shifts = MAX_ALLOWED_LENGTH // max_length
         else:
             raise ValueError(f"`max_length` {max_length} (> 2^{int(math.log(MAX_ALLOWED_LENGTH, 2))}) is too large!")

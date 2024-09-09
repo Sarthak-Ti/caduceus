@@ -14,13 +14,14 @@ import os
 import matplotlib.pyplot as plt
 # import seaborn as sns
 from tqdm import tqdm
+import argparse
 
 try:
     OmegaConf.register_new_resolver('eval', eval)
     OmegaConf.register_new_resolver('div_up', lambda x, y: (x + y - 1) // y)
 except ValueError as e:
     if "Resolver already registered" in str(e):
-            print(f"Resolver already exists, skipping registration.")
+            print("Resolver already exists, skipping registration.")
     
 
 class IdentityNet(torch.nn.Module):
@@ -52,12 +53,13 @@ class Evals():
         if dataset is None:
             dataset_args = self.cfg['dataset']
             self.dataset = enformer_dataset.EnformerDataset(split, dataset_args['max_length'], rc_aug = dataset_args['rc_aug'],
-                                                            return_CAGE=dataset_args['return_cage'], cell_type=dataset_args.get('cell_type', None),
+                                                            return_CAGE=dataset_args['return_CAGE'], cell_type=dataset_args.get('cell_type', None),
                                                             kmer_len=dataset_args['kmer_len']) #could use dataloader instead, but again kinda complex
         else:
             self.dataset = dataset
          
-        self.cfg['decoder']['d_output'] = self.dataset.d_output     
+        self.cfg['decoder']['d_output'] = self.dataset.d_output
+        print(self.dataset.d_output)
         torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(
             state_dict["state_dict"], "model."
         )
@@ -90,10 +92,10 @@ class Evals():
         
         if encoder_state_dict: #if it's emtpy, means no encoder, so just use identity! This should never be true for caduceus
             raise NotImplementedError('Encoder not implemented for Caduceus')
-            del self.cfg['encoder']['_name_']
-            self.encoder = EnformerEncoder(**self.cfg['encoder'])
-            self.encoder.load_state_dict(encoder_state_dict, strict=True)
-            self.skip_embedding = True
+            # del self.cfg['encoder']['_name_']
+            # self.encoder = EnformerEncoder(**self.cfg['encoder'])
+            # self.encoder.load_state_dict(encoder_state_dict, strict=True)
+            # self.skip_embedding = True
         else:
             self.encoder = IdentityNet()
             self.skip_embedding = False
@@ -119,7 +121,7 @@ class Evals():
         #now evaluate the model on the entire dataset
         dataset_args = self.cfg['dataset'] #get the dataset args
         dataset = enformer_dataset.EnformerDataset(self.split, dataset_args['max_length'], rc_aug = dataset_args['rc_aug'],
-                                                            return_CAGE=dataset_args['return_cage'], cell_type=dataset_args.get('cell_type', None),
+                                                            return_CAGE=dataset_args['return_CAGE'], cell_type=dataset_args.get('cell_type', None),
                                                             kmer_len=dataset_args['kmer_len'], return_target=False)
         loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
         results = []
@@ -169,12 +171,32 @@ def pearsonr2(x, y):
     sx = np.std(x, ddof=1, axis=-1)
     sy = np.std(y, ddof=1, axis=-1)
     rho = cov/(sx * sy)
-
+    #now return the correlation
     return rho
         
         
-def main():
-    evals = Evals('/data/leslie/sarthak/hyena/hyena-dna/outputs/2024-08-03/10-17-19-541733/checkpoints/00-val_loss=0.68478.ckpt')
+def main(path, name, split='test'):
+    evals = Evals(path)
+    print('model loaded, now evaluating')
+    allout = evals.evaluate(4)
+    split='test'
+    labels = np.load(f'/data/leslie/sarthak/data/enformer/data/{split}_label.npy')
+    allout = allout.transpose(0, 2, 1)
+    labels = labels.transpose(0, 2, 1)
+    #if we are not using cage have to cut off labels
+    if allout.shape[1] != labels.shape[1]:
+        labels = labels[:, :allout.shape[1], :]
+    corrs = pearsonr2(allout, labels)
+    np.save(f'/data/leslie/sarthak/data/enformer/data/model_out/{name}.npy_corrs.npy', corrs)
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="Evaluate model and save correlation results.")
+    
+    # Adding arguments
+    parser.add_argument('--path', type=str, required=True, help='Path to the checkpoint file')
+    parser.add_argument('--name', type=str, required=True, help='Name for the output file')
+    parser.add_argument('--split', type=str, default='test', help='Split type (default: test)')
+    args = parser.parse_args()
+    
+    # Calling main with arguments
+    main(args.path, args.name, args.split)

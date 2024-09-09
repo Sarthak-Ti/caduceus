@@ -28,7 +28,8 @@ python -m train wandb.group=enformer wandb.name=enformer_kmer8_mamba_2 experimen
  +decoder.conjoin_train=true +decoder.conjoin_test=false optimizer.lr="1e-3" \
  train.pretrained_model_path=null +decoder.convolutions=false dataset.max_length=196608 dataset.kmer_len=8 \
  model.config.vocab_size=390625 model.config.pad_vocab_size_multiple=1 train.pretrained_safetensors_model_path=null \
- trainer.accumulate_grad_batches=8
+ trainer.accumulate_grad_batches=8 \
+ train.ckpt=/data/leslie/sarthak/caduceus/outputs/2024-08-30/14-13-25-111389/checkpoints/last.ckpt \
 #  dataset.return_cage=true
 #  trainer.accumulate_grad_batches=8
 #  +dataset.cell_type=121 \

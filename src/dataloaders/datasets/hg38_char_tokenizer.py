@@ -33,7 +33,7 @@ class CharacterTokenizer(PreTrainedTokenizer):
         self.characters = characters
         self.model_max_length = model_max_length
         bos_token = AddedToken("[BOS]", lstrip=False, rstrip=False)
-        eos_token = AddedToken("[EOS]", lstrip=False, rstrip=False)
+        # eos_token = AddedToken("[EOS]", lstrip=False, rstrip=False)
         sep_token = AddedToken("[SEP]", lstrip=False, rstrip=False)
         cls_token = AddedToken("[CLS]", lstrip=False, rstrip=False)
         pad_token = AddedToken("[PAD]", lstrip=False, rstrip=False)

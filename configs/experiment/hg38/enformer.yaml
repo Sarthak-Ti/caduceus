@@ -72,7 +72,7 @@ dataset:
   use_fixed_len_val: false  # placing a fixed length val here, but it's really the test
   replace_N_token: false  # replace N (uncertain token) with pad tokens in dataloader
   pad_interval: false  # handle uncertain tokens within the FastaInteral class  
-  return_cage: false  # return cage data in dataloader
+  return_CAGE: false  # return cage data in dataloader
   kmer_len: null  # kmer length for kmer tokenization
 
 

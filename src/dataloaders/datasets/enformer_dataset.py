@@ -177,7 +177,7 @@ class EnformerDataset():
         self.labels = zarr.open(data_path, mode='r')['labels']
         
         self.keep = None
-        if self.d_output is None and self.return_CAGE:
+        if self.return_CAGE:
             self.d_output = self.labels.shape[-1]
         else:
             self.d_output = 4675 #the non cage data!
@@ -272,7 +272,7 @@ Can run in the terminal using these commands
 cd /data/leslie/sarthak/hyena/hyena-dna/
 python
 import src.dataloaders.datasets.enformer_dataset as enformer_dataset
-dataset = enformer_dataset.EnformerDataset('test', 196608, return_CAGE=True)
+dataset = enformer_dataset.EnformerDataset('test', 196608, return_CAGE=True, kmer_len=6)
 out = dataset[0]
 out[0] #the input data tokenized
 '''

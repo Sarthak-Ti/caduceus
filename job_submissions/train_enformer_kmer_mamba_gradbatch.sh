@@ -29,5 +29,5 @@ python -m train wandb.group=enformer wandb.name=enformer_kmer_mamba_gradbatches_
  +decoder.conjoin_train=true +decoder.conjoin_test=false optimizer.lr="1e-3" \
  train.pretrained_model_path=null +decoder.convolutions=false dataset.max_length=196608 dataset.kmer_len=6 \
  model.config.vocab_size=15625 model.config.pad_vocab_size_multiple=1 train.pretrained_safetensors_model_path=null \
- train.ckpt=/data/leslie/sarthak/caduceus/outputs/2024-08-19/20-23-52-562994/checkpoints/last.ckpt \
+ train.ckpt=/data/leslie/sarthak/caduceus/outputs/2024-08-30/13-56-38-130114/checkpoints/last.ckpt \
  trainer.accumulate_grad_batches=8
