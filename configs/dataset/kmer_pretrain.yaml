@@ -1,0 +1,15 @@
+_name_: KmerPretrainLoader
+bed_file: null
+fasta_file: null
+dataset_name: KmerPretrainLoader
+tokenizer_name: null
+cache_dir: null
+max_length: null
+add_eos: False
+batch_size: 2048  # per GPU
+batch_size_eval: ${eval:${.batch_size} * 2}
+num_workers: 1  # For preprocessing only
+shuffle: True
+pin_memory: True
+__train_len: ${div_up:1_000_000_000, ${.max_length}}
+__l_max: ${.max_length}

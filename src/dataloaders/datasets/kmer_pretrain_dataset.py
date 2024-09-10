@@ -181,7 +181,7 @@ class KmerPretrain():
 
 def main():
     # test the dataset
-    dataset = KmerPretrain('train', 196608, rc_aug = True)
+    dataset = KmerPretrain('train', 196608)
     print(len(dataset)) #this is correct, 1.1*num_peaks
     print(dataset.seqs.shape)
     print(dataset[0])

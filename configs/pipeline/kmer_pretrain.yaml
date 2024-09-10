@@ -1,0 +1,23 @@
+# @package _global_
+defaults:
+  - /trainer: default
+  - /loader: default
+  - /dataset: kmer_pretrain
+  # - /task: regression #one of the options, uses mse loss
+  - /optimizer: adamw
+  - /scheduler: cosine_warmup
+  - /callbacks: [base, model_every_epoch]
+
+train:
+  monitor: val/loss # the metric to monitor for early stopping
+  mode: min
+
+task:
+  _name_: lm
+  loss:
+    _name_: cross_entropy
+    ignore_index: 15629  # Bake in tokenizer value for padding / EOS tokens. new to caduceus
+  torchmetrics: ['perplexity', 'num_tokens']
+
+encoder: null
+decoder: null

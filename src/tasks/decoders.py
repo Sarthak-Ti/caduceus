@@ -240,18 +240,16 @@ class ProfileDecoder(Decoder):
             squeeze = self.squeeze
 
         if self.mode == "last":
-            restrict = lambda x: x[..., -l_output:, :]
+            def restrict(x):
+                return x[..., -l_output:, :]
         elif self.mode == "first":
-            restrict = lambda x: x[..., :l_output, :]
+            def restrict(x):
+                return x[..., :l_output, :]
         elif self.mode == "pool": #what we used for the poster, finds moving average cumsum, if l_out is 0 becomes 1 which is average
             #unsure if mask is used
             if mask is None:
-                restrict = lambda x: (
-                    torch.cumsum(x, dim=-2)
-                    / torch.arange(
-                        1, 1 + x.size(-2), device=x.device, dtype=x.dtype
-                    ).unsqueeze(-1)
-                )[..., -l_output:, :]           
+                def restrict(x):
+                    return (torch.cumsum(x, dim=-2) / torch.arange(1, 1 + x.size(-2), device=x.device, dtype=x.dtype).unsqueeze(-1))[..., -l_output:, :]           
             else:
                 # sum masks
                 mask_sums = torch.sum(mask, dim=-1).squeeze() - 1  # for 0 indexing
@@ -259,22 +257,21 @@ class ProfileDecoder(Decoder):
                 # convert mask_sums to dtype int
                 mask_sums = mask_sums.type(torch.int64)
 
-                restrict = lambda x: (
-                    torch.cumsum(x, dim=-2)
-                    / torch.arange(
-                        1, 1 + x.size(-2), device=x.device, dtype=x.dtype
-                    ).unsqueeze(-1)
-                )[torch.arange(x.size(0)), mask_sums, :].unsqueeze(1)  # need to keep original shape
+                def restrict(x):
+                    return (torch.cumsum(x, dim=-2) / torch.arange(1, 1 + x.size(-2), device=x.device, dtype=x.dtype).unsqueeze(-1))[torch.arange(x.size(0)), mask_sums, :].unsqueeze(1)  # need to keep original shape
 
         elif self.mode == "sum":
-            restrict = lambda x: torch.cumsum(x, dim=-2)[..., -l_output:, :]
+            def restrict(x):
+                return torch.cumsum(x, dim=-2)[..., -l_output:, :]
             # TODO use same restrict function as pool case
         elif self.mode == 'ragged':
             assert lengths is not None, "lengths must be provided for ragged mode"
             # remove any additional padding (beyond max length of any sequence in the batch)
-            restrict = lambda x: x[..., : max(lengths), :]
+            def restrict(x):
+                return x[..., :max(lengths), :]
         elif self.mode == 'mean': #useless, l_output = 0 turns to l_output = 1 which means pool is the average...
-            restrict = lambda x: torch.mean(x, dim=-2).unsqueeze(1)
+            def restrict(x):
+                return torch.mean(x, dim=-2).unsqueeze(1)
         else:
             raise NotImplementedError(
                 "Mode must be ['last' | 'first' | 'pool' | 'sum' | 'mean' | 'ragged']"
@@ -306,7 +303,8 @@ class EnformerDecoder(Decoder):
     '''Decoder for profile task and also coutns task'''
     def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False,
                  yshape=114688, bin_size=128, downsampled=False, dropout_rate=0.1,
-                 num_downsamples=7, dim_divisible_by=128, kmer_len=None, conjoin_train=True, conjoin_test=False):
+                 num_downsamples=7, dim_divisible_by=128, kmer_len=None, conjoin_train=True, conjoin_test=False,
+                 mouse = False, d_output_mouse = None):
         super().__init__()
         # if d_output is None:
         #     d_output = yshape//bin_size
@@ -348,6 +346,8 @@ class EnformerDecoder(Decoder):
             d_model = twice_dim
         
         self.output_transform = nn.Linear(d_model, d_output)
+        if mouse:
+            self.output_transform_mouse = nn.Linear(d_model, d_output_mouse)
         self.pool = nn.AvgPool1d(kernel_size=bin_size) #default stride is kernel size
 
         if l_output == 0:
@@ -361,7 +361,7 @@ class EnformerDecoder(Decoder):
         self.bin_size = bin_size
         self.softplus = nn.Softplus()
 
-    def forward(self, x, state=None, lengths=None, l_output=None, mask=None):
+    def forward(self, x, state=None, lengths=None, l_output=None, mask=None, mouse=False):
         """
         Forward pass for the EnformerDecoder.
 
@@ -371,6 +371,7 @@ class EnformerDecoder(Decoder):
             lengths (optional): Not used.
             l_output (optional): Not used.
             mask (optional): Not used.
+            mouse (bool mask): size of batch_size, tells you per batch .
 
         Returns:
             Tensor: Output tensor of shape (batch_size, num_bins, d_output).
@@ -380,15 +381,15 @@ class EnformerDecoder(Decoder):
             
         if self.conjoin_train or (self.conjoin_test and not self.training):
             x, x_rc = x.chunk(2, dim=-1)
-            x = self.evaluate_forward(x.squeeze(-1))
-            x_rc = self.evaluate_forward(x_rc.squeeze(-1))
+            x = self.evaluate_forward(x.squeeze(-1), mouse=mouse)
+            x_rc = self.evaluate_forward(x_rc.squeeze(-1), mouse=mouse)
             x = (x + x_rc) / 2 #this is how we keep it rc, otherwise it would separate, unsure why the hiddne states differ, thought those would be identical tho
         else:
-            x = self.evaluate_forward(x)
+            x = self.evaluate_forward(x, mouse=mouse)
 
         return x
 
-    def evaluate_forward(self, x):
+    def evaluate_forward(self, x, mouse=False):
         if self.convolutions is False:
             #we first take just the middle elements of the sequence
             # x = x[:,int(x.shape[1]/2)-int(self.yshape/2):int(x.shape[1]/2)+int(self.yshape/2),:]
@@ -398,7 +399,7 @@ class EnformerDecoder(Decoder):
             startidx = x.shape[1]//2 - self.yshape//2
             endidx = startidx + self.yshape
             
-            x = x[:,startidx:endidx,:]
+            x = x[:,startidx:endidx,:] #cuts it to size yshape which is the middle 896, not the full 1536
             x_permute = x.permute(0,2,1)
             # x_pooled = F.avg_pool1d(x_permute, kernel_size=self.bin_size, stride=self.bin_size)
             x_pooled = self.pool(x_permute)
@@ -440,8 +441,14 @@ class EnformerDecoder(Decoder):
             # # x now has shape (batch_size, 256, num_bins)
             # x = x.permute(0, 2, 1)  # Change shape to (batch_size, num_bins, 256) for the linear layer
             
+        if mouse:
+            # x_mouse = self.output_transform_mouse(x)
+            raise NotImplementedError("Mouse output not implemented, unsure how to mask it")
+        
         x = self.output_transform(x)
 
+        #now apply masking
+            
         #softplus activation
         x = self.softplus(x)
 
