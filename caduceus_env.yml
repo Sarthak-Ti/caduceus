@@ -44,6 +44,6 @@ dependencies:
       - transformers==4.38.1
       - triton==2.2.0
       - wandb==0.13.5
-      - flash-attn==2.5.6
+      - flash-attn==2.5.6 #these 3 manually install afterwards as they require torch
       - causal-conv1d===1.2.0.post2
       - mamba-ssm==1.2.0.post1
