@@ -153,6 +153,8 @@ class Evals():
         fig.suptitle(f'{self.model_type} Model Coverage Comparison')
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
+        
+        return fig, (ax1, ax2) 
     
     def test(self):
         print('test worked')
