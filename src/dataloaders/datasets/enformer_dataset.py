@@ -129,6 +129,7 @@ class EnformerDataset():
         else:
             genome_np = '/data/leslie/sarthak/data/chrombpnet_test/hg38_tokenized.npz'
             complement_map = {"7": 10, "8": 9, "9": 8, "10": 7, "11": 11}
+            max_key = 11
         
         #load in the tokenized genome
         with np.load(genome_np) as data:
@@ -182,7 +183,10 @@ class EnformerDataset():
         else:
             self.d_output = 4675 #the non cage data!
         
-        if isinstance(cell_type,str):
+        if cell_type=='DNase':
+            self.d_output = 674
+            self.keep = np.array([i for i in range(0, 674)])
+        elif isinstance(cell_type,str):
             targets = '/data/leslie/sarthak/data/enformer/data/human/targets.txt'
             targets = pd.read_csv(targets, sep='\t')
             #nah let's just do it properly, we'll have overlap, but it's fine!

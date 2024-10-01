@@ -130,6 +130,10 @@ class CaduceusEmbeddings(nn.Module):
     ):
         super().__init__()
         factory_kwargs = {"device": device, "dtype": dtype}
+        #check if config has a .positional_embed and see if it's True
+        # if config.get('positional_embed', False):
+            # positional_embedding = True
+            # raise NotImplementedError("Positional embeddings are not yet supported, make sure only for rcps, and add something to use positional_embed=True for RCPS. Creating_ccre_mask_pretrain.ipynb has code for it")            
         if config.rcps:
             self.word_embeddings = RCPSEmbedding(
                 config.vocab_size, config.d_model, config.complement_map, **factory_kwargs

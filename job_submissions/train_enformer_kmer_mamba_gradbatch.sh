@@ -30,4 +30,5 @@ python -m train wandb.group=enformer wandb.name=enformer_kmer_mamba_gradbatches_
  train.pretrained_model_path=null +decoder.convolutions=false dataset.max_length=196608 dataset.kmer_len=6 \
  model.config.vocab_size=15625 model.config.pad_vocab_size_multiple=1 train.pretrained_safetensors_model_path=null \
  trainer.accumulate_grad_batches=8 \
-#  train.ckpt=/data/leslie/sarthak/caduceus/outputs/2024-08-30/13-56-38-130114/checkpoints/last.ckpt \
+ train.ckpt=/data/leslie/sarthak/caduceus/outputs/2024-09-06/11-44-16-039839/checkpoints/last.ckpt \
+#gradbatch main

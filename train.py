@@ -581,6 +581,7 @@ class SequenceLightningModule(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def train_dataloader(self):
+        # print(self.hparams.loader)
         return self.dataset.train_dataloader(**self.hparams.loader)
 
     def _eval_dataloaders_names(self, loaders, prefix):
@@ -630,7 +631,7 @@ class SequenceLightningModule(pl.LightningModule):
         test_loader_names, test_loaders = self._eval_dataloaders()
         self.test_loader_names = ["final/" + name for name in test_loader_names]
         return test_loaders
-
+    
 
 # pytorch-lightning utils and entrypoint
 def create_trainer(config, **kwargs):
@@ -671,17 +672,29 @@ def create_trainer(config, **kwargs):
     if isinstance(n_devices, Sequence):  # trainer.devices could be [1, 3] for example
         n_devices = len(n_devices)
     if n_devices > 1 and config.trainer.get('strategy', None) is None:
+        print('using ddp for training')
         config.trainer.strategy = dict(
             _target_='pytorch_lightning.strategies.DDPStrategy',
             find_unused_parameters=False,
             # https://pytorch-lightning.readthedocs.io/en/stable/advanced/advanced_gpu.html#ddp-optimizations
             gradient_as_bucket_view=True,
         )
+    elif n_devices > 1 and config.trainer.get('strategy', None) == 'fsdp':
+        print('using fsdp for training')
+        config.trainer.strategy = dict(
+            _target_='pytorch_lightning.strategies.FSDPStrategy',
+            sharding_strategy='FULL_SHARD',  # or 'SHARD_GRAD_OP' for less aggressive sharding
+            cpu_offload=True,  # set to True if you want to offload to CPU
+            # activation_checkpointing=True,  # set to True for very large models
+            # Add other FSDP-specific parameters as needed
+        )
 
     # Init lightning trainer
     log.info(f"Instantiating trainer <{config.trainer._target_}>")
     # special processing for seqlen warmup scheduler (reload)
+    print('trainer config:', config.trainer)
     trainer = hydra.utils.instantiate(config.trainer, callbacks=callbacks, logger=logger)
+    print(f"Trainer strategy: {type(trainer.strategy).__name__}")
 
     return trainer
 
@@ -721,6 +734,10 @@ def train(config):
     if config.train.seed is not None:
         pl.seed_everything(config.train.seed, workers=True)
     trainer = create_trainer(config)
+    #print all trainer options
+    # print(trainer)
+    # print(vars(trainer))
+    
     model = SequenceLightningModule(config)
     # print(model)
     # print(model.model.backbone.load_old_embedding,'\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n','\n')

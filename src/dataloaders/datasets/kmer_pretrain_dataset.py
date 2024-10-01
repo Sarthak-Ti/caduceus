@@ -40,6 +40,25 @@ chrom_info= {'chr1': [10000, 248946422],
  'chrX': [10000, 156030895],
  'chrY': [2781479, 56887902],}
 
+COMPLEMENT_MAP = {
+                "0": 0,
+                "1": 1,
+                "2": 2,
+                "3": 3,
+                "4": 4,
+                "5": 5,
+                "6": 6,
+                "7": 10,
+                "8": 9,
+                "9": 8,
+                "10": 7,
+                "11": 11,
+                "12": 12,
+                "13": 13,
+                "14": 14,
+                "15": 15
+            }
+
 trainsplits = {'train':['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr9', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX', 'chrY'],
           'val':['chr10', 'chr8'],
           'valid': ['chr10', 'chr8'],
@@ -57,6 +76,7 @@ def split_integers(start, end, max_length):
 
 '''
 Class that sweeps through the genome by chromosome and returns the sequence for pretraining
+not actually just for Kmers, can be individual nucleotides which is like kmer length of 1
 '''
 class KmerPretrain():
     def __init__(
@@ -69,9 +89,10 @@ class KmerPretrain():
         rc_aug=False,
         d_output = None,
         kmer_len = 6,
-        clean_data = True, #should really be true...
+        clean_data = True, #should really be true, removes regions with lots of N like centromeres, and also regions with no cCREs if ccre_only is true
         mlm_probability=0.15,
         eligible_replacements=None,
+        ccre_only=False, #tells it to only use regions with cCREs, and only mask regions that have cCREs
     ):
         
         self.max_length = max_length
@@ -83,7 +104,12 @@ class KmerPretrain():
         self.mlm_probability = mlm_probability
         if tokenizer is None:
             self.tokenizer = CaduceusTokenizer(max_length, kmer_len=kmer_len)
-        self.eligible_replacements = eligible_replacements
+        if eligible_replacements=='default':
+            self.eligible_replacements = torch.tensor([7,8,9,10])
+        elif eligible_replacements is not None:
+            self.eligible_replacements = torch.tensor(eligible_replacements)
+        else:
+            self.eligible_replacements = None
 
         #first load in the bigwig and genome fasta files
         genome_np = '/data/leslie/sarthak/data/chrombpnet_test/hg38_tokenized.npz'
@@ -94,8 +120,11 @@ class KmerPretrain():
             self.genome = {key: np.array(data[key]) for key in data}
         
         #RC will be implemented by loading the json file and then mapping every element to the reverse complement and reversing order
-        with open(f'/data/leslie/sarthak/data/enformer/data/complement_map_{kmer_len}mer.json', 'r') as f:
-            complement_map = json.load(f)
+        if kmer_len is not None:
+            with open(f'/data/leslie/sarthak/data/enformer/data/complement_map_{kmer_len}mer.json', 'r') as f:
+                complement_map = json.load(f)
+        else:
+            complement_map = COMPLEMENT_MAP
         max_key = int(list(complement_map.keys())[-1])
         self.complement_array = np.zeros(max_key + 1, dtype=int)
         for k, v in complement_map.items():
@@ -106,6 +135,14 @@ class KmerPretrain():
             split = 'valid' #chrombpnets way of calling the data for some reason???
         
         #what we do is load in the data for sweeps
+
+        if ccre_only:
+            #load in the pretokenized
+            with np.load('/data/leslie/sarthak/data/GRCh38-cCREs_mask.npz') as mask:
+                self.mask = {key: np.array(mask[key]) for key in mask}
+        else:
+            self.mask = None
+        
         midpoints = []
         chroms = []
         for chrom in chrom_info.keys():
@@ -128,11 +165,21 @@ class KmerPretrain():
         # data = self.all_data
         good_data = []
         self.num_bad = 0
+        self.num_masked = 0
         for i in range(data.shape[0]):
             peak = data[i]
             chrom = peak[0]
             center = int(peak[1])
-            seq = self.genome[chrom][center-self.max_length//2:center+self.max_length//2] 
+            seq = self.genome[chrom][center-self.max_length//2:center+self.max_length//2]
+            
+            if self.mask is not None: #also remove the ones that have no cCREs
+                mask = self.mask[chrom][center-self.max_length//2:center+self.max_length//2]
+                #now multiply them
+                tempseq = seq * mask
+                if np.sum(tempseq) == 0: #means no cCREs in the region
+                    self.num_masked += 1
+                    continue
+            
             #find how many 11 are in there
             n_count = np.sum(seq == 15624) #the N token equivalent
             if n_count > 1000:
@@ -168,12 +215,17 @@ class KmerPretrain():
         seq = self.replace_value(seq, self.tokenizer.max_char_len, self.tokenizer.pad_token_id)
         
         # seq = torch.LongTensor(np.concatenate(([self.BOS], seq, [self.EOS])))
+        if self.mask is not None:
+            mask = self.mask[chrom][center-self.max_length//2:center+self.max_length//2]
+        else:
+            mask = None
         data, target = mlm_getitem(
                 seq,
                 mlm_probability=self.mlm_probability,
                 contains_eos=False,
                 tokenizer=self.tokenizer,
                 eligible_replacements=self.eligible_replacements,
+                mask=mask
             )
         return data, target
 
@@ -190,7 +242,7 @@ Can run in the terminal using these commands
 cd /data/leslie/sarthak/caduceus/
 python
 import src.dataloaders.datasets.kmer_pretrain_dataset as kmer_pretrain_dataset
-dataset = kmer_pretrain_dataset.KmerPretrain('train', 196608)
+dataset = kmer_pretrain_dataset.KmerPretrain('train', 196608, kmer_len=None, ccre_only=True, eligible_replacements=[7,8,9,10]) #can do whatever you want here
 out = dataset[0]
 out[0] #the input data tokenized
 '''

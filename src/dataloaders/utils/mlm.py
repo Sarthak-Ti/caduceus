@@ -1,7 +1,7 @@
 import torch
 
 
-def mlm_getitem(seq, mlm_probability=0.15, contains_eos=False, tokenizer=None, eligible_replacements=None):
+def mlm_getitem(seq, mlm_probability=0.15, contains_eos=False, tokenizer=None, eligible_replacements=None, mask=None):
     """Helper method for creating MLM input / target.
 
     Adapted from:
@@ -11,6 +11,8 @@ def mlm_getitem(seq, mlm_probability=0.15, contains_eos=False, tokenizer=None, e
     target = data.clone()
     # We sample a few tokens in each sequence for MLM training (with probability `self.mlm_probability`)
     probability_matrix = torch.full(target.shape, mlm_probability)
+    if mask is not None:
+        probability_matrix = probability_matrix * mask
     # TODO: Do we need to avoid "masking" special tokens as is done here?
     #  https://github.com/huggingface/transformers/blob/14666775a296a76c88e1aa686a9547f393d322e2/src/transformers/data/data_collator.py#L760-L766
     masked_indices = torch.bernoulli(probability_matrix).bool()

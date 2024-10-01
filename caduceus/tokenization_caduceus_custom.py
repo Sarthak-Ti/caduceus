@@ -10,6 +10,25 @@ import json
 
 import itertools
 
+COMPLEMENT_MAP = {
+                "0": 0,
+                "1": 1,
+                "2": 2,
+                "3": 3,
+                "4": 4,
+                "5": 5,
+                "6": 6,
+                "7": 10,
+                "8": 9,
+                "9": 8,
+                "10": 7,
+                "11": 11,
+                "12": 12,
+                "13": 13,
+                "14": 14,
+                "15": 15
+            }
+
 class CaduceusTokenizer(PreTrainedTokenizer):
     model_input_names = ["input_ids"]
 
@@ -53,24 +72,48 @@ class CaduceusTokenizer(PreTrainedTokenizer):
             characters = [comb for _, comb in enumerate(characters)]
         
         if complement_map is None and kmer_len is None:
-            complement_map = {"A": "T", "C": "G", "G": "C", "T": "A", "N": "N"}
+            self._complement_map = COMPLEMENT_MAP
         elif complement_map is None and kmer_len is not None:
             with open(f'/data/leslie/sarthak/data/enformer/data/complement_map_{kmer_len}mer.json', 'r') as f:
                 self._complement_map = json.load(f)
+        else:
+            self._complement_map = complement_map
         
         self.characters = characters
         self.model_max_length = model_max_length
         self.max_char_len = len(characters)
 
-        self._vocab_str_to_int = {
-            **{ch: i for i, ch in enumerate(self.characters)},
-            "[CLS]": self.max_char_len,
-            "[SEP]": self.max_char_len + 1,
-            "[BOS]": self.max_char_len + 2,
-            "[MASK]": self.max_char_len + 3,
-            "[PAD]": self.max_char_len + 4,
-            "[RESERVED]": self.max_char_len + 5,
-            "[UNK]": self.max_char_len + 6,
+        if kmer_len is not None: #if it's kmer we add it at the end
+            self._vocab_str_to_int = {
+                **{ch: i for i, ch in enumerate(self.characters)},
+                "[CLS]": self.max_char_len,
+                "[SEP]": self.max_char_len + 1,
+                "[BOS]": self.max_char_len + 2,
+                "[MASK]": self.max_char_len + 3,
+                "[PAD]": self.max_char_len + 4,
+                "[RESERVED]": self.max_char_len + 5,
+                "[UNK]": self.max_char_len + 6,
+            }
+        if kmer_len is not None:
+            self._vocab_str_to_int = {
+                **{ch: i for i, ch in enumerate(self.characters)},
+                "[CLS]": self.max_char_len,
+                "[SEP]": self.max_char_len + 1,
+                "[BOS]": self.max_char_len + 2,
+                "[MASK]": self.max_char_len + 3,
+                "[PAD]": self.max_char_len + 4,
+                "[UNK]": self.max_char_len + 5,
+            }
+        elif kmer_len is None:
+            self._vocab_str_to_int = {
+            "[CLS]": 0,
+            "[SEP]": 1,
+            "[BOS]": 2,
+            "[MASK]": 3,
+            "[PAD]": 4,
+            "[RESERVED]": 5,
+            "[UNK]": 6,
+            **{ch: i + 7 for i, ch in enumerate(self.characters)},
         }
         self._vocab_int_to_str = {v: k for k, v in self._vocab_str_to_int.items()}
         add_prefix_space = kwargs.pop("add_prefix_space", False)

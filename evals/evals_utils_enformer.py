@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 # import seaborn as sns
 from tqdm import tqdm
 import argparse
+import itertools
+
 
 try:
     OmegaConf.register_new_resolver('eval', eval)
@@ -52,6 +54,7 @@ class Evals():
         #now set up dataset
         if dataset is None:
             dataset_args = self.cfg['dataset']
+            self.kmer_len = dataset_args['kmer_len']
             self.dataset = enformer_dataset.EnformerDataset(split, dataset_args['max_length'], rc_aug = dataset_args['rc_aug'],
                                                             return_CAGE=dataset_args['return_CAGE'], cell_type=dataset_args.get('cell_type', None),
                                                             kmer_len=dataset_args['kmer_len']) #could use dataloader instead, but again kinda complex
@@ -158,6 +161,20 @@ class Evals():
     
     def test(self):
         print('test worked')
+    
+    # def ism_init(self):
+    #     numbers = (7, 8, 9, 10, 11)
+    #     length = self.kmer_len
+    #     combinations = itertools.product(numbers, repeat=length)
+    #     self.combination_dict = {comb: idx for idx, comb in enumerate(combinations)}
+    #     self.reverse_dict = {v: k for k, v in self.combination_dict.items()}
+        
+    # def ism(self, idx, pos):
+    #     #we simply return the output of the model but we slightly modify the value
+    #     true_out = self(idx)
+
+        
+    #     return true_out
 
         
 
@@ -177,7 +194,7 @@ def pearsonr2(x, y):
     return rho
         
         
-def main(path, name, split='test'):
+def main(path, name, split='test', save_model_out=False):
     evals = Evals(path)
     print('model loaded, now evaluating')
     allout = evals.evaluate(4)
@@ -185,6 +202,8 @@ def main(path, name, split='test'):
     labels = np.load(f'/data/leslie/sarthak/data/enformer/data/{split}_label.npy')
     allout = allout.transpose(0, 2, 1)
     labels = labels.transpose(0, 2, 1)
+    if save_model_out:
+        np.save(f'/data/leslie/sarthak/data/enformer/data/model_out/{name}.npy', allout)
     #if we are not using cage have to cut off labels
     if allout.shape[1] != labels.shape[1]:
         labels = labels[:, :allout.shape[1], :]
@@ -198,6 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('--path', type=str, required=True, help='Path to the checkpoint file')
     parser.add_argument('--name', type=str, required=True, help='Name for the output file')
     parser.add_argument('--split', type=str, default='test', help='Split type (default: test)')
+    parser.add_argument('--save_model_out', action='store_true', help='Save model output')
     args = parser.parse_args()
     
     # Calling main with arguments

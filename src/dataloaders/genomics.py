@@ -178,8 +178,10 @@ class HG38(SequenceDataset):
         else:
             shuffle = self.shuffle
             sampler = None
+        # print(f"Dataset length: {len(self.dataset_train)}")
         loader = self._data_loader(self.dataset_train, batch_size=self.batch_size,
                                    shuffle=shuffle, sampler=sampler, **kwargs)
+        # print(f"Loader length: {len(loader)}")
         return loader
 
     def val_dataloader(self, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
@@ -877,7 +879,7 @@ class KmerPretrainLoader(HG38): #for unique cell type tokens
                 detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
                 fast_forward_epochs=None, fast_forward_batches=None, data_path=None,return_CAGE = False,
-                kmer_len=None, clean_data=True, mlm_probability=0.15, eligible_replacements=None, *args, **kwargs):
+                kmer_len=None, clean_data=True, mlm_probability=0.15, eligible_replacements=None, ccre_only=False, *args, **kwargs):
         self.dataset_name = dataset_name
         self.dest_path = dest_path
         self.tokenizer_name = tokenizer_name
@@ -906,6 +908,7 @@ class KmerPretrainLoader(HG38): #for unique cell type tokens
         self.clean_data = clean_data
         self.mlm_probability = mlm_probability
         self.eligible_replacements = eligible_replacements
+        self.ccre_only = ccre_only
 
         if self.dest_path is None:
             self.dest_path = default_data_path / self._name_
@@ -949,6 +952,9 @@ class KmerPretrainLoader(HG38): #for unique cell type tokens
                                 # dest_path=self.dest_path,
                                 rc_aug=self.rc_aug,
                                 kmer_len=self.kmer_len,
+                                ccre_only=self.ccre_only,
+                                eligible_replacements=self.eligible_replacements,
+                                mlm_probability=self.mlm_probability,
                                 # return_mask=self.return_mask,
             )
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])
