@@ -1,14 +1,15 @@
 
 import torch
-from random import randrange, random, sample
+from random import random
 import numpy as np
 # import sys
-# sys.path.append('/data/leslie/sarthak/hyena/hyena-dna/')
+# sys.path.append(os.path.join(base_path,'/hyena/hyena-dna/')
 # from src.dataloaders.datasets.hg38_char_tokenizer import CharacterTokenizer
 # import h5py
 import pandas as pd
 import zarr
 import json
+import os
 
 """
 
@@ -17,6 +18,10 @@ updated class, uses bed file to load larger length sequence and zarr file labels
 Significantly more efficient and faster
 
 """
+
+base_path = os.path.abspath(__file__).split('sarthak')[0]+'sarthak/'
+print('base_path:',base_path)
+
 
 chrom_info= {'chr1': [10000, 248946422],
  'chr2': [10000, 242183529],
@@ -66,7 +71,7 @@ class Tokenizer():
                 "15": 15
             }
         else:
-            with open(f'/data/leslie/sarthak/data/enformer/data/complement_map_{kmer_len}mer.json', 'r') as f:
+            with open(os.path.join(base_path,f'data/enformer/data/complement_map_{kmer_len}mer.json'), 'r') as f:
                 self.complement_map = json.load(f)
 
 # helper functions
@@ -118,16 +123,16 @@ class EnformerDataset():
         if self.rc_aug:
             raise NotImplementedError('rc_aug not implemented with this, but would be easy following profile dataset')
         
-        genome_np = '/data/leslie/sarthak/data/chrombpnet_test/hg38_tokenized.npz'
+        genome_np = os.path.join(base_path,'data/chrombpnet_test/hg38_tokenized.npz')
         if kmer_len is not None:
-            genome_np = f'/data/leslie/sarthak/data/chrombpnet_test/hg38_tokenized_kmer_{kmer_len}.npz'
+            genome_np = os.path.join(base_path,f'data/chrombpnet_test/hg38_tokenized_kmer_{kmer_len}.npz')
             print(f'Using kmer genome with length {kmer_len}')
              #RC will be implemented by loading the json file and then mapping every element to the reverse complement and reversing order
-            with open(f'/data/leslie/sarthak/data/enformer/data/complement_map_{kmer_len}mer.json', 'r') as f:
+            with open(os.path.join(base_path,f'data/enformer/data/complement_map_{kmer_len}mer.json'), 'r') as f:
                 complement_map = json.load(f)
             max_key = int(list(complement_map.keys())[-1])
         else:
-            genome_np = '/data/leslie/sarthak/data/chrombpnet_test/hg38_tokenized.npz'
+            genome_np = os.path.join(base_path,'data/chrombpnet_test/hg38_tokenized.npz')
             complement_map = {"7": 10, "8": 9, "9": 8, "10": 7, "11": 11}
             max_key = 11
         
@@ -143,7 +148,7 @@ class EnformerDataset():
 
         if split == 'val':
             split = 'valid'
-        seqs = pd.read_csv('/data/leslie/sarthak/data/enformer/data/human/sequences.bed', sep='\t', header=None)
+        seqs = pd.read_csv(os.path.join(base_path,'data/enformer/data/human/sequences.bed'), sep='\t', header=None)
         self.seqs_bed = seqs[seqs[3] == split]
         # self.seq = np.zeros((len(self.seqs_bed), max_length), dtype=self.genome['chr1'].dtype) #note with 16 bit it takes a lo;t of space, can migrate to not preallocating, just get when we need it
         self.length = 131072 #the length of the sequences form enformer
@@ -174,7 +179,7 @@ class EnformerDataset():
         if split == 'valid':
             split = 'val'
         if data_path is None:
-            data_path = f'/data/leslie/sarthak/data/enformer/data/{split}_label.zarr'
+            data_path = os.path.join(base_path,f'data/enformer/data/{split}_label.zarr')
         self.labels = zarr.open(data_path, mode='r')['labels']
         
         self.keep = None
@@ -187,7 +192,7 @@ class EnformerDataset():
             self.d_output = 674
             self.keep = np.array([i for i in range(0, 674)])
         elif isinstance(cell_type,str):
-            targets = '/data/leslie/sarthak/data/enformer/data/human/targets.txt'
+            targets = os.path.join(base_path,'data/enformer/data/human/targets.txt')
             targets = pd.read_csv(targets, sep='\t')
             #nah let's just do it properly, we'll have overlap, but it's fine!
             #get the indices to keep

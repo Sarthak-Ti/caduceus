@@ -1,19 +1,14 @@
 #!/bin/bash
 
+#SBATCH --partition=gpu
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --time=120:00:00
+#SBATCH --mem=100G
+#SBATCH --gres=gpu:h100:1
+
 # Source the bashrc file
 source ~/.bashrc
-
-# SLURM directives
-#SBATCH --partition=gpu        # Equivalent to -q in LSF
-#SBATCH --ntasks=4             # Equivalent to -n in LSF
-#SBATCH --gres=gpu:1           # Request one GPU
-#SBATCH --mem=30G              # Memory per node (equivalent to LSF's rusage[mem=30])
-#SBATCH --time=168:00:00       # Equivalent to -W in LSF, 168 hours
-#SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j.out   # Equivalent to -o in LSF
-#SBATCH --error=/data1/lesliec/sarthak/caduceus/jobs/%j.err    # Equivalent to -e in LSF
-
-# Activate your environment
-# source ~/mambaforge/etc/profile.d/mamba.sh  # Adjust this line to your environment activation command
 
 cd /data1/lesliec/sarthak/caduceus/
 nvidia-smi
