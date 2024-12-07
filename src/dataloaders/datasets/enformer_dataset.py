@@ -104,6 +104,7 @@ class EnformerDataset():
         cell_type = None, #whether to just do one specific cell type
         kmer_len = None,
         return_target = True,
+        one_hot = False
     ):
         
         self.max_length = max_length
@@ -119,6 +120,7 @@ class EnformerDataset():
         self.uppercase = uppercase
         self.return_CAGE = return_CAGE
         self.return_target = return_target
+        self.one_hot = one_hot
         
         if self.rc_aug:
             raise NotImplementedError('rc_aug not implemented with this, but would be easy following profile dataset')
@@ -273,6 +275,13 @@ class EnformerDataset():
         
         if self.keep is not None:
             targets = targets[:, self.keep]
+        
+        if self.one_hot:
+            x = seq
+            x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 0) #need to make sure it is the right order, so now is shape 4xseq_len
+            if 11 in x:
+                x_onehot[:, x == 11] = 0
+            seq = x_onehot
 
         return seq, targets #seq is size seq_len, targets is 896xnum_targets
 
@@ -281,7 +290,7 @@ Can run in the terminal using these commands
 cd /data/leslie/sarthak/hyena/hyena-dna/
 python
 import src.dataloaders.datasets.enformer_dataset as enformer_dataset
-dataset = enformer_dataset.EnformerDataset('test', 196608, return_CAGE=True, kmer_len=6)
+dataset = enformer_dataset.EnformerDataset('test', 196608, return_CAGE=True, one_hot=True)
 out = dataset[0]
 out[0] #the input data tokenized
 '''
