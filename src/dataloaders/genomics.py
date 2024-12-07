@@ -27,11 +27,11 @@ from src.dataloaders.datasets.DNase_dataset import DNaseDataset
 from src.dataloaders.datasets.DNase_allcelltypes import DNaseAllCellTypeDataset
 from src.dataloaders.datasets.DNase_ctst_dataset import DNaseCtstDataset
 from src.dataloaders.datasets.profile_atac import ProfileATAC
-
 logger = src.utils.train.get_logger(__name__)
 from src.dataloaders.datasets.profile_atac_long import ProfileATACLong
 from src.dataloaders.datasets.enformer_dataset import EnformerDataset
 from src.dataloaders.datasets.kmer_pretrain_dataset import KmerPretrain
+from src.dataloaders.datasets.graphreg_dataset import GraphRegDataset
 
 
 class HG38(SequenceDataset):
@@ -960,6 +960,104 @@ class KmerPretrainLoader(HG38): #for unique cell type tokens
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])
         ] #uses dataset class and makes a train and validation using the basic loader
         self.tokenizer = self.dataset_train.tokenizer
+
+    def test_dataloader(self, *args: Any, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
+        """ The test dataloader, it's a dummy loader just to make the trainer happy, we don't use it."""
+        return self._data_loader(self.dataset_val, batch_size=self.batch_size_eval)
+    
+class GraphRegLoader(HG38): #for unique cell type tokens
+    _name_ = "GraphRegLoader"
+    l_output = 0  # need to set this for decoder to work correctly
+    #global in the context of the class or its instances. potentially used by hydra? I am unsure of what this does...
+
+    def __init__(self, dataset_name, dest_path=None, tokenizer_name='char', d_output=None, rc_aug=False,
+                max_length=1024, use_padding=True, max_length_val=None, max_length_test=None,
+                padding_side='left', return_mask=False, val_ratio=0.0005, val_split_seed=2357, add_eos=False, 
+                detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
+                shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
+                fast_forward_epochs=None, fast_forward_batches=None, data_path=None, has_TSS = False, clean_data=True, remove_repeats=False,
+                cell_type = None, kmer_len=None, one_hot=False, *args, **kwargs):
+        self.dataset_name = dataset_name
+        self.dest_path = dest_path
+        self.tokenizer_name = tokenizer_name
+        self.d_output = d_output
+        self.rc_aug = rc_aug
+        self.max_length = max_length
+        self.use_padding = use_padding
+        self.max_length_val = max_length_val if max_length_val is not None else max_length
+        self.max_length_test = max_length_test if max_length_test is not None else max_length
+        self.padding_side = padding_side
+        self.return_mask = return_mask
+        self.val_ratio = val_ratio
+        self.val_split_seed = val_split_seed
+        self.val_only = val_only
+        self.add_eos = add_eos
+        self.detokenize = detokenize
+        self.batch_size = batch_size
+        self.batch_size_eval = batch_size_eval if batch_size_eval is not None else self.batch_size
+        self.num_workers = num_workers
+        self.shuffle = shuffle
+        self.pin_memory = pin_memory
+        self.drop_last = drop_last
+        self.data_path = data_path
+        self.cell_type = cell_type
+        self.kmer_len = kmer_len
+        self.has_TSS = has_TSS
+        self.clean_data = clean_data
+        self.remove_repeats = remove_repeats
+        self.one_hot = one_hot
+
+        if self.dest_path is None:
+            self.dest_path = default_data_path / self._name_
+
+        if fault_tolerant:
+            assert self.shuffle
+        self.fault_tolerant = fault_tolerant
+        if ddp:
+            assert fault_tolerant
+        self.ddp = ddp
+        self.fast_forward_epochs = fast_forward_epochs
+        self.fast_forward_batches = fast_forward_batches
+        if self.fast_forward_epochs is not None or self.fast_forward_batches is not None:
+            assert ddp and fault_tolerant
+
+    def setup(self, stage=None):
+        # TODO instantiate with registry
+        #what we need to do is have characters be the list of cell indices 0-161
+        characters = ['A', 'C', 'G', 'T', 'N']
+
+        # Combine the two lists to form the final list of tokens
+        # characters = number_tokens + nucleotide_tokens
+        if self.tokenizer_name == 'char':
+            print("**Using Char-level tokenizer**")
+            self.tokenizer = CharacterTokenizer(
+                characters=characters,
+                model_max_length=self.max_length + 2,  # add 2 since default adds eos/eos tokens, crop later
+                add_special_tokens=False,
+                padding_side=self.padding_side,
+            )
+        
+        # Create all splits: torch datasets (only train/test in this benchmark)
+        self.dataset_train, self.dataset_val = [
+            GraphRegDataset(split=split,
+                                max_length=max_len,
+                                tokenizer=self.tokenizer,  # pass the tokenize wrapper
+                                tokenizer_name=self.tokenizer_name,
+                                # d_output=self.d_output, #we manually defined it in the dataset
+                                add_eos=self.add_eos,
+                                # dest_path=self.dest_path,
+                                rc_aug=self.rc_aug,
+                                data_path=self.data_path,
+                                cell_type=self.cell_type,
+                                kmer_len=self.kmer_len,
+                                has_TSS = self.has_TSS,
+                                remove_repeats = self.remove_repeats,
+                                clean_data = self.clean_data,
+                                one_hot = self.one_hot,
+                                # return_mask=self.return_mask,
+            )
+            for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])
+        ] #uses dataset class and makes a train and validation using the basic loader
 
     def test_dataloader(self, *args: Any, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
         """ The test dataloader, it's a dummy loader just to make the trainer happy, we don't use it."""

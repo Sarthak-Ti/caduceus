@@ -453,6 +453,66 @@ class EnformerDecoder(Decoder):
         x = self.softplus(x)
 
         return x
+
+class GraphRegDecoder(Decoder):
+    '''Decoder for Graph Reg profiles'''
+    def __init__(self, d_model = 128, l_output = 0, mode='pool', convolutions=False,
+                 bin_size=100, dropout_rate=0.1,kmer_len=None, conjoin_train=True, conjoin_test=False):
+        super().__init__()
+        # if d_output is None:
+        #     d_output = yshape//bin_size
+        #yshape is the size in nucleotides of the region you are looking at, independent of how downsampled it is, that's adjusted for later
+        self.conjoin_train = conjoin_train
+        self.conjoin_test = conjoin_test
+        self.kmer_len = kmer_len
+        if self.kmer_len:
+            raise NotImplementedError("Kmer len not implemented")
+        self.convolutions = convolutions
+        self.bin_size = bin_size
+        self.pool = nn.AvgPool1d(kernel_size=bin_size) #default stride is kernel size
+        self.output_transform = nn.Linear(d_model, 3)
+        
+    def forward(self, x, state=None, lengths=None, l_output=None, mask=None, mouse=False):
+        """
+        Forward pass for the EnformerDecoder.
+
+        Args:
+            x (Tensor): Input tensor of shape (batch_size, seq_len, d_model) or (batch_size, seq_len, d_model, 2) if conjoining it.
+            state (optional): Not used.
+            lengths (optional): Not used.
+            l_output (optional): Not used.
+            mask (optional): Not used.
+            mouse (bool mask): size of batch_size, tells you per batch .
+
+        Returns:
+            Tensor: Output tensor of shape (batch_size, num_bins, d_output).
+        """
+        #the first option is we pool it based on the 128 bp and just do some sort of average pool
+        #the second option is we do a convolution and then pool it        
+            
+        if self.conjoin_train or (self.conjoin_test and not self.training):
+            x, x_rc = x.chunk(2, dim=-1)
+            x = self.evaluate_forward(x.squeeze(-1))
+            x_rc = self.evaluate_forward(x_rc.squeeze(-1))
+            x = (x + x_rc) / 2 #this is how we keep it rc, otherwise it would separate, unsure why the hiddne states differ, thought those would be identical tho
+        else:
+            x = self.evaluate_forward(x)
+
+        return x
+    
+    def evaluate_forward(self, x, mouse=False):
+        if self.convolutions is False:
+            x_permute = x.permute(0,2,1) #now is baatch x d model x seqlen
+            x_pooled = self.pool(x_permute) #now is batch x d model x num bins
+            x = x_pooled.permute(0,2,1) #now is batch x num bins x d model
+        else:
+            raise NotImplementedError("Convolutional GraphRegDecoder not implemented")
+        
+        x = self.output_transform(x) #now should be batch x num bins x 3
+
+        #exponential activation
+        x = torch.exp(x)
+        return x
         
 
 class NDDecoder(Decoder):
@@ -586,6 +646,7 @@ registry = {
     "token": TokenDecoder,
     "profile": ProfileDecoder,
     'enformer': EnformerDecoder,
+    'graphreg': GraphRegDecoder,
 }
 model_attrs = {
     "linear": ["d_output"],

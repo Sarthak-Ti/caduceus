@@ -185,9 +185,13 @@ class SequenceLightningModule(pl.LightningModule):
         decoder_cfg = utils.to_list(
             self.hparams.model.pop("decoder", None)
         ) + utils.to_list(self.hparams.decoder)
-        #this is solely because there might be times where we cut down the output, so we modify the decoder as such!
-        if self.dataset.dataset_train.d_output is not None:
-            decoder_cfg[1]['d_output'] = self.dataset.dataset_train.d_output
+        #this is solely because there might be times where we cut down the output, so we modify the decoder as such! This is only if we dynamically redefine d_output, not all datasets do this! thus the try except
+        try:
+            if self.dataset.dataset_train.d_output is not None:
+                decoder_cfg[1]['d_output'] = self.dataset.dataset_train.d_output
+        except AttributeError:
+            pass
+
 
         # Instantiate model
         config_path = self.hparams.model.pop("config_path", None)
@@ -684,7 +688,7 @@ def create_trainer(config, **kwargs):
         config.trainer.strategy = dict(
             _target_='pytorch_lightning.strategies.FSDPStrategy',
             sharding_strategy='FULL_SHARD',  # or 'SHARD_GRAD_OP' for less aggressive sharding
-            cpu_offload=True,  # set to True if you want to offload to CPU
+            cpu_offload=False,  # set to True if you want to offload to CPU
             # activation_checkpointing=True,  # set to True for very large models
             # Add other FSDP-specific parameters as needed
         )

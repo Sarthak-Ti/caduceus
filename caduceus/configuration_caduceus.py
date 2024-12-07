@@ -53,6 +53,7 @@ class CaduceusConfig(PretrainedConfig):
             bidirectional_weight_tie: bool = True,
             rcps: bool = False,
             complement_map: Optional[dict] = None,  # used for RCPSEmbedding / RCPSLMHead
+            cnn_embedding: bool = False,  #if you want to use a CNN to embed instead of a linear layer
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -73,3 +74,4 @@ class CaduceusConfig(PretrainedConfig):
         self.complement_map = complement_map
         if self.complement_map is None:
             self.complement_map = complement_map_default
+        self.cnn_embedding = cnn_embedding

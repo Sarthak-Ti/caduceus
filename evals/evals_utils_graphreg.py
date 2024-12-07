@@ -2,12 +2,11 @@
 import sys
 sys.path.append('/data/leslie/sarthak/caduceus/')
 from src.models.sequence.dna_embedding import DNAEmbeddingModelCaduceus
-from src.tasks.decoders import EnformerDecoder
-# from src.tasks.encoders import EnformerEncoder
+from src.tasks.decoders import GraphRegDecoder
 from caduceus.configuration_caduceus import CaduceusConfig
 import torch
 import numpy as np
-import src.dataloaders.datasets.enformer_dataset as enformer_dataset
+import src.dataloaders.datasets.graphreg_dataset as d
 import yaml
 from omegaconf import OmegaConf
 import os
@@ -55,9 +54,16 @@ class Evals():
         if dataset is None:
             dataset_args = self.cfg['dataset']
             self.kmer_len = dataset_args['kmer_len']
-            self.dataset = enformer_dataset.EnformerDataset(split, dataset_args['max_length'], rc_aug = dataset_args['rc_aug'],
-                                                            return_CAGE=dataset_args['return_CAGE'], cell_type=dataset_args.get('cell_type', None),
-                                                            kmer_len=dataset_args['kmer_len']) #could use dataloader instead, but again kinda complex
+            self.dataset = d.GraphRegDataset(split, dataset_args['max_length'], rc_aug = dataset_args['rc_aug'],
+                                                            cell_type=dataset_args.get('cell_type', None),
+                                                            kmer_len=dataset_args.get('kmer_len', None),
+                                                            remove_repeats=dataset_args.get('remove_repeats', False),
+                                                            has_TSS=dataset_args.get('has_TSS', False),
+                                                            clean_data=dataset_args.get('clean_data', True),
+                                                            vocab_size=cfg['model']['config']['vocab_size'],
+                                                            one_hot=dataset_args.get('one_hot', False),
+                                                            ) #could use dataloader instead, but again kinda complex
+            
         else:
             self.dataset = dataset
          
@@ -92,7 +98,7 @@ class Evals():
         
         #remove self.cfg['decoder']['_name_']
         del self.cfg['decoder']['_name_']
-        self.decoder = EnformerDecoder(**self.cfg['decoder']) #could do with instantiating, but that is rather complex
+        self.decoder = GraphRegDecoder(**self.cfg['decoder']) #could do with instantiating, but that is rather complex
         self.decoder.load_state_dict(decoder_state_dict, strict=True)
         
         if encoder_state_dict: #if it's emtpy, means no encoder, so just use identity! This should never be true for caduceus
@@ -124,42 +130,40 @@ class Evals():
     
     def evaluate(self, batch_size=8):
         #now evaluate the model on the entire dataset
-        dataset_args = self.cfg['dataset'] #get the dataset args
-        dataset = enformer_dataset.EnformerDataset(self.split, dataset_args['max_length'], rc_aug = dataset_args['rc_aug'],
-                                                            return_CAGE=dataset_args['return_CAGE'], cell_type=dataset_args.get('cell_type', None),
-                                                            kmer_len=dataset_args['kmer_len'], return_target=False)
+        # dataset_args = self.cfg['dataset'] #get the dataset args
+        dataset = self.dataset
         loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
         results = []
         for data in tqdm(loader, total=len(loader)):
-            # data = data[0]
+            data = data[0]
             x = self(data=data)
             results.append(x.cpu().numpy().astype(np.float16))
         return np.concatenate(results, axis=0)
     
-    def plot_track(self, idx, track=121):
-        '''
-        given an index, plots one track and compares it to the real results
-        '''
-        #now plot the track
-        seq, label = self.dataset[idx]
-        # data = data.cpu().numpy()
-        x = self(data = seq).cpu().squeeze().numpy()
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    # def plot_track(self, idx, track=121):
+    #     '''
+    #     given an index, plots one track and compares it to the real results
+    #     '''
+    #     #now plot the track
+    #     seq, label = self.dataset[idx]
+    #     # data = data.cpu().numpy()
+    #     x = self(data = seq).cpu().squeeze().numpy()
+    #     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
         
-        ax1.plot(x[:, track], label='Predicted Coverage', color='b')
-        ax1.set_title('Predicted Coverage')
-        ax1.legend()
+    #     ax1.plot(x[:, track], label='Predicted Coverage', color='b')
+    #     ax1.set_title('Predicted Coverage')
+    #     ax1.legend()
         
-        ax2.plot(label[:, track], label='Actual Coverage', color='r')
-        ax2.set_title('Actual Coverage')
-        ax2.legend()
+    #     ax2.plot(label[:, track], label='Actual Coverage', color='r')
+    #     ax2.set_title('Actual Coverage')
+    #     ax2.legend()
         
-        ax2.set_xlabel('Position')
-        fig.suptitle(f'{self.model_type} Model Coverage Comparison')
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-        plt.show()
+    #     ax2.set_xlabel('Position')
+    #     fig.suptitle(f'{self.model_type} Model Coverage Comparison')
+    #     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    #     plt.show()
         
-        return fig, (ax1, ax2) 
+    #     return fig, (ax1, ax2) 
     
     def test(self):
         print('test worked')
@@ -196,31 +200,31 @@ def pearsonr2(x, y):
     return rho
         
         
-def main(path, name, split='test', save_model_out=False):
-    evals = Evals(path)
-    print('model loaded, now evaluating')
-    allout = evals.evaluate(4)
-    split='test'
-    labels = np.load(f'/data/leslie/sarthak/data/enformer/data/{split}_label.npy')
-    allout = allout.transpose(0, 2, 1)
-    labels = labels.transpose(0, 2, 1)
-    if save_model_out:
-        np.save(f'/data/leslie/sarthak/data/enformer/data/model_out/{name}.npy', allout)
-    #if we are not using cage have to cut off labels
-    if allout.shape[1] != labels.shape[1]:
-        labels = labels[:, :allout.shape[1], :]
-    corrs = pearsonr2(allout, labels)
-    np.save(f'/data/leslie/sarthak/data/enformer/data/model_out/{name}.npy_corrs.npy', corrs)
+# def main(path, name, split='test', save_model_out=False):
+#     evals = Evals(path)
+#     print('model loaded, now evaluating')
+#     allout = evals.evaluate(4)
+#     split='test'
+#     labels = np.load(f'/data/leslie/sarthak/data/enformer/data/{split}_label.npy')
+#     allout = allout.transpose(0, 2, 1)
+#     labels = labels.transpose(0, 2, 1)
+#     if save_model_out:
+#         np.save(f'/data/leslie/sarthak/data/enformer/data/model_out/{name}.npy', allout)
+#     #if we are not using cage have to cut off labels
+#     if allout.shape[1] != labels.shape[1]:
+#         labels = labels[:, :allout.shape[1], :]
+#     corrs = pearsonr2(allout, labels)
+#     np.save(f'/data/leslie/sarthak/data/enformer/data/model_out/{name}.npy_corrs.npy', corrs)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Evaluate model and save correlation results.")
+# if __name__ == '__main__':
+#     parser = argparse.ArgumentParser(description="Evaluate model and save correlation results.")
     
-    # Adding arguments
-    parser.add_argument('--path', type=str, required=True, help='Path to the checkpoint file')
-    parser.add_argument('--name', type=str, required=True, help='Name for the output file')
-    parser.add_argument('--split', type=str, default='test', help='Split type (default: test)')
-    parser.add_argument('--save_model_out', action='store_true', help='Save model output')
-    args = parser.parse_args()
+#     # Adding arguments
+#     parser.add_argument('--path', type=str, required=True, help='Path to the checkpoint file')
+#     parser.add_argument('--name', type=str, required=True, help='Name for the output file')
+#     parser.add_argument('--split', type=str, default='test', help='Split type (default: test)')
+#     parser.add_argument('--save_model_out', action='store_true', help='Save model output')
+#     args = parser.parse_args()
     
-    # Calling main with arguments
-    main(args.path, args.name, args.split)
+#     # Calling main with arguments
+#     main(args.path, args.name, args.split)

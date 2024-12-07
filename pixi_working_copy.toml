@@ -95,7 +95,7 @@ double-conversion = { version = "==3.3.0", build = "h59595ed_0" }
 entrypoints = { version = "==0.4", build = "pyhd8ed1ab_0" }
 exceptiongroup = { version = "==1.2.0", build = "pyhd8ed1ab_0" }
 executing = { version = "==2.0.1", build = "pyhd8ed1ab_0" }
-expat = { version = "*" }
+expat = { version = "==2.6.2", build = "h59595ed_0" }
 fasteners = { version = "==0.17.3", build = "pyhd8ed1ab_0" }
 filelock = { version = "==3.13.1", build = "pyhd8ed1ab_0" }
 fmt = { version = "==10.1.1", build = "h00ab1b0_1" }
@@ -117,7 +117,7 @@ gxx = { version = "==8.5.0", build = "h143be6b_10" }
 gxx_impl_linux-64 = { version = "==8.5.0", build = "hb55b52c_17" }
 huggingface_hub = { version = "==0.20.2", build = "pyhd8ed1ab_0" }
 icecream = { version = "==2.1.3", build = "pyhd8ed1ab_0" }
-icu = { version = "*" }
+icu = { version = "==72.1", build = "hcb278e6_0" }
 idna = { version = "==3.6", build = "pyhd8ed1ab_0" }
 importlib-metadata = { version = "==7.0.1", build = "pyha770c72_0" }
 importlib_metadata = { version = "==7.0.1", build = "hd8ed1ab_0" }
@@ -149,10 +149,10 @@ jupyterlab_server = { version = "==2.25.2", build = "pyhd8ed1ab_0" }
 jupyterlab_widgets = { version = "==3.0.9", build = "pyhd8ed1ab_0" }
 kernel-headers_linux-64 = { version = "==2.6.32", build = "he073ed8_16" }
 keyutils = { version = "==1.6.1", build = "h166bdaf_0" }
-kiwisolver = { version = "*" }
+kiwisolver = { version = "==1.4.5", build = "py311h9547e67_1" }
 krb5 = { version = "==1.21.2", build = "h659d440_0" }
 langcodes = { version = "==3.3.0", build = "pyhd8ed1ab_0" }
-lcms2 = { version = "*" }
+lcms2 = { version = "==2.16", build = "hb7c19ff_0" }
 ld_impl_linux-64 = { version = "==2.36.1", build = "hea4e1c9_2" }
 lerc = { version = "==4.0.0", build = "h27087fc_0" }
 libabseil = { version = "==20230802.1", build = "cxx17_h59595ed_0" }
@@ -177,7 +177,7 @@ libcurand = { version = "==10.3.4.107", build = "0" }
 libcurl = { version = "==8.8.0", build = "hca28451_0" }
 libcusolver = { version = "==11.4.1.48", build = "0" }
 libcusparse = { version = "==11.7.5.86", build = "0" }
-libdeflate = { version = "*" }
+libdeflate = { version = "==1.19", build = "hd590300_0" }
 libedit = { version = "==3.1.20191231", build = "he28a2e2_2" }
 libev = { version = "==4.33", build = "hd590300_2" }
 libevent = { version = "==2.1.12", build = "hf998b51_1" }
@@ -192,7 +192,7 @@ libgoogle-cloud = { version = "==2.12.0", build = "h5206363_4" }
 libgrpc = { version = "==1.59.3", build = "hd6c4280_0" }
 libhwloc = { version = "==2.9.3", build = "default_h554bfaf_1009" }
 libiconv = { version = "==1.17", build = "hd590300_2" }
-libjpeg-turbo = { version = "*" }
+libjpeg-turbo = { version = "==3.0.0", build = "hd590300_1" }
 liblapack = { version = "==3.9.0", build = "16_linux64_mkl" }
 liblapacke = { version = "==3.9.0", build = "16_linux64_mkl" }
 liblief = { version = "==0.12.3", build = "h27087fc_0" }
@@ -207,7 +207,7 @@ libnsl = { version = "==2.0.1", build = "hd590300_0" }
 libnuma = { version = "==2.0.16", build = "h0b41bf4_1" }
 libnvjpeg = { version = "==11.9.0.86", build = "0" }
 libparquet = { version = "==14.0.2", build = "h352af49_2_cpu" }
-libpng = { version = "*" }
+libpng = { version = "==1.6.39", build = "h753d276_0" }
 libprotobuf = { version = "==4.24.4", build = "hf27288f_0" }
 libre2-11 = { version = "==2023.6.2", build = "h7a70373_0" }
 libsanitizer = { version = "==8.5.0", build = "h70fd0c9_17" }
@@ -219,14 +219,14 @@ libssh2 = { version = "==1.11.0", build = "h0841786_0" }
 libstdcxx-devel_linux-64 = { version = "==8.5.0", build = "h82e8279_17" }
 libstdcxx-ng = { version = "==13.2.0", build = "h7e041cc_3" }
 libthrift = { version = "==0.19.0", build = "hb90f79a_1" }
-libtiff = { version = "*" }
+libtiff = { version = "==4.6.0", build = "ha9c0a0a_2" }
 libutf8proc = { version = "==2.8.0", build = "h166bdaf_0" }
 libuuid = { version = "==2.38.1", build = "h0b41bf4_0" }
 libuv = { version = "==1.44.2", build = "hd590300_1" }
-libwebp-base = { version = "*" }
+libwebp-base = { version = "==1.3.2", build = "hd590300_0" }
 libxcb = { version = "==1.15", build = "h0b41bf4_0" }
 libxcrypt = { version = "==4.4.36", build = "hd590300_1" }
-libxml2 = { version = "*" }
+libxml2 = { version = "==2.11.5", build = "h0d562d8_0" }
 libxslt = { version = "==1.1.37", build = "h0054252_1" }
 libzlib = { version = "==1.2.13", build = "hd590300_5" }
 lightning-utilities = { version = "==0.10.0", build = "pyhd8ed1ab_0" }
@@ -273,7 +273,7 @@ numba = { version = "==0.59.0", build = "py311h96b013e_1" }
 numcodecs = { version = "==0.12.1", build = "py311h4332511_1" }
 numpy = { version = "==1.26.3", build = "py311h64a7726_0" }
 oauthlib = { version = "==3.2.2", build = "pyhd8ed1ab_0" }
-openjpeg = { version = "*" }
+openjpeg = { version = "==2.5.0", build = "h488ebb8_3" }
 openmpi = { version = "==4.1.6", build = "hc5af2df_101" }
 openssl = { version = "==3.3.1", build = "h4bc722e_2" }
 orc = { version = "==1.9.2", build = "h4b38347_0" }
@@ -350,7 +350,7 @@ perl-xml-simple = { version = "==2.25", build = "pl5321hdfd78af_2" }
 perl-yaml = { version = "==1.30", build = "pl5321hdfd78af_0" }
 pexpect = { version = "==4.8.0", build = "pyh1a96a4e_2" }
 pickleshare = { version = "==0.7.5", build = "py_1003" }
-pillow = { version = "*" }
+pillow = { version = "==10.2.0", build = "py311ha6c5da5_0" }
 pip = { version = "==23.3.2", build = "pyhd8ed1ab_0" }
 pkginfo = { version = "==1.9.6", build = "pyhd8ed1ab_0" }
 pkgutil-resolve-name = { version = "==1.3.10", build = "pyhd8ed1ab_1" }
@@ -389,7 +389,7 @@ python-json-logger = { version = "==2.0.7", build = "pyhd8ed1ab_0" }
 python-libarchive-c = { version = "==5.0", build = "py311h38be061_2" }
 python-tzdata = { version = "==2023.4", build = "pyhd8ed1ab_0" }
 python-xxhash = { version = "==3.4.1", build = "py311h459d7ec_0" }
-python_abi = { version = "==3.11" }
+python_abi = { version = "==3.11", build = "4_cp311" }
 pytorch = { version = "==2.1.2", build = "py3.11_cuda11.8_cudnn8.7.0_0" }
 pytorch-cuda = { version = "==11.8", build = "h7e8668a_5" }
 pytorch-lightning = { version = "==2.4.0" }
@@ -493,7 +493,6 @@ zipp = { version = "==3.17.0", build = "pyhd8ed1ab_0" }
 zlib = { version = "==1.2.13", build = "hd590300_5" }
 zstandard = { version = "==0.22.0", build = "py311hb6f056b_1" }
 zstd = { version = "==1.5.6", build = "ha6fb4c9_0" }
-torchview = {version = "*" }
 
 [pypi-dependencies]
 antlr4-python3-runtime = "==4.9.3"

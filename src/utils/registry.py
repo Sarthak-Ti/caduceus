@@ -42,6 +42,10 @@ model = {
     # "vit_b_16": "src.models.baselines.vit_all.vit_base_patch16_224",
     # "dna_embedding": "src.models.sequence.dna_embedding.DNAEmbeddingModel",
     # "bpnet": "src.models.sequence.hyena_bpnet.HyenaBPNet"
+    
+    #other models like graph reg conv
+    "graph_reg_conv": "src.models.sequence.conv.GraphRegConvNet",
+    
 }
 
 layer = {

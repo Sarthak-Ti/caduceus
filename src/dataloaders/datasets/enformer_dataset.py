@@ -274,7 +274,7 @@ class EnformerDataset():
         if self.keep is not None:
             targets = targets[:, self.keep]
 
-        return seq, targets #coutns is literally just the sum of the cts + 1 then logged
+        return seq, targets #seq is size seq_len, targets is 896xnum_targets
 
 '''
 Can run in the terminal using these commands

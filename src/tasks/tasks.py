@@ -505,6 +505,23 @@ class EnformerTask(BaseTask):
         
         return x, y, w
 
+class Basic(BaseTask):
+    def forward(self, batch, encoder, model, decoder, _state):
+        """Passes a batch through the encoder, backbone, and decoder
+        In this case, encoder and decoder are ID, so just have the model and no states or anyything"""
+        # z holds arguments such as sequence length
+        x, y, *z = batch
+        
+        if len(z) == 0:
+            z = {}
+        
+        # print('x shape: ', x.shape) #is batch x 4 x 100000 for graph reg conv. and double batch for the 
+        x = model(x)
+        # print('x shape after model: ', x.shape)
+        # print(x.shape) #for graph reg is indeed batch x 1000 x 3 as expected!
+        
+        return x, y, z #just return an empty dict, cuz n eed a dict for kwargs
+
 class MultiClass(BaseTask):
     
     def __init__(self, *args, **kwargs):
@@ -720,4 +737,5 @@ registry = {
     'regclass': RegClass,
     'profileclass': ProfileClass,
     'enformer': EnformerTask,
+    'basic': Basic,
 }

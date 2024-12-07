@@ -121,6 +121,17 @@ class BiMambaWrapper(nn.Module):
         return out
 
 
+class Transpose(nn.Module):
+    '''A basic class to transpose a tensor. Useful for embedding with CNN'''
+    def __init__(self, dim0, dim1, dim2):
+        super(Transpose, self).__init__()
+        self.dim0 = dim0
+        self.dim1 = dim1
+        self.dim2 = dim2
+
+    def forward(self, x):
+        return x.permute(self.dim0, self.dim1, self.dim2)
+
 class CaduceusEmbeddings(nn.Module):
     def __init__(
             self,
@@ -134,7 +145,34 @@ class CaduceusEmbeddings(nn.Module):
         # if config.get('positional_embed', False):
             # positional_embedding = True
             # raise NotImplementedError("Positional embeddings are not yet supported, make sure only for rcps, and add something to use positional_embed=True for RCPS. Creating_ccre_mask_pretrain.ipynb has code for it")            
-        if config.rcps:
+        if config.cnn_embedding: #first see if doing it
+            if config.rcps:
+                raise NotImplementedError("CNN embedding is not supported for RCPS.")
+            #now define word embeddings to be a basic cnn
+            # self.word_embeddings = nn.ModuleList([
+            #     nn.Sequential(
+            #         nn.Conv1d(4, config.d_model // 3, kernel_size=6, padding='same'),
+            #         nn.ReLU()
+            #     ),
+            #     nn.Sequential(
+            #         nn.Conv1d(4, config.d_model // 3, kernel_size=12, padding='same'),
+            #         nn.ReLU()
+            #     ),
+            #     nn.Sequential(
+            #         nn.Conv1d(4, config.d_model // 3, kernel_size=24, padding='same'),
+            #         nn.ReLU()
+            #     )
+            # ])
+            #that coudl be more complicated, but would have to use torch.cat in the forward pass, so easier not to
+            self.word_embeddings = nn.Sequential(
+                nn.Conv1d(4, config.d_model // 2, kernel_size=15, padding='same'),
+                nn.ReLU(),
+                nn.Conv1d(config.d_model // 2, config.d_model, kernel_size=15, padding='same'),
+                nn.ReLU(),
+                Transpose(0, 2, 1)
+            )
+            # print('doing cnn embedding')
+        elif config.rcps:
             self.word_embeddings = RCPSEmbedding(
                 config.vocab_size, config.d_model, config.complement_map, **factory_kwargs
             )

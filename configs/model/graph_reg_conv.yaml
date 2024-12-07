@@ -1,0 +1,5 @@
+_name_: graph_reg_conv
+one_hot: true
+input_len: ${dataset.__l_max}
+config:
+  vocab_size: 4

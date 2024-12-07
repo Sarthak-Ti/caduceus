@@ -106,6 +106,13 @@ class EnformerEncoder(Encoder):
             x = self.conv_tower(x)
         return x.transpose(1,2), True
 
+class CNNEmbedding(Encoder):
+    def __init__(self, d_input, d_model, flat=False, **kwargs):
+        super().__init__()
+        #just have to appply a super simple conv that goes to model size
+        self.conv = nn.Conv1d(d_input, d_model, 1)
+        
+
 # For every type of encoder/decoder, specify:
 # - constructor class
 # - list of attributes to grab from dataset
