@@ -784,7 +784,7 @@ class EnformerLoader(HG38): #for unique cell type tokens
                 detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
                 fast_forward_epochs=None, fast_forward_batches=None, data_path=None,return_CAGE = False,
-                cell_type = None, kmer_len=None, one_hot=False, *args, **kwargs):
+                cell_type = None, kmer_len=None, one_hot=False, pool=False, *args, **kwargs):
         self.dataset_name = dataset_name
         self.dest_path = dest_path
         self.tokenizer_name = tokenizer_name
@@ -812,6 +812,10 @@ class EnformerLoader(HG38): #for unique cell type tokens
         self.cell_type = cell_type
         self.kmer_len = kmer_len
         self.one_hot = one_hot
+        self.pool = pool
+        
+        #just print all the options
+        # print(f"dataset_name: {dataset_name}, dest_path: {dest_path}, tokenizer_name: {tokenizer_name}, d_output: {d_output}, rc_aug: {rc_aug}, max_length: {max_length}, use_padding: {use_padding}, max_length_val: {max_length_val}, max_length_test: {max_length_test}, padding_side: {padding_side}, return_mask: {return_mask}, val_ratio: {val_ratio}, val_split_seed: {val_split_seed}, add_eos: {add_eos}, detokenize: {detokenize}, val_only: {val_only}, batch_size: {batch_size}, batch_size_eval: {batch_size_eval}, num_workers: {num_workers}, shuffle: {shuffle}, pin_memory: {pin_memory}, drop_last: {drop_last}, fault_tolerant: {fault_tolerant}, ddp: {ddp}, fast_forward_epochs: {fast_forward_epochs}, fast_forward_batches: {fast_forward_batches}, data_path: {data_path}, return_CAGE: {return_CAGE}, cell_type: {cell_type}, kmer_len: {kmer_len}, one_hot: {one_hot}, pool: {pool}")
 
         if self.dest_path is None:
             self.dest_path = default_data_path / self._name_
@@ -861,6 +865,7 @@ class EnformerLoader(HG38): #for unique cell type tokens
                                 cell_type=self.cell_type,
                                 kmer_len=self.kmer_len,
                                 one_hot=self.one_hot,
+                                pool=self.pool,
                                 # return_mask=self.return_mask,
             )
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])

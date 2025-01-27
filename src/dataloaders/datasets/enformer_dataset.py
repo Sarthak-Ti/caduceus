@@ -104,7 +104,9 @@ class EnformerDataset():
         cell_type = None, #whether to just do one specific cell type
         kmer_len = None,
         return_target = True,
-        one_hot = False
+        one_hot = False,
+        pool = 1,
+        pool_type = 'mean',
     ):
         
         self.max_length = max_length
@@ -121,6 +123,8 @@ class EnformerDataset():
         self.return_CAGE = return_CAGE
         self.return_target = return_target
         self.one_hot = one_hot
+        self.pool = pool
+        self.pool_type = pool_type
         
         if self.rc_aug:
             raise NotImplementedError('rc_aug not implemented with this, but would be easy following profile dataset')
@@ -182,7 +186,9 @@ class EnformerDataset():
             split = 'val'
         if data_path is None:
             data_path = os.path.join(base_path,f'data/enformer/data/{split}_label.zarr')
-        self.labels = zarr.open(data_path, mode='r')['labels']
+            self.labels = zarr.open(data_path, mode='r')['labels']
+        else:
+            self.labels = zarr.open(data_path, mode='r')[split] #we made it more effective, so not with this ['labels']
         
         self.keep = None
         if self.return_CAGE:
@@ -275,6 +281,17 @@ class EnformerDataset():
         
         if self.keep is not None:
             targets = targets[:, self.keep]
+            
+        if self.pool > 1:
+            #first reshape
+            if targets.shape[0] % self.pool != 0:
+                raise ValueError('Pool size must divide sequence length')
+            
+            targets = targets.view(targets.size(0) // self.pool, self.pool, targets.size(1))
+            if self.pool_type != 'mean':
+                raise NotImplementedError('Only mean pooling implemented')
+            targets = targets.mean(dim=1)
+            
         
         if self.one_hot:
             x = seq
@@ -293,5 +310,9 @@ import src.dataloaders.datasets.enformer_dataset as enformer_dataset
 dataset = enformer_dataset.EnformerDataset('test', 196608, return_CAGE=True, one_hot=True)
 out = dataset[0]
 out[0] #the input data tokenized
+
+#if you want to do it for a different dataset (my less processed one)
+dataset = enformer_dataset.EnformerDataset('train', 196608, cell_type='DNase', one_hot=True, data_path='/data1/lesliec/sarthak/data/borzoi/outputs/hg38/labels.zarr', pool = 64)
+zarr_open = zarr.open('/data1/lesliec/sarthak/data/borzoi/outputs/hg38/labels.zarr', mode='r')
 '''
 

@@ -348,6 +348,7 @@ class SequenceLightningModule(pl.LightningModule):
 
 
     def forward(self, batch):
+        # print('running forward')
         # print(self.encoder)
         # print(self.model)
         # print(self.decoder)
@@ -447,6 +448,7 @@ class SequenceLightningModule(pl.LightningModule):
     #     super().test_epoch_end(outputs)
 
     def training_step(self, batch, batch_idx, dataloader_idx=0):
+        # print('about to do train step')
         loss = self._shared_step(batch, batch_idx, prefix="train")
 
         # Log the loss explicitly so that it shows up in WandB
@@ -586,6 +588,9 @@ class SequenceLightningModule(pl.LightningModule):
 
     def train_dataloader(self):
         # print(self.hparams.loader)
+        if self.hparams.loader.get('num_workers', None) == 1:
+            self.hparams.loader['num_workers'] = 0
+            print('changing number of workers to 0 (weird fix)')
         return self.dataset.train_dataloader(**self.hparams.loader)
 
     def _eval_dataloaders_names(self, loaders, prefix):
