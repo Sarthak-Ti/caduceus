@@ -562,7 +562,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/yaml-0.2.5-h7f98852_2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/yaml-cpp-0.8.0-h59595ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.9.3-py311h459d7ec_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/zarr-3.0.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/zarr-3.0.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zeromq-4.3.5-h59595ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-3.17.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda
@@ -11509,13 +11509,13 @@ packages:
   timestamp: 1701168730543
 - kind: conda
   name: zarr
-  version: 3.0.0
+  version: 3.0.1
   build: pyhd8ed1ab_0
   subdir: noarch
   noarch: python
-  url: https://conda.anaconda.org/conda-forge/noarch/zarr-3.0.0-pyhd8ed1ab_0.conda
-  sha256: 0d45854a36d84c71cac9e397fddc3262d29e52c9dfc1c5b632d99f6e2395805f
-  md5: 5b82afdd503bec6825b274e7d6f425eb
+  url: https://conda.anaconda.org/conda-forge/noarch/zarr-3.0.1-pyhd8ed1ab_0.conda
+  sha256: 8dd5a5bd63ffee72ca0c1012ec8f4197a6b3e74a99ecb4590fe3678face13dc0
+  md5: 66820cb25ad3c48f9ee46a48289b3454
   depends:
   - crc32c
   - donfig >=0.8
@@ -11530,8 +11530,8 @@ packages:
   license_family: MIT
   purls:
   - pkg:pypi/zarr?source=hash-mapping
-  size: 124030
-  timestamp: 1736439169036
+  size: 124580
+  timestamp: 1737135197886
 - kind: conda
   name: zeromq
   version: 4.3.5

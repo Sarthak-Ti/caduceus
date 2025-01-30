@@ -54,6 +54,8 @@ class CaduceusConfig(PretrainedConfig):
             rcps: bool = False,
             complement_map: Optional[dict] = None,  # used for RCPSEmbedding / RCPSLMHead
             cnn_embedding: bool = False,  #if you want to use a CNN to embed instead of a linear layer
+            cnn_embedding_dim: int = 4,
+            skip_embedding: bool = False,
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -75,3 +77,5 @@ class CaduceusConfig(PretrainedConfig):
         if self.complement_map is None:
             self.complement_map = complement_map_default
         self.cnn_embedding = cnn_embedding
+        self.cnn_embedding_dim = cnn_embedding_dim
+        self.skip_embedding = skip_embedding

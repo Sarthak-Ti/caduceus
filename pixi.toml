@@ -487,7 +487,7 @@ xz = { version = "==5.2.6", build = "h166bdaf_0" }
 yaml = { version = "==0.2.5", build = "h7f98852_2" }
 yaml-cpp = { version = "==0.8.0", build = "h59595ed_0" }
 yarl = { version = "==1.9.3", build = "py311h459d7ec_0" }
-zarr = { version = "3.0.0" }
+zarr = { version = "3.0.1" }
 zeromq = { version = "==4.3.5", build = "h59595ed_0" }
 zipp = { version = "==3.17.0", build = "pyhd8ed1ab_0" }
 zlib = { version = "==1.2.13", build = "hd590300_5" }

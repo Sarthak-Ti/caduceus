@@ -145,7 +145,13 @@ class CaduceusEmbeddings(nn.Module):
         # if config.get('positional_embed', False):
             # positional_embedding = True
             # raise NotImplementedError("Positional embeddings are not yet supported, make sure only for rcps, and add something to use positional_embed=True for RCPS. Creating_ccre_mask_pretrain.ipynb has code for it")            
-        if config.cnn_embedding: #first see if doing it
+        if config.cnn_embedding and config.skip_embedding:
+            raise ValueError("Cannot use both CNN and skip embeddings.")
+        
+        if config.skip_embedding:
+            self.word_embeddings = Transpose(0, 2, 1) #so that we can input ohe data for gpn msa. maybe better to have identity yor some other option here
+        
+        elif config.cnn_embedding: #first see if doing it
             if config.rcps:
                 raise NotImplementedError("CNN embedding is not supported for RCPS.")
             #now define word embeddings to be a basic cnn
@@ -165,12 +171,14 @@ class CaduceusEmbeddings(nn.Module):
             # ])
             #that coudl be more complicated, but would have to use torch.cat in the forward pass, so easier not to
             self.word_embeddings = nn.Sequential(
-                nn.Conv1d(4, config.d_model // 2, kernel_size=15, padding='same'),
+                nn.Conv1d(config.cnn_embedding_dim, config.d_model // 2, kernel_size=15, padding='same'),
                 nn.ReLU(),
                 nn.Conv1d(config.d_model // 2, config.d_model, kernel_size=15, padding='same'),
                 nn.ReLU(),
                 Transpose(0, 2, 1)
             )
+            #print the weights of the first cnn
+            # print(self.word_embeddings[0].weight)
             # print('doing cnn embedding')
         elif config.rcps:
             self.word_embeddings = RCPSEmbedding(

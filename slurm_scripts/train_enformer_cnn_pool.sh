@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --partition=gpu
+#SBATCH --partition=lesliec,gpu
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:1
-#SBATCH --job-name=Enformer_cnn_128bp
+#SBATCH --job-name=Enformer_cnn_128bp_524k
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 POOL_VALUE=128
@@ -18,7 +18,7 @@ cd /data1/lesliec/sarthak/caduceus/
 nvidia-smi
 
 #if want to continue, set pretrained model path and safetensors path to null but define checkpoint
-pixi run python -m train wandb.group=enformer wandb.name=$SLURM_JOB_NAME experiment=hg38/enformer dataset.batch_size=2 \
+pixi run python -m train wandb.group=enformer wandb.name=$SLURM_JOB_NAME experiment=hg38/enformer dataset.batch_size=1 \
  trainer.precision=bf16 dataset.num_workers=$SLURM_CPUS_PER_TASK dataset.rc_aug=false +dataset.mlm=false \
  model.config.vocab_size=12 model.config.pad_vocab_size_multiple=1 +model.config.cnn_embedding=true \
  \
@@ -26,7 +26,7 @@ pixi run python -m train wandb.group=enformer wandb.name=$SLURM_JOB_NAME experim
  model._name_=dna_embedding_caduceus model.config.bidirectional_strategy=add model.config.bidirectional_weight_tie=true model.config.rcps=false \
  +decoder.conjoin_train=false +decoder.conjoin_test=false optimizer.lr="1e-3" \
  \
- train.pretrained_model_path=null +decoder.convolutions=false dataset.max_length=196608 \
+ train.pretrained_model_path=null +decoder.convolutions=false dataset.max_length=524288 \
  train.pretrained_safetensors_model_path=null trainer.accumulate_grad_batches=8 \
  \
  +dataset.one_hot=true +dataset.pool=$POOL_VALUE +decoder.bin_size=$POOL_VALUE +dataset.cell_type=DNase \
