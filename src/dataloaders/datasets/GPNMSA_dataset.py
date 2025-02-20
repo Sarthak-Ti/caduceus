@@ -10,6 +10,7 @@ import pandas as pd
 import zarr
 import json
 import os
+import pyBigWig
 
 """
 
@@ -102,6 +103,8 @@ class GPNMSADataset():
         pool_type = 'mean',
         msa_path = None,
         pad_one_hot = 512,
+        phastcons = False,
+        phylop = False,
     ):
         
         self.max_length = max_length
@@ -114,8 +117,8 @@ class GPNMSADataset():
         self.pool = pool
         self.pool_type = pool_type
         self.pad_one_hot = pad_one_hot
-        
-        
+        self.phastcons = phastcons
+        self.phylop = phylop
 
         
         # genome_np = os.path.join(base_path,'data/chrombpnet_test/hg38_tokenized.npz')
@@ -140,6 +143,10 @@ class GPNMSADataset():
         else:
             self.msa_path = msa_path
         # self.msa = zarr.open(msa_path, mode='r')
+        if self.phastcons:
+            self.phastcons_path = '/data1/lesliec/sarthak/data/gpn/hg38.phastCons100way.bw'
+        if self.phylop:
+            self.phylop_path = '/data1/lesliec/sarthak/data/gpn/hg38.phyloP100way.bw'
         
         #also initialize the way we convert to tokenized data
         self.key = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4, '-': 4, 'a': 0, 'c': 1, 'g': 2, 't': 3, 'n': 4}
@@ -307,6 +314,23 @@ class GPNMSADataset():
             seq = torch.LongTensor(seq)
             flip = False
 
+        if self.one_hot:
+            x = seq
+            x_onehot = torch.nn.functional.one_hot(x, num_classes=5).float().reshape(x.shape[0],-1).transpose(1, 0) #5 classes because N or - is its own class, ACGTN in that order!
+            #also reshape to concatenate all the data in that dimension
+            # x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 0) #need to make sure it is the right order, so now is shape 5xseq_len
+            #and we have to stack it!
+            
+            if self.pad_one_hot is not None:
+                tempseq = torch.zeros(self.pad_one_hot, x_onehot.shape[1])
+                tempseq[:x_onehot.shape[0], :] = x_onehot
+                x_onehot = tempseq
+
+            seq = x_onehot
+        else:
+            raise NotImplementedError('Only one hot implemented, not sure how to do it without one hot, cannot do phastcons like this either')
+        
+        #now we append the phastcons labels
         
         if not self.return_target:
             return seq
@@ -337,22 +361,7 @@ class GPNMSADataset():
             targets = targets.mean(dim=1)
             
         
-        if self.one_hot:
-            x = seq
-            x_onehot = torch.nn.functional.one_hot(x, num_classes=5).float().reshape(x.shape[0],-1).transpose(1, 0) #5 classes because N or - is its own class, ACGTN in that order!
-            #also reshape to concatenate all the data in that dimension
-            # x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 0) #need to make sure it is the right order, so now is shape 5xseq_len
-            #and we have to stack it!
-            
-            if self.pad_one_hot is not None:
-                tempseq = torch.zeros(self.pad_one_hot, x_onehot.shape[1])
-                tempseq[:x_onehot.shape[0], :] = x_onehot
-                x_onehot = tempseq
-
-            
-            seq = x_onehot
-        else:
-            raise NotImplementedError('Only one hot implemented, not sure how to do it without one hot')
+        
 
         return seq, targets #seq is size seq_len, targets is 896xnum_targets
 

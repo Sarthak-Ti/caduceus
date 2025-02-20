@@ -20,7 +20,7 @@ Significantly more efficient and faster
 """
 
 base_path = os.path.abspath(__file__).split('sarthak')[0]+'sarthak/'
-print('base_path:',base_path)
+# print('base_path:',base_path)
 
 
 chrom_info= {'chr1': [10000, 248946422],
@@ -266,12 +266,22 @@ class EnformerDataset():
             flip = True
         else:
             flip = False
+        
+        seq = torch.LongTensor(seq)
+        
+        if self.one_hot:
+            x = seq
+            x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 0) #need to make sure it is the right order, so now is shape 4xseq_len
+            if 11 in x:
+                x_onehot[:, x == 11] = 0
+            seq = x_onehot
+        
         if not self.return_target:
-            return torch.LongTensor(seq)
+            return seq
         
         #and gather the data
         targets = self.labels[idx]
-        seq = torch.LongTensor(seq)
+        
         # print(counts)
         targets = torch.FloatTensor(targets)
         if not self.return_CAGE and len(self.labels.shape) == 3: #otherwise we already filtered it
@@ -293,12 +303,12 @@ class EnformerDataset():
             targets = targets.mean(dim=1)
             
         
-        if self.one_hot:
-            x = seq
-            x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 0) #need to make sure it is the right order, so now is shape 4xseq_len
-            if 11 in x:
-                x_onehot[:, x == 11] = 0
-            seq = x_onehot
+        # if self.one_hot:
+        #     x = seq
+        #     x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 0) #need to make sure it is the right order, so now is shape 4xseq_len
+        #     if 11 in x:
+        #         x_onehot[:, x == 11] = 0
+        #     seq = x_onehot
 
         return seq, targets #seq is size seq_len, targets is 896xnum_targets
 

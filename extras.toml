@@ -1,3 +1,9 @@
+New
+export CUDA_HOME='/data1/lesliec/sarthak/caduceus/.pixi/envs/default'
+pip install mamba-ssm[causal-conv1d]==2.1 --no-build-isolation
+pip install flash-attn==2.5.6
+
+Old
 causal-conv1d = "===1.2.0.post2"
 mamba-ssm = "==1.2.0.post1"
 flash-attn = "==2.5.6"

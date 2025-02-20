@@ -191,8 +191,7 @@ class SequenceLightningModule(pl.LightningModule):
                 decoder_cfg[1]['d_output'] = self.dataset.dataset_train.d_output
         except AttributeError:
             pass
-
-
+        
         # Instantiate model
         config_path = self.hparams.model.pop("config_path", None)
         if config_path is not None:
@@ -256,6 +255,11 @@ class SequenceLightningModule(pl.LightningModule):
         self.train_torchmetrics = self.task.train_torchmetrics
         self.val_torchmetrics = self.task.val_torchmetrics
         self.test_torchmetrics = self.task.test_torchmetrics
+        
+        #Finally, we can start tracking time
+        self.start_time = time.time()  # Store start time
+        self.max_runtime = 7 * 24 * 60 * 60  # 7 days in seconds
+        self.epoch_durations = []  # List to track epoch durations
 
     def load_state_dict(self, state_dict, strict=False):
         if self.hparams.train.pretrained_model_state_hook['_name_'] is not None:
@@ -422,12 +426,15 @@ class SequenceLightningModule(pl.LightningModule):
     def on_train_epoch_start(self):
         # Reset training torchmetrics
         self.task._reset_torchmetrics("train")
+        self.epoch_start_time = time.time()  # Start time of the new epoch
 
     # def training_epoch_end(self, outputs):
     #     # Log training torchmetrics
     #     super().training_epoch_end(outputs)
     #     #inherits the training_epoch_end of the parent class, which is the basic pl.lightningmodule.
     #     #we will just comment it out since it doesn't seem to do anything using the basic values, doesn't seem to be called anywhere
+
+    
 
     def on_validation_epoch_start(self):
         # Reset all validation torchmetrics
@@ -437,6 +444,20 @@ class SequenceLightningModule(pl.LightningModule):
     # def validation_epoch_end(self, outputs):
     #     # Log all validation torchmetrics
     #     super().validation_epoch_end(outputs)
+    
+    def on_validation_epoch_end(self):
+        """Track the duration of each epoch."""
+        epoch_time = time.time() - self.epoch_start_time
+        self.epoch_durations.append(epoch_time)
+        #also we want to make sure we have enough time
+        avg_epoch_time = sum(self.epoch_durations) / len(self.epoch_durations)
+
+        elapsed_time = time.time() - self.start_time
+        remaining_time = self.max_runtime - elapsed_time
+
+        if remaining_time < avg_epoch_time:
+            print(f"Not enough time for another epoch! Stopping training. Avg epoch time: {avg_epoch_time:.2f}s")
+            self.trainer.should_stop = True  # Stop training early
 
     def on_test_epoch_start(self):
         # Reset all test torchmetrics
@@ -588,6 +609,7 @@ class SequenceLightningModule(pl.LightningModule):
 
     def train_dataloader(self):
         # print(self.hparams.loader)
+        # print(f'ABOUT TO INITIATE DATALOADER, {self.hparams.loader}')
         if self.hparams.loader.get('num_workers', None) == 1:
             self.hparams.loader['num_workers'] = 0
             print('changing number of workers to 0 (weird fix)')

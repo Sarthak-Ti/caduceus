@@ -7,14 +7,15 @@ from functools import partial
 from typing import Optional, Tuple, Union
 
 import torch
-from mamba_ssm.modules.mamba_simple import Mamba, Block
+from mamba_ssm.modules.mamba_simple import Mamba
+from mamba_ssm.modules.block import Block
 from torch import nn
 from torch.nn import functional as F
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithNoAttention, MaskedLMOutput, SequenceClassifierOutput
 
 try:
-    from mamba_ssm.ops.triton.layernorm import RMSNorm, layer_norm_fn, rms_norm_fn
+    from mamba_ssm.ops.triton.layer_norm import RMSNorm, layer_norm_fn, rms_norm_fn
 except ImportError:
     RMSNorm, layer_norm_fn, rms_norm_fn = None, None, None
 
@@ -54,9 +55,17 @@ def create_block(
         nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_epsilon, **factory_kwargs
     )
     block_cls = RCPSMambaBlock if rcps else Block
+    # print(f"Creating block with d_model={d_model}, mixer_cls={mixer_cls}, norm_cls={norm_cls}, fused_add_norm={fused_add_norm}, residual_in_fp32={residual_in_fp32}")
+    # Creating block with d_model=256, mixer_cls=functools.partial(<class 'caduceus.modeling_caduceus.BiMambaWrapper'>, layer_idx=0, d_state=16, d_conv=4, expand=2, 
+    # dt_rank='auto', dt_min=0.001, dt_max=0.1, dt_init='random', dt_scale=1.0, dt_init_floor=0.0001, conv_bias=True, bias=False, use_fast_path=True, bidirectional=False, 
+    # bidirectional_strategy='add', bidirectional_weight_tie=False, device=None, dtype=None), norm_cls=functools.partial(<class 'mamba_ssm.ops.triton.layer_norm.RMSNorm'>, 
+    # eps=1e-05, device=None, dtype=None), fused_add_norm=True, residual_in_fp32=False
+    # now block has an option to do mlp, so we'll dimply define it as identity so it doesn't do the mlp, uses same functionality in that case!
+     
     block = block_cls(
         d_model,
         mixer_cls,
+        nn.Identity,
         norm_cls=norm_cls,
         fused_add_norm=fused_add_norm,
         residual_in_fp32=residual_in_fp32,
@@ -66,7 +75,8 @@ def create_block(
 
 
 class BiMambaWrapper(nn.Module):
-    """Thin wrapper around Mamba to support bi-directionality."""
+    """Thin wrapper around Mamba to support bi-directionality.
+    If bidirectional is false, then it just returns the output of the forward pass."""
 
     def __init__(
             self,

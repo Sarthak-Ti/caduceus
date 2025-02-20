@@ -6,7 +6,7 @@
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:1
-#SBATCH --job-name=gpnmsa_basic_ohe
+#SBATCH --job-name=gpnmsa_basic_ohe_norcaug
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -24,4 +24,8 @@ pixi run python -m train wandb.group=gpnmsa wandb.name=$SLURM_JOB_NAME experimen
  +decoder.conjoin_train=false +decoder.conjoin_test=false optimizer.lr="1e-3" \
  \
  +decoder.convolutions=false dataset.max_length=196608 trainer.accumulate_grad_batches=8 decoder.d_output=674 \
- dataset.rc_aug=true +model.config.skip_embedding=true
+ dataset.rc_aug=false \
+ +model.config.skip_embedding=true
+#  +model.config.cnn_embedding=true +model.config.cnn_embedding_dim=512 
+#  +model.config.skip_embedding=true
+ 
