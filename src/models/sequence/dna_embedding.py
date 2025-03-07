@@ -320,16 +320,16 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, ad
     return:
         state_dict: dict, update with inflated weights
     """
-
     # consumes prefix from pretrained model, if necessary
+    model = model.model #because we input the whole thing, have to specify what it is!
     torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(
         state_dict, "model."
     )
 
     model_new_params_dict = model.state_dict()
     # print(model.state_dict())
-    # for key in model.state_dict().keys():
-    #     print(key)
+    for key in model.state_dict().keys():
+        print(key)
     # same as in the cCRE_DNase_level_testing.ipynb
     updated_model_state_dict = {}
     
@@ -432,6 +432,57 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, ad
         # note, decoder not included in backbone
         for name, param in model.named_parameters():
             param.requires_grad = False
+
+    # we have updated the new model state dict with pretrained now
+    return updated_model_state_dict
+
+def load_full_model(model, state_dict):
+    """
+
+    Doesn't modify state dict, only allows loading of the full model
+
+    inputs:
+        model: nn.Module, the from 'scratch' model
+        state_dict: dict, from the pretrained weights
+
+    return:
+        state_dict: dict, update with inflated weights
+    """
+    # purposely doesn't consumes prefix from pretrained model, so can get full model
+
+    model_new_params_dict = model.state_dict()
+    updated_model_state_dict = {}
+    
+    # loop through scratch model keys (pretrained may have extra stuff)
+    for key in sorted(model_new_params_dict.keys()):
+        
+        loaded_params = state_dict.get(key, None)
+        # make sure key is in the loaded params first, if not, then print it out
+        # print(loaded_params)
+        
+        if loaded_params is None:
+            # This should never happen, it should be there!
+            #however it isn't there if we for example save something to model.new_embeddings, which is only to be used for adjusting embedding size
+            print("Missing key in pretrained model!", key)
+            raise Exception
+        
+        else:
+            print('key: shape MATCH, loading', key)  # load matched weights #I commented out because I don't want it
+            used_params = loaded_params
+
+        # we need to pass back a state dict with the '.model' prefix!!!!!
+        # key_with_prefix = 'model.' + key
+        updated_model_state_dict[key] = used_params
+
+        # if add_embeddings: #now implemented in the main train.py file
+        #     print("adding embeddings:", key)
+            
+            
+        #     old_vocab = model.state_dict()[key].shape[0]
+        #     old_dim = model.state_dict()[key].shape[1]
+            
+        #     #what we need to do is first save out the extra ones, because they were initialized in a special way
+        #     saved_embeddings = model.state_dict()[key][0:add_embeddings]
 
     # we have updated the new model state dict with pretrained now
     return updated_model_state_dict

@@ -71,4 +71,5 @@ callbacks = {
 
 model_state_hook = {
     'load_backbone': 'src.models.sequence.dna_embedding.load_backbone', #is 'src.models.sequence.long_conv_lm.load_backbone in hyena
+    'load_full_model': 'src.models.sequence.dna_embedding.load_full_model', #loads the full model, including decoder, not just the backbone!
 }

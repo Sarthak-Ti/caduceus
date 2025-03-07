@@ -105,6 +105,7 @@ class GPNMSADataset():
         pad_one_hot = 512,
         phastcons = False,
         phylop = False,
+        human_only = False,
     ):
         
         self.max_length = max_length
@@ -119,6 +120,7 @@ class GPNMSADataset():
         self.pad_one_hot = pad_one_hot
         self.phastcons = phastcons
         self.phylop = phylop
+        self.human_only = human_only
 
         
         # genome_np = os.path.join(base_path,'data/chrombpnet_test/hg38_tokenized.npz')
@@ -222,8 +224,8 @@ class GPNMSADataset():
             self.d_output = 4675 #the non cage data!
         
         if cell_type=='DNase':
-            self.d_output = 674
-            self.keep = np.array([i for i in range(0, 674)])
+            # self.d_output = 674
+            self.keep = np.array(range(674))
         elif isinstance(cell_type,str):
             targets = os.path.join(base_path,'data/enformer/data/human/targets.txt')
             targets = pd.read_csv(targets, sep='\t')
@@ -233,10 +235,10 @@ class GPNMSADataset():
             if not self.return_CAGE:
                 self.keep = self.keep[self.keep < 4675]
                 assert(len(self.keep) > 0)
-            self.d_output = len(self.keep)
+            # self.d_output = len(self.keep)
         elif isinstance(cell_type, list):
             self.keep = np.array(cell_type)
-            self.d_output = len(self.keep)
+            # self.d_output = len(self.keep)
         elif isinstance(cell_type, int):
             raise NotImplementedError('Have to implement this, can\'t open self.labels, need self.keep approach')
             # self.keep = np.array([cell_type])
@@ -271,7 +273,7 @@ class GPNMSADataset():
             idx = len(self) + idx # negative indexing
         
         msa = zarr.open(self.msa_path, mode='r')
-
+        
         row = self.seqs_np[idx]
         chrom = row[0]
         start = row[1]
@@ -291,34 +293,35 @@ class GPNMSADataset():
             rightpad = np.ones((end-chromlen,100))*4
             end = chromlen
         
+        temp_seq = msa[chrom[3:]][start:end]
+        if self.human_only:
+            temp_seq = temp_seq[:, 0:1] #so keeps that last dim
+            leftpad = leftpad[:, 0:1]
+            rightpad = rightpad[:, 0:1]
         
+        arr_as_int = np.frombuffer(temp_seq.tobytes(), dtype=np.uint8)
+        
+        
+        #now reverse complement and map to integers
         if self.rc_aug and coin_flip():
-            temp_seq = msa[chrom[3:]][start:end]
-            arr_as_int = np.frombuffer(temp_seq.tobytes(), dtype=np.uint8)
+            leftpad, rightpad = rightpad, leftpad #do it this way so that we can also use the same flipped padding forphastcons and phylop scores
             mapped_arr = np.take(self.rc_lookup, arr_as_int)
-            seq = mapped_arr.reshape(temp_seq.shape[0], temp_seq.shape[1])
-            seq = np.concatenate([leftpad, seq, rightpad])
-            seq = torch.LongTensor(seq)
-
-            #and flip seqs along the axis 0
-            seq = seq.flip(0)
             flip = True
         else:
             #now we get our data and convert it!
-            temp_seq = msa[chrom[3:]][start:end]
-            arr_as_int = np.frombuffer(temp_seq.tobytes(), dtype=np.uint8)
             mapped_arr = np.take(self.lookup, arr_as_int)
-            seq = mapped_arr.reshape(temp_seq.shape[0], temp_seq.shape[1])
-            seq = np.concatenate([leftpad, seq, rightpad])
-
-            seq = torch.LongTensor(seq)
             flip = False
+        seq = mapped_arr.reshape(temp_seq.shape[0], temp_seq.shape[1])
+        seq = np.concatenate([leftpad, seq, rightpad])
+        if flip:
+            seq = np.flip(seq, axis=0).copy()
 
+        seq = torch.LongTensor(seq)
+        
         if self.one_hot:
             x = seq
             x_onehot = torch.nn.functional.one_hot(x, num_classes=5).float().reshape(x.shape[0],-1).transpose(1, 0) #5 classes because N or - is its own class, ACGTN in that order!
             #also reshape to concatenate all the data in that dimension
-            # x_onehot = torch.nn.functional.one_hot((x-7)%4, num_classes=4).float().transpose(1, 0) #need to make sure it is the right order, so now is shape 5xseq_len
             #and we have to stack it!
             
             if self.pad_one_hot is not None:
@@ -330,7 +333,30 @@ class GPNMSADataset():
         else:
             raise NotImplementedError('Only one hot implemented, not sure how to do it without one hot, cannot do phastcons like this either')
         
-        #now we append the phastcons labels
+        #now we append the phastcons labels, current shape is species_num*5 x length, so append it on axis 0
+        if self.phastcons:
+            phastcons = pyBigWig.open(self.phastcons_path)
+            phastcons_values = np.array(phastcons.values(chrom, start, end))
+            phastcons_values = np.concatenate([leftpad[:,0], phastcons_values, rightpad[:,0]])
+            phastcons_values = torch.FloatTensor(phastcons_values)
+            phastcons_values[torch.isnan(phastcons_values)] = 0
+            if flip:
+                phastcons_values = phastcons_values.flip(0)
+            #and now concatenate
+            seq = torch.cat([seq, phastcons_values.view(1,-1)], dim=0)
+            phastcons.close()
+        
+        if self.phylop:
+            phylop = pyBigWig.open(self.phylop_path)
+            phylop_values = np.array(phylop.values(chrom, start, end))
+            phylop_values = np.concatenate([leftpad[:,0], phylop_values, rightpad[:,0]])
+            phylop_values = torch.FloatTensor(phylop_values)
+            phylop_values[torch.isnan(phylop_values)] = 0
+            if flip:
+                phylop_values = phylop_values.flip(0)
+            #and now concatenate
+            seq = torch.cat([seq, phylop_values.view(1,-1)], dim=0)
+            phylop.close()
         
         if not self.return_target:
             return seq
@@ -377,5 +403,9 @@ out[0] #the input data tokenized
 #if you want to do it for a different dataset (my less processed one)
 dataset = d.GPNMSADataset('train', 196608, cell_type='DNase', one_hot=True, data_path='/data1/lesliec/sarthak/data/borzoi/outputs/hg38/labels.zarr', pool = 64)
 zarr_open = zarr.open('/data1/lesliec/sarthak/data/borzoi/outputs/hg38/labels.zarr', mode='r')
+
+#if you want to just get the sequences
+dataset = d.GPNMSADataset('train', 196608, cell_type='DNase', one_hot=True, data_path='/data1/lesliec/sarthak/data/borzoi/outputs/hg38/labels.zarr', pool = 64, return_target = False)
+
 '''
 

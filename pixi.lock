@@ -578,7 +578,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/yaml-0.2.5-h7f98852_2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/yaml-cpp-0.8.0-h59595ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.9.3-py311h459d7ec_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/zarr-3.0.1-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/zarr-3.0.4-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zeromq-4.3.5-h59595ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-3.17.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda
@@ -1510,8 +1510,6 @@ packages:
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-cccl-12.4.127-0.tar.bz2
   sha256: 0818bede93df28b2ab7993b591f73f6e00a680145011a4a4ad8c3fb10f0c9df2
   md5: 90bcbf580038ee64d11555ed97d0eab0
-  arch: x86_64
-  platform: linux
   size: 1460617
   timestamp: 1710541403303
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-cudart-11.8.89-0.tar.bz2
@@ -1525,8 +1523,6 @@ packages:
   depends:
   - cuda-cccl
   - cuda-cudart >=11.8.89
-  arch: x86_64
-  platform: linux
   size: 1137073
   timestamp: 1663787238388
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-cupti-11.8.87-0.tar.bz2
@@ -1537,8 +1533,6 @@ packages:
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-driver-dev-12.4.127-0.tar.bz2
   sha256: 4cca33c1d25c32e14d9af3a600f6876939f31f0322ebe3011008cd3f814fd8f6
   md5: 309fe813e7d4be5b6e317e8adc5ed4f4
-  arch: x86_64
-  platform: linux
   size: 18557
   timestamp: 1710544195085
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-libraries-11.8.0-0.tar.bz2
@@ -1574,8 +1568,6 @@ packages:
   - libcusparse-dev >=11.7.5.86
   - libnpp-dev >=11.8.0.86
   - libnvjpeg-dev >=11.9.0.86
-  arch: x86_64
-  platform: linux
   size: 1571
   timestamp: 1664475500133
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-nvcc-11.8.89-0.tar.bz2
@@ -1593,8 +1585,6 @@ packages:
   md5: 953e857784524bf97f58a478cb05f2ac
   depends:
   - cuda-nvrtc >=11.8.89
-  arch: x86_64
-  platform: linux
   size: 17858592
   timestamp: 1663786894532
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-nvtx-11.8.86-0.tar.bz2
@@ -1605,8 +1595,6 @@ packages:
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-profiler-api-12.4.127-0.tar.bz2
   sha256: 18bca2d9f35b3f1e9b1924bdcf1424077346487f553c25ed5cade7598a9129b3
   md5: 5a12f7616c05770a6df75dd585b9b608
-  arch: x86_64
-  platform: linux
   size: 19274
   timestamp: 1710544073179
 - conda: https://conda.anaconda.org/nvidia/linux-64/cuda-runtime-11.8.0-0.tar.bz2
@@ -3479,8 +3467,6 @@ packages:
   md5: d2097d064d1437dbbcce39c3e8018a4e
   depends:
   - libcublas >=11.11.3.6
-  arch: x86_64
-  platform: linux
   size: 413253930
   timestamp: 1662499317965
 - conda: https://conda.anaconda.org/nvidia/linux-64/libcufft-10.9.0.58-0.tar.bz2
@@ -3493,8 +3479,6 @@ packages:
   md5: bd0ef1722efed6b4d689043a1bbd72fc
   depends:
   - libcufft >=10.9.0.58
-  arch: x86_64
-  platform: linux
   size: 289240757
   timestamp: 1661545712353
 - conda: https://conda.anaconda.org/nvidia/linux-64/libcufile-1.8.1.2-0.tar.bz2
@@ -3507,8 +3491,6 @@ packages:
   md5: 8bb837551ec20660ea27ce3355b89dcf
   depends:
   - libcufile >=1.8.1.2
-  arch: x86_64
-  platform: linux
   size: 14908
   timestamp: 1698278236219
 - conda: https://conda.anaconda.org/nvidia/linux-64/libcurand-10.3.4.107-0.tar.bz2
@@ -3521,8 +3503,6 @@ packages:
   md5: a019f661d2ef3ae00ca1542417d1f43d
   depends:
   - libcurand >=10.3.4.107
-  arch: x86_64
-  platform: linux
   size: 459866
   timestamp: 1700684205374
 - conda: https://conda.anaconda.org/conda-forge/linux-64/libcurl-8.8.0-hca28451_0.conda
@@ -3551,8 +3531,6 @@ packages:
   md5: eef8b2209666925de40dc52dc2bd0036
   depends:
   - libcusolver >=11.4.1.48
-  arch: x86_64
-  platform: linux
   size: 69542891
   timestamp: 1661488763689
 - conda: https://conda.anaconda.org/nvidia/linux-64/libcusparse-11.7.5.86-0.tar.bz2
@@ -3565,8 +3543,6 @@ packages:
   md5: e0c8805b9b08087d1cce37bcc270a3e4
   depends:
   - libcusparse >=11.7.5.86
-  arch: x86_64
-  platform: linux
   size: 377165256
   timestamp: 1661489561708
 - conda: https://conda.anaconda.org/conda-forge/linux-64/libdeflate-1.18-h0b41bf4_0.conda
@@ -3999,8 +3975,6 @@ packages:
   md5: dde377399a27bb87e124db9c8b898e32
   depends:
   - libnpp >=11.8.0.86
-  arch: x86_64
-  platform: linux
   size: 151472361
   timestamp: 1661489433906
 - conda: https://conda.anaconda.org/conda-forge/linux-64/libnsl-2.0.1-hd590300_0.conda
@@ -4032,8 +4006,6 @@ packages:
   md5: 3fa3184a0180608546e54934be2e4a26
   depends:
   - libnvjpeg >=11.9.0.86
-  arch: x86_64
-  platform: linux
   size: 2166145
   timestamp: 1661545917152
 - conda: https://conda.anaconda.org/conda-forge/linux-64/libopus-1.3.1-h7f98852_1.tar.bz2
@@ -5513,6 +5485,7 @@ packages:
   - perl-parent
   - perl-test-nowarnings 1.06.*
   license: GPL
+  purls: []
   size: 122588
   timestamp: 1684142551388
 - conda: https://conda.anaconda.org/conda-forge/noarch/perl-common-sense-3.75-pl5321hd8ed1ab_0.tar.bz2
@@ -5543,6 +5516,7 @@ packages:
   - perl >=5.32.1,<6.0a0 *_perl5
   - perl-pathtools
   license: perl_5
+  purls: []
   size: 44558
   timestamp: 1649753516996
 - conda: https://conda.anaconda.org/conda-forge/noarch/perl-constant-1.33-pl5321hd8ed1ab_0.tar.bz2
@@ -5597,6 +5571,7 @@ packages:
   - perl >=5.32.1,<6.0a0 *_perl5
   - perl-encode
   license: perl_5
+  purls: []
   size: 13535
   timestamp: 1642625784077
 - conda: https://conda.anaconda.org/conda-forge/noarch/perl-exporter-5.74-pl5321hd8ed1ab_0.tar.bz2
@@ -5636,6 +5611,7 @@ packages:
   depends:
   - perl >=5.32.1,<6.0a0 *_perl5
   license: perl_5
+  purls: []
   size: 5808
   timestamp: 1642408453092
 - conda: https://conda.anaconda.org/conda-forge/noarch/perl-file-temp-0.2304-pl5321hd8ed1ab_0.tar.bz2
@@ -5674,6 +5650,7 @@ packages:
   - perl-http-message
   - perl-uri
   license: perl_5
+  purls: []
   size: 69558
   timestamp: 1684138502782
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-html-tagset-3.20-pl5321hdfd78af_4.tar.bz2
@@ -5682,6 +5659,7 @@ packages:
   depends:
   - perl >=5.32.1,<6.0a0 *_perl5
   license: unknown
+  purls: []
   size: 13935
   timestamp: 1642419522073
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-html-template-2.97-pl5321hdfd78af_2.tar.bz2
@@ -5692,6 +5670,7 @@ packages:
   - perl-cgi
   - perl-scalar-list-utils
   license: perl_5
+  purls: []
   size: 47744
   timestamp: 1642768991631
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-html-tree-5.07-pl5321hdfd78af_2.tar.bz2
@@ -5704,6 +5683,7 @@ packages:
   - perl-html-parser
   - perl-html-tagset
   license: perl_5
+  purls: []
   size: 133125
   timestamp: 1643027051803
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-http-date-6.06-pl5321hdfd78af_0.tar.bz2
@@ -5715,6 +5695,7 @@ packages:
   - perl-time-local >=1.28
   - perl-timedate
   license: perl_5
+  purls: []
   size: 14585
   timestamp: 1688694562206
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-http-message-6.36-pl5321hdfd78af_0.tar.bz2
@@ -5736,6 +5717,7 @@ packages:
   - perl-uri
   - perl-url-encode
   license: perl_5
+  purls: []
   size: 55579
   timestamp: 1644924341289
 - conda: https://conda.anaconda.org/conda-forge/linux-64/perl-inc-latest-0.500-pl5321ha770c72_0.conda
@@ -5754,6 +5736,7 @@ packages:
   depends:
   - perl >=5.32.1,<6.0a0 *_perl5
   license: perl_5
+  purls: []
   size: 16396
   timestamp: 1644443478492
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-json-4.10-pl5321hdfd78af_0.tar.bz2
@@ -5763,6 +5746,7 @@ packages:
   - perl >=5.32.1,<6.0a0 *_perl5
   - perl-json-xs <3
   license: perl_5
+  purls: []
   size: 57107
   timestamp: 1665505424282
 - conda: https://conda.anaconda.org/bioconda/linux-64/perl-json-xs-2.34-pl5321h4ac6f70_6.tar.bz2
@@ -5775,6 +5759,7 @@ packages:
   - perl-common-sense
   - perl-types-serialiser
   license: unknown
+  purls: []
   size: 67113
   timestamp: 1684139802690
 - conda: https://conda.anaconda.org/conda-forge/noarch/perl-log-log4perl-1.56-pl5321hd8ed1ab_0.tar.bz2
@@ -5797,6 +5782,7 @@ packages:
   - perl-carp
   - perl-exporter
   license: perl_5
+  purls: []
   size: 24193
   timestamp: 1642711023
 - conda: https://conda.anaconda.org/bioconda/linux-64/perl-math-cdf-0.1-pl5321h031d066_9.tar.bz2
@@ -5806,6 +5792,7 @@ packages:
   - libgcc-ng >=12
   - perl >=5.32.1,<5.33.0a0 *_perl5
   license: Public Domain
+  purls: []
   size: 71151
   timestamp: 1684220155221
 - conda: https://conda.anaconda.org/conda-forge/linux-64/perl-mime-base64-3.16-pl5321h166bdaf_0.tar.bz2
@@ -5881,6 +5868,7 @@ packages:
   - perl-sys-info-base
   - perl-sys-info-driver-linux
   license: perl_5
+  purls: []
   size: 10585
   timestamp: 1643390306016
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-sys-info-base-0.7807-pl5321hdfd78af_1.tar.bz2
@@ -5890,6 +5878,7 @@ packages:
   - perl >=5.32.1,<6.0a0 *_perl5
   - perl-text-template-simple
   license: perl_5
+  purls: []
   size: 21779
   timestamp: 1642586188407
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-sys-info-driver-linux-0.7905-pl5321hdfd78af_1.tar.bz2
@@ -5901,6 +5890,7 @@ packages:
   - perl-sys-info-base
   - perl-unix-processors
   license: perl_5
+  purls: []
   size: 21243
   timestamp: 1643067666711
 - conda: https://conda.anaconda.org/conda-forge/linux-64/perl-test-fatal-0.016-pl5321ha770c72_0.tar.bz2
@@ -5938,6 +5928,7 @@ packages:
   - perl >=5.32.1,<6.0a0 *_perl5
   - perl-digest-md5
   license: perl_5
+  purls: []
   size: 52514
   timestamp: 1642584265274
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-time-local-1.35-pl5321hdfd78af_0.tar.bz2
@@ -5950,6 +5941,7 @@ packages:
   - perl-exporter
   - perl-parent
   license: perl_5
+  purls: []
   size: 13866
   timestamp: 1682807403407
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-timedate-2.33-pl5321hdfd78af_2.tar.bz2
@@ -5958,6 +5950,7 @@ packages:
   depends:
   - perl >=5.32.1,<6.0a0 *_perl5
   license: perl_5
+  purls: []
   size: 32123
   timestamp: 1642539941730
 - conda: https://conda.anaconda.org/conda-forge/linux-64/perl-try-tiny-0.31-pl5321ha770c72_0.tar.bz2
@@ -5977,6 +5970,7 @@ packages:
   - perl >=5.32.1,<6.0a0 *_perl5
   - perl-common-sense
   license: perl_5
+  purls: []
   size: 13136
   timestamp: 1644512391683
 - conda: https://conda.anaconda.org/conda-forge/linux-64/perl-unix-processors-2.046-pl5321h7f98852_1001.tar.bz2
@@ -6008,6 +6002,7 @@ packages:
   depends:
   - perl >=5.32.1,<5.33.0a0 *_perl5
   license: perl_5
+  purls: []
   size: 15042
   timestamp: 1643319772158
 - conda: https://conda.anaconda.org/conda-forge/noarch/perl-xml-namespacesupport-1.12-pl5321hd8ed1ab_0.tar.bz2
@@ -6080,6 +6075,7 @@ packages:
   - perl-xml-sax
   - perl-xml-sax-expat
   license: perl_5
+  purls: []
   size: 50461
   timestamp: 1642640011052
 - conda: https://conda.anaconda.org/bioconda/noarch/perl-yaml-1.30-pl5321hdfd78af_0.tar.bz2
@@ -6089,6 +6085,7 @@ packages:
   depends:
   - perl >=5.32.1,<6.0a0 *_perl5
   license: perl_5
+  purls: []
   size: 43572
   timestamp: 1644444148032
 - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.8.0-pyh1a96a4e_2.tar.bz2
@@ -6445,6 +6442,8 @@ packages:
   - zlib
   license: MIT
   license_family: MIT
+  purls:
+  - pkg:pypi/pybigwig?source=hash-mapping
   size: 97170
   timestamp: 1717609478889
 - conda: https://conda.anaconda.org/conda-forge/noarch/pybind11-abi-4-hd8ed1ab_3.tar.bz2
@@ -8479,13 +8478,13 @@ packages:
   - pkg:pypi/yarl?source=hash-mapping
   size: 121561
   timestamp: 1701168730543
-- conda: https://conda.anaconda.org/conda-forge/noarch/zarr-3.0.1-pyhd8ed1ab_1.conda
-  sha256: 9a4def237d7921764c5d0fb22bc3021753592b1037be1b8309574371389642d7
-  md5: 03153ba3563632ab2acd5514616dd68a
+- conda: https://conda.anaconda.org/conda-forge/noarch/zarr-3.0.4-pyhd8ed1ab_0.conda
+  sha256: b2901d6ed8286123285a642ba191c0435c7c7e300a6c081398b3194438365fed
+  md5: 53d9e51678e67722cdd6b824e543048e
   depends:
   - crc32c
   - donfig >=0.8
-  - numcodecs >=0.14.1
+  - numcodecs >=0.14
   - numpy >=1.25
   - packaging >=22.0
   - python >=3.11
@@ -8496,8 +8495,8 @@ packages:
   license_family: MIT
   purls:
   - pkg:pypi/zarr?source=hash-mapping
-  size: 182244
-  timestamp: 1738265737276
+  size: 201534
+  timestamp: 1740372513696
 - conda: https://conda.anaconda.org/conda-forge/linux-64/zeromq-4.3.5-h59595ed_0.conda
   sha256: 53bf2a18224406e9806adb3b270a2c8a028aca0c89bd40114a85d6446f5c98d1
   md5: 8851084c192dbc56215ac4e3c9aa30fa

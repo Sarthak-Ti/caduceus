@@ -170,7 +170,7 @@ class Evals():
             results.append(x.cpu().numpy().astype(np.float16))
         return np.concatenate(results, axis=0)
     
-    def evaluate_zarr(self, zarr_name, batch_size=8, overwrite = False):
+    def evaluate_zarr(self, zarr_name, batch_size=8, overwrite = False, num_workers=0):
         # raise NotImplementedError('Zarr evaluation not implemented yet. will do what evaluation does but save it to zarr by making new one and saving it in evals')
         #this will evaluate it and then saves it to a zarr file
         compression = Blosc(cname='zlib', clevel=9, shuffle=Blosc.BITSHUFFLE)
@@ -183,18 +183,23 @@ class Evals():
         if overwrite:
             mode = 'w'
             print('overwriting zarr file')
+        elif not os.path.exists(zarr_name):
+            mode = 'w'
+            print('creating new zarr file')
         else:
             mode = 'r+'
-        root = zarr.open(zarr_name, mode=mode)
+            print('overwriting zarr file')
+            # raise ValueError('Zarr file already exists, set overwrite to True to overwrite')
+        root = zarr.open(zarr_name, mode=mode, zarr_format=2)
         
         try:
-            root.create_array('evals', shape=(len(self.dataset), *label.shape), chunks=(1, *label.shape), dtype='f2', compressors=compression)
+            root.create_array('evals', shape=(len(self.dataset), *label.shape), chunks=(1, *label.shape), dtype='f2', compressor=compression)
         except zarr.errors.ContainsArrayError:
             print("eval Array already exists")
             assert root['evals'].shape == (len(self.dataset), *label.shape), f"Shape mismatch: {root['evals'].shape} vs {(len(self.dataset), *label.shape)}"
         
         #now make the data loader
-        loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
         #now loop through the data and save it to the zarr file
         batch_idx = 0
         with torch.no_grad():
@@ -216,7 +221,7 @@ class Evals():
         
         Args:
             zarr_name (str): the name of the zarr file to save the correlations to
-            axis (int): the axis to correlate
+            axis (int): the axis to correlate, the axis is the axis of the dataset output
             corr_type (str): the type of correlation to use, either 'spearman' or 'pearson'
             pool_size (int): the size of the pooling to do, if None, then no pooling is done
             original_pool (int): the original pooling size, if None, then no pooling is done

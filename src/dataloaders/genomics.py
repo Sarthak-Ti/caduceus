@@ -1083,7 +1083,8 @@ class GPNMSALoader(HG38): #for the msa gpn models
                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
                 fast_forward_epochs=None, fast_forward_batches=None, data_path=None, return_CAGE=False,
                 cell_type = None, kmer_len=None, one_hot=False, pool=False,
-                msa_path = None, pad_one_hot = 512, *args, **kwargs):
+                msa_path = None, pad_one_hot = 512, phastcons = False, phylop = False, human_only = False,
+                *args, **kwargs):
         self.dataset_name = dataset_name
         self.dest_path = dest_path
         self.tokenizer_name = tokenizer_name
@@ -1114,6 +1115,10 @@ class GPNMSALoader(HG38): #for the msa gpn models
         self.pool = pool
         self.msa_path = msa_path
         self.pad_one_hot = pad_one_hot
+        self.phastcons = phastcons
+        self.phylop = phylop
+        self.human_only = human_only
+        
         
         #just print all the options
         # print(f"dataset_name: {dataset_name}, dest_path: {dest_path}, tokenizer_name: {tokenizer_name}, d_output: {d_output}, rc_aug: {rc_aug}, max_length: {max_length}, use_padding: {use_padding}, max_length_val: {max_length_val}, max_length_test: {max_length_test}, padding_side: {padding_side}, return_mask: {return_mask}, val_ratio: {val_ratio}, val_split_seed: {val_split_seed}, add_eos: {add_eos}, detokenize: {detokenize}, val_only: {val_only}, batch_size: {batch_size}, batch_size_eval: {batch_size_eval}, num_workers: {num_workers}, shuffle: {shuffle}, pin_memory: {pin_memory}, drop_last: {drop_last}, fault_tolerant: {fault_tolerant}, ddp: {ddp}, fast_forward_epochs: {fast_forward_epochs}, fast_forward_batches: {fast_forward_batches}, data_path: {data_path}, return_CAGE: {return_CAGE}, cell_type: {cell_type}, kmer_len: {kmer_len}, one_hot: {one_hot}, pool: {pool}")
@@ -1163,6 +1168,9 @@ class GPNMSALoader(HG38): #for the msa gpn models
                                 pool=self.pool,
                                 msa_path = self.msa_path,
                                 pad_one_hot = self.pad_one_hot,
+                                phastcons = self.phastcons,
+                                phylop = self.phylop,
+                                human_only = self.human_only,
             )
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])
         ] #uses dataset class and makes a train and validation using the basic loader

@@ -262,15 +262,26 @@ class SequenceLightningModule(pl.LightningModule):
         self.epoch_durations = []  # List to track epoch durations
 
     def load_state_dict(self, state_dict, strict=False):
+        # print(state_dict.keys(),'\n',sep='\n')
+        #this part is where you check to see if you have some additional options, then to just load those parts for example
+        #but if you want tl load the full thing, can set to null
+        #will call your model_state_hook, which is usually dna_embedding in sequence, and the load_backbone function
+        # inside = "decoder.0.output_transform.weight" in state_dict.keys()
+        # print('decoder in state dict:', inside)
+
         if self.hparams.train.pretrained_model_state_hook['_name_'] is not None:
             model_state_hook = utils.instantiate(
                 registry.model_state_hook,
                 self.hparams.train.pretrained_model_state_hook.copy(),
                 partial=True,
             )
-            state_dict = model_state_hook(self.model, state_dict)
+            state_dict = model_state_hook(self, state_dict) #by default this will not load the decoder, as we go through the keys in the model itself!!
+
+        # inside = "decoder.0.output_transform.weight" in state_dict.keys()
+        # print('decoder in state dict:', inside)
+        # print('RUNNING THIS LOAD STATE DICT FUNCTION!!','','','','','','','','','','','',sep='\n')
         # print(self.model.lm_head.weight.shape) #this is the wrong shape, could find some way to modify it here
-        log.info("Custom load_state_dict function is running.")
+        log.info("Custom load_state_dict function is running. Only backbone is loaded")
         # print("State dict keys:", state_dict.keys())
         # print(state_dict['model.backbone.embeddings.word_embeddings.weight'].shape)
         # print(state_dict['model.lm_head.weight'].shape)
@@ -428,13 +439,108 @@ class SequenceLightningModule(pl.LightningModule):
         self.task._reset_torchmetrics("train")
         self.epoch_start_time = time.time()  # Start time of the new epoch
 
+        # print("=== Debug: Checking model state shapes ===")
+        # #we will now add in a mini test to make sure all the keys and things match up
+        # checkpoint = torch.load(self.hparams.train.ckpt, map_location="cpu")
+        
+        # if "state_dict" not in checkpoint:
+        #     print("No 'state_dict' found in checkpoint.")
+        #     return
+        
+        # # torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(
+        # #     checkpoint["state_dict"], "model."
+        # # )
+        
+        # ckpt_state_dict = checkpoint["state_dict"]
+        # # current_state_dict = self.model.state_dict()
+        # # decoder_state_dict = self.decoder.state_dict()
+        # # current_state_dict.update(decoder_state_dict)
+        # current_state_dict = self.state_dict()
+
+        # # Compare keys in checkpoint with current model
+        # for key in ckpt_state_dict:
+        #     if key in current_state_dict:
+        #         ckpt_shape = ckpt_state_dict[key].shape
+        #         current_shape = current_state_dict[key].shape
+        #         if ckpt_shape != current_shape:
+        #             print(f"Mismatch for '{key}': checkpoint shape {ckpt_shape} vs current shape {current_shape}")
+        #     else:
+        #         print(f"Key '{key}' found in checkpoint but not in current model.")
+
+        # for key in current_state_dict:
+        #     if key not in ckpt_state_dict:
+        #         print(f"Key '{key}' found in current model but not in checkpoint.")
+                
+        # optimizer_state_dict_current = self.trainer.optimizers[0].state_dict()['state']  # Assumes a single optimizer
+        # optimizer_state_dict = checkpoint["optimizer_states"][0]['state']  # Assumes a single optimizer
+        # # print('amount of optimizers:', len(self.trainer.optimizers)) #both match at 1
+        # # print('amount of optimizer states:', len(checkpoint['optimizer_states']))
+        # # opt_state = optimizer.state_dict()["state"]
+        # # print(opt_state.keys()) #0 to 274
+
+        # # print(len(optimizer_state_dict))
+        # # print(len(optimizer.state_dict()['state']))
+
+        # # Let's now loop over the optimizer states and compare
+
+        # print("=== Debug: Checking optimizer state shapes (using param group ordering) ===")
+        # for i in range(len(optimizer_state_dict)):
+        #     # print(f"Parameter state dict index {i}")
+        #     # The optimizer state dict keys might be indices matching the order in param_list
+        #     if i in optimizer_state_dict_current and i in optimizer_state_dict:
+        #         #make sure the shapes are the same
+        #         shape_current = optimizer_state_dict_current[i]['exp_avg'].shape
+        #         shape_ckpt = optimizer_state_dict[i]['exp_avg'].shape
+        #         if shape_current != shape_ckpt:
+        #             print(f"Mismatch for 'exp_avg': current shape {shape_current} vs checkpoint shape {shape_ckpt} in index {i}")
+        #         shape_current = optimizer_state_dict_current[i]['exp_avg_sq'].shape
+        #         shape_ckpt = optimizer_state_dict[i]['exp_avg_sq'].shape
+        #         if shape_current != shape_ckpt:
+        #             print(f"Mismatch for 'exp_avg_sq': current shape {shape_current} vs checkpoint shape {shape_ckpt} in index {i}")
+        #         shape_current = optimizer_state_dict_current[i]['step'].shape
+        #         shape_ckpt = optimizer_state_dict[i]['step'].shape
+        #         if shape_current != shape_ckpt:
+        #             print(f"Mismatch for 'step': current shape {shape_current} vs checkpoint shape {shape_ckpt} in index {i}")
+        #     else:
+        #         print(f"No optimizer state found for parameter index {i}")
+
     # def training_epoch_end(self, outputs):
     #     # Log training torchmetrics
     #     super().training_epoch_end(outputs)
     #     #inherits the training_epoch_end of the parent class, which is the basic pl.lightningmodule.
     #     #we will just comment it out since it doesn't seem to do anything using the basic values, doesn't seem to be called anywhere
 
-    
+    def on_before_optimizer_step(self, optimizer):
+        # return
+        # print('doing this before optimizer step')
+        # print(optimizer) #adamw optimizer with the groups, in this example 2
+        # print(f"\n=== Before optimizer step at global step {self.trainer.global_step} ===")
+
+        #this is a way to test to see if there's issues with loading of the checkpoint and making sure the optimizer matches
+        if self.trainer.global_step == 0:
+            print("Skipping first step. no optimizer variables yet")
+            return
+        param_list = optimizer.param_groups[0]['params']
+        
+        optimizer_state_dict = optimizer.state_dict()['state']
+
+        for i, param in enumerate(param_list):
+            if param.grad is None:
+                continue
+
+            # Log parameter shape and gradient shape
+            if param.shape != param.grad.shape:
+                print(f"Param index {i} | Param shape: {param.shape}, Grad shape: {param.grad.shape}") #this should obviously match, I don't know why it wouldn't...
+
+            param_state = optimizer_state_dict[i]
+            exp_avg = param_state.get('exp_avg', None)
+            if exp_avg is not None:
+                # print(f"  exp_avg shape:   {exp_avg.shape}")
+                if exp_avg.shape != param.grad.shape:
+                    print("  !!! MISMATCH: exp_avg shape does not match grad shape !!!")
+                    print(f"  Param index {i} | Param shape: {param.shape}, Grad shape: {param.grad.shape}, exp_avg shape: {exp_avg.shape}")
+            else:
+                print("  No exp_avg state found.")
 
     def on_validation_epoch_start(self):
         # Reset all validation torchmetrics
@@ -853,60 +959,6 @@ def train(config):
             #print(f"in_proj weights tied: {in_proj_tied}"). returns true, same for out_proj
 
         model.load_state_dict(state_dict, strict=config.train.pretrained_model_strict_load)
-        
-    
-    # print(model)
-    #below is a hack to access the embeddings, we will save it out once, then can randomly access it
-    #set seed, so should be repeatable, and honestly not the worst thing, just grabbing them all
-    #you set the ignore_embeddings to true, and then you can access the embeddings and save them out
-    # embeddings = model.model.backbone.embeddings.word_embeddings
-    # #and save them out
-    # torch.save(embeddings, '/data/leslie/sarthak/data/saved_embeddings.pt')
-    # import sys
-    # sys.exit()
-    
-                
-    # word_embeddings_layer = self.model.backbone.embeddings.word_embeddings #this accesses the embeddings
-    # print(self.hparams.model) #dict of the stuff under model in the experiment
-    # print(self.hparams.train) # this is what we need to decide to add embeddings or not
-    # print("Model:", self.model)
-    # print(word_embeddings_layer) #class Embedding(20,128), we know how to modify that and access the embeddings
-
-    #note that this approach is not great, as it just uses the already saved embeddings. terrible coding practice, not flexible at all
-    # '''A hack to ensure that we can add embeddings to the modle while keeping the old embeddings
-    # This approach is useful to increase the vocabulary size of the model
-    # No longer used, as the embeddings don't really matter, can be retrained, but the option remains
-    # Requres saving out the old embeddings manually, then it loads them in here
-    # Also, we have a better method below, where we don't need this anymore
-    # Actually this method is wrong, so we will be taking it out and commenting it, not useful!!'''
-    # if config.train['pretrained_model_state_hook']['add_embeddings']:
-    #     # keep = config.train['pretrained_model_state_hook']['add_embeddings']
-    #     #we add the number of embeddings equal to the model
-    #     original_embeddings = model.model.backbone.embeddings.word_embeddings
-    #     # new_vocab_size = original_embeddings.num_embeddings + add_embeddings
-    #     # new_embedding_layer = torch.nn.Embedding(new_vocab_size, original_embeddings.embedding_dim)
-    #     # nn.init.normal_(module.weight, std=initializer_range) #no need to use since we grabbed their values
-    #     saved_embeddings = torch.load('/data/leslie/sarthak/data/saved_embeddings.pt')
-    #     saved_embeddings.weight.data[:12] = original_embeddings.weight.data[:12] #because it's set by what was saved
-    #     model.model.backbone.embeddings.word_embeddings = saved_embeddings
-    #     print(saved_embeddings)
-    
-    # import sys
-    # sys.exit()
-    #we will now test to see if our data matches
-    # ic(model.model.backbone.embeddings.word_embeddings)
-    #now load in embeddings with torch
-    # old = torch.load('/data/leslie/sarthak/data/saved_embeddings.pt') #based on wrong ones so does give false, but ours is correct
-    # ic(old)
-    #and now make sure that all of it is the same
-    # weights1 = model.model.backbone.embeddings.word_embeddings.weight.data[:12]
-    # weights2 = old.weight.data[:12]
-    # a = ic(torch.allclose(weights1.detach().cpu(), weights2.detach().cpu()))
-    # ic(a)
-    #save out the new embeddings
-    # torch.save(model.model.backbone.embeddings.word_embeddings, '/data/leslie/sarthak/data/saved_embeddings_new.pt')
-    # import sys
-    # sys.exit()
 
     # Run initial validation epoch (useful for debugging, fine-tuning)
     if config.train.validate_at_start:
@@ -916,9 +968,14 @@ def train(config):
     log.info(f'{config.train.ckpt=} {fsspec_exists(config.train.ckpt)=}')
     # if config.train.get("compile_model", False):
     #     model = torch.compile(model, mode="reduce-overhead")
+    # print(model)
     if config.train.ckpt is not None and fsspec_exists(config.train.ckpt): #makes sure it's a real path!
         print('restoring checkpoint!!')
         trainer.fit(model, ckpt_path=config.train.ckpt)
+    elif config.train.get("weights_only_ckpt", None) is not None:
+        checkpoint = torch.load(config.train.weights_only_ckpt, map_location='cpu')
+        model.load_state_dict(checkpoint['state_dict'], strict=True)
+        trainer.fit(model)
     else:
         trainer.fit(model)
 

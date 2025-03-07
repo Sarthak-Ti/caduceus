@@ -95,16 +95,3 @@ train:
   gpu_mem: ${eval:"round(float(__import__('subprocess').check_output('nvidia-smi -i 0 --query-gpu=memory.total --format=csv,noheader,nounits', shell=True).strip().decode()) / 1000)"}
   seed: 2222
   global_batch_size: ${dataset.batch_size}
-  # pretrained_model_path: /data/leslie/sarthak/caduceus/caduceus-ps_seqlen-131k_d_model-256_n_layer-16/weights.ckpt #the path for the fine tuned model
-  # pretrained_safetensors_model_path: /data/leslie/sarthak/caduceus/caduceus-ps_seqlen-131k_d_model-256_n_layer-16/model.safetensors #the path for the fine tuned model
-  pretrained_model_strict_load: False  # false allows encoder/decoder to be used if new model uses it, which downstream fineituning does
-  pretrained_model_state_hook: #note all of these are passed to the load_backbone function
-    _name_: load_backbone
-    freeze_backbone: false  # first try we just use this
-    ignore_head: true #in our case we want to make sure this is true
-    add_embeddings: false #initially was 4
-    ignore_embeddings: false #tells it to reset embeddings if true, completely reinitializes them
-    # load_old_embedding: 12 #tells it to load the old embeddings from the pretrained model, then to add new ones for new tokens.
-    # keeps the number of embeddings that you tell it to keep, and adds new ones for new tokens, the new amount is the difference.
-    #between this number and the number in the config.dataset
-  #bias model chrombpnet_model_1000/models/bias_model_scaled.h5
