@@ -23,7 +23,7 @@ class CorrectAggregatedMetric(Metric):
         self.add_state("denominator", default=torch.tensor(0.0), dist_reduce_fx="sum")
 
     def _update(self, numerator, denominator, preds, y) -> tuple:
-        raise NotImplemented
+        raise NotImplementedError
 
     def update(self, logits: torch.Tensor, y: torch.Tensor):
         # update metric states
@@ -302,8 +302,8 @@ def mse(outs, y, len_batch=None):
         # Computes the loss of the first `lens` items in the batches
         # TODO document the use case of this
         mask = torch.zeros_like(outs, dtype=torch.bool)
-        for i, l in enumerate(len_batch):
-            mask[i, :l, :] = 1
+        for i, lens in enumerate(len_batch):
+            mask[i, :lens, :] = 1
         outs_masked = torch.masked_select(outs, mask)
         y_masked = torch.masked_select(y, mask)
         return F.mse_loss(outs_masked, y_masked)
@@ -324,8 +324,8 @@ def mae(outs, y, len_batch=None):
     else:
         # Computes the loss of the first `lens` items in the batches
         mask = torch.zeros_like(outs, dtype=torch.bool)
-        for i, l in enumerate(len_batch):
-            mask[i, :l, :] = 1
+        for i, lens in enumerate(len_batch):
+            mask[i, :lens, :] = 1
         outs_masked = torch.masked_select(outs, mask)
         y_masked = torch.masked_select(y, mask)
         return F.l1_loss(outs_masked, y_masked)
@@ -393,7 +393,7 @@ def custom_mse_ce(outs, y, len_batch=None, ignore_index=-100, mask = True, weigh
     return weight*mse_loss + (1-weight)*ce_loss #note we can weight them if we want to
 
 def custom_mse(outs, y, len_batch=None, ignore_index=-100, mask = True, weight = .5):
-    class_out = outs[:,0:outs.shape[1]//2] #this should work just fine for either 2 or 322
+    # class_out = outs[:,0:outs.shape[1]//2] #this should work just fine for either 2 or 322
     reg_out = outs[:,outs.shape[1]//2:]
     class_y = y[0]
     reg_y = y[1] #should be 64x1 or 64 x 161 if multitasking
@@ -407,9 +407,9 @@ def custom_mse(outs, y, len_batch=None, ignore_index=-100, mask = True, weight =
 
 def custom_ce(outs, y, len_batch=None, ignore_index=-100, mask = True, weight = .5, pos_weight = .04):
     class_out = outs[:,0:outs.shape[1]//2] #this should work just fine for either 2 or 322
-    reg_out = outs[:,outs.shape[1]//2:]
+    # reg_out = outs[:,outs.shape[1]//2:]
     class_y = y[0]
-    reg_y = y[1] #should be 64x1 or 64 x 161 if multitasking
+    # reg_y = y[1] #should be 64x1 or 64 x 161 if multitasking
     ce_loss = binary_cross_entropy_with_logits(class_out, class_y, pos_weight=pos_weight)
     return ce_loss*(1-weight)
 
@@ -450,7 +450,8 @@ def cbpnet_multinomial_nll(logits,true_counts, len_batch=None, ignore_index=-100
     #     true_counts = true_counts[:,:-1] #because we appended the counts to the end, so remove it for this loss
     #     logits = logits[0]
     #we also need to make sure that we have the right shape
-    logits = logits.squeeze(); true_counts = true_counts.squeeze()
+    logits = logits.squeeze()
+    true_counts = true_counts.squeeze()
     # if logits.shape[1] > true_counts.shape[1]: #added it in the tasks instead
     #     #then we cut off from both ends until we get the same size
     #     diff = logits.shape[1] - true_counts.shape[1]
@@ -510,6 +511,198 @@ def custom_profile_poisson_loss(outs,y,len_batch=None, ignore_index=-100, mask =
 #     loss = outs - y * torch.log(outs)
 #     return loss.mean()
 
+# def joint_loss(seq,seq_unmask,acc,acc_unmask,task1='mlm',task2='mlm',count_weight=1):
+#     '''
+#     joint loss function for sequence and accessibility masking
+#     Vocab size excludes the mask token
+#     seq: (batch_size, seq_len, vocab_size)
+#     seq_unmask: (batch_size, seq_len, vocab_size+1) #the last one is the mask
+#     acc: (batch_size, seq_len, 1)
+#     acc_unmask: (batch_size, seq_len, X) #the last one is the mask, X=2 if regression, X=3 if binary classification
+#     '''
+#     if task2 == 'reg':
+#         loss2 = poisson_loss_mask(acc,acc_unmask,seq,seq_unmask)
+#         scale2 = count_weight
+#     elif task2 == 'mlm':
+#         loss2 = ce_loss_mask_acc(seq,seq_unmask,acc,acc_unmask)
+#         scale2 = 1
+#     else:
+#         raise ValueError('task2 not recognized')
+    
+#     if task1 != 'mlm':
+#         raise ValueError('task1 not recognized')
+#     loss1 = ce_loss_mask_seq(seq,seq_unmask,acc,acc_unmask)
+    
+#     return loss1 + loss2*scale2
+        
+    
+
+# def poisson_loss_mask(seq,seq_unmask,acc,acc_unmask):
+#     '''poisson loss function for sequence and accessibility regression
+#     seq: Not used
+#     seq_unmask: Not used
+#     acc: (batch_size, seq_len, 1)
+#     acc_unmask: (batch_size, seq_len, 2)
+#     '''
+#     #subset it to the values that are beign evaluated
+#     acc = acc.squeeze(-1)
+#     mask = acc_unmask[:,:,1] == 1
+#     acc = acc[mask]
+#     acc_unmask = acc_unmask[mask][:,0] #remove the mask dim
+#     acc = F.softplus(acc)
+    
+#     #and now compute the loss
+#     loss = F.poisson_nll_loss(acc, acc_unmask, log_input=False, full=False)
+#     return loss
+
+# def ce_loss_mask_seq(seq,seq_unmask,acc,acc_unmask):
+#     '''cross entropy loss function for sequence and accessibility classification
+#     seq: (batch_size, seq_len, vocab_size)
+#     seq_unmask: (batch_size, seq_len, vocab_size+1) #the last one is the mask
+#     acc: Not used
+#     acc_unmask: Not used
+#     '''
+    
+#     #mask out useless elements
+#     mask = seq_unmask[:,:,-1] == 1
+#     seq = seq[mask]
+#     seq_unmask = seq_unmask[mask]
+    
+#     seq_unmask = seq_unmask[:,:-1] #remove the mask dim
+    
+#     #now compute the loss
+#     loss = F.cross_entropy(seq, seq_unmask) #technically should take in indices instead of one hot true, but it's identical
+#     return loss
+    
+# def ce_loss_mask_acc(seq,seq_unmask,acc,acc_unmask): #separate so we can profile them separately, also, we have a single value, so use binary cross entropy
+#     '''cross entropy loss function for sequence and accessibility classification
+#     seq: Not used
+#     seq_unmask: Not used
+#     acc: (batch_size, seq_len, 1)
+#     acc_unmask: (batch_size, seq_len, 3) #the last one is the mask
+#     '''    
+#     #mask out useless elements
+#     acc = acc.squeeze(-1)
+#     mask = acc_unmask[:,:,2] == 1
+#     acc = acc[mask]
+#     acc_unmask = acc_unmask[mask]
+    
+#     acc = acc.squeeze(0)
+#     acc_unmask = acc_unmask[:,1] #removes mask dim and just gets the values where it is accessible!
+    
+#     #now compute the loss
+#     loss = F.binary_cross_entropy_with_logits(acc, acc_unmask)
+#     return loss
+
+
+def joint_loss(x, y, task1='mlm', task2='mlm', count_weight=1):
+    """
+    Joint loss function for sequence and accessibility masking.
+    
+    x: tuple (seq, acc)
+         - seq: (batch_size, seq_len, vocab_size)
+         - acc: (batch_size, seq_len, 1)
+    y: tuple (seq_unmask, acc_unmask)
+         - seq_unmask: (batch_size, seq_len, vocab_size+1)  (last channel is the mask)
+         - acc_unmask: (batch_size, seq_len, X) where X=2 (for regression) or X=3 (for binary classification)
+         
+    task1: (for the sequence) currently only supports 'mlm'
+    task2: (for the accessibility) 'mlm' or 'reg'
+    count_weight: scaling weight for the regression loss when task2 is 'reg'
+    """
+    # x and y are tuples: x = (seq, acc), y = (seq_unmask, acc_unmask)
+    seq, acc = x
+    seq_unmask, acc_unmask = y
+
+    # Compute accessibility loss (task2)
+    if task2 == 'reg':
+        loss2 = poisson_loss_mask((None, acc), (None, acc_unmask))
+        scale2 = count_weight
+    elif task2 == 'mlm':
+        loss2 = ce_loss_mask_acc((None, acc), (None, acc_unmask))
+        scale2 = 1
+    else:
+        raise ValueError('task2 not recognized')
+
+    # Compute sequence loss (task1 must be 'mlm')
+    if task1 != 'mlm':
+        raise ValueError('task1 not recognized')
+    loss1 = ce_loss_mask_seq((seq, None), (seq_unmask, None))
+    
+    return loss1 + loss2 * scale2
+
+def poisson_loss_mask(x, y):
+    """
+    Poisson loss for accessibility regression.
+    
+    x: tuple (dummy, acc)
+         - acc: (batch_size, seq_len, 1)
+    y: tuple (dummy, acc_unmask)
+         - acc_unmask: (batch_size, seq_len, 2)   (last channel is the mask)
+    """
+    # We only use the accessibility part.
+    acc = x[1]      # shape: (batch_size, seq_len, 1)
+    acc_unmask = y[1]  # shape: (batch_size, seq_len, 2)
+    
+    # Squeeze the last channel
+    acc = acc.squeeze(-1)
+    # Create mask from second channel (index 1)
+    mask = acc_unmask[:, :, 1] == 1
+    acc = acc[mask]
+    # Use the first channel (index 0) as the target, remove mask dim
+    acc_target = acc_unmask[mask][:, 0]
+    
+    # Make sure predictions are positive.
+    acc = F.softplus(acc)
+    
+    loss = F.poisson_nll_loss(acc, acc_target, log_input=False, full=False)
+    return loss
+
+def ce_loss_mask_seq(x, y):
+    """
+    Cross entropy loss for sequence classification.
+    
+    x: tuple (seq, dummy)
+         - seq: (batch_size, seq_len, vocab_size)
+    y: tuple (seq_unmask, dummy)
+         - seq_unmask: (batch_size, seq_len, vocab_size+1)  (last channel is the mask)
+    """
+    seq = x[0]
+    seq_unmask = y[0]
+    
+    # Create mask from last column of seq_unmask
+    mask = seq_unmask[:, :, -1] == 1
+    seq_pred = seq[mask]
+    # Remove mask channel from target; resulting shape is (N, vocab_size)
+    seq_target = seq_unmask[mask][:, :-1]
+    
+    loss = F.cross_entropy(seq_pred, seq_target)
+    return loss
+
+def ce_loss_mask_acc(x, y):
+    """
+    Binary cross entropy loss for accessibility classification.
+    
+    x: tuple (dummy, acc)
+         - acc: (batch_size, seq_len, 1)
+    y: tuple (dummy, acc_unmask)
+         - acc_unmask: (batch_size, seq_len, 3)  (last channel is the mask)
+    """
+    acc = x[1]  # shape: (batch_size, seq_len, 1)
+    acc_unmask = y[1]  # shape: (batch_size, seq_len, 3)
+    
+    acc = acc.squeeze(-1)
+    # Create mask from last channel (index 2)
+    mask = acc_unmask[:, :, 2] == 1
+    acc_pred = acc[mask]
+    # Use the second channel (index 1) of acc_unmask as the target
+    acc_target = acc_unmask[mask][:, 1]
+    
+    loss = F.binary_cross_entropy_with_logits(acc_pred, acc_target)
+    return loss
+
+    
+
 # Metrics that can depend on the loss
 def loss(x, y, loss_fn):
     """ This metric may be useful because the training loss may add extra regularization (e.g. weight decay implemented as L2 penalty), while adding this as a metric skips the additional losses """
@@ -567,6 +760,10 @@ output_metric_fns = {
     'cbpnet_multinomial_nll': cbpnet_multinomial_nll,
     'poisson_loss': poisson_loss_nll,
     'custom_profile_poisson_loss': custom_profile_poisson_loss,
+    'joint_loss': joint_loss,
+    'poisson_loss_mask': poisson_loss_mask,
+    'ce_loss_mask_seq': ce_loss_mask_seq,
+    'ce_loss_mask_acc': ce_loss_mask_acc,
 }
 
 loss_metric_fns = {

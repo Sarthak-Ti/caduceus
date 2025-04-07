@@ -1,0 +1,5 @@
+_name_: GeneralLoader
+dataset_name: GeneralLoader
+batch_size_eval: ${eval:${.batch_size} * 2}
+shuffle: True
+pin_memory: True

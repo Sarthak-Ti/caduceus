@@ -108,6 +108,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/donfig-0.8.1.post1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/double-conversion-3.3.0-h59595ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/entrypoints-0.4-pyhd8ed1ab_0.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/noarch/et_xmlfile-2.0.0-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/executing-2.0.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/expat-2.6.2-h59595ed_0.conda
@@ -341,6 +342,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openh264-2.3.1-hcb278e6_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openjpeg-2.5.0-hfec8fc6_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openmpi-4.1.6-hc5af2df_101.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/openpyxl-3.1.5-py311h50c5138_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.3.1-h4bc722e_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/orc-1.9.2-h4b38347_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/overrides-7.4.0-pyhd8ed1ab_0.conda
@@ -606,7 +608,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/0c/4c/b075da0092003d9a55cf2ecc1cae9384a1ca4f650d51b00fc59875fe76f6/ipdb-0.13.13-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/48/4d/3653b00c3467764f1611608942fbccc0dcfd7b3c0ff8e51555a4ac219e6f/leidenalg-0.8.10.tar.gz
       - pypi: https://files.pythonhosted.org/packages/5f/82/9c5960908a58d1271e605795e4003155dece094b6db8c778582d21093b60/liftover-1.1.17-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/87/6d/9a9976674e77de3eab157e8c50667a7091058fa355fd7665eb1ab4b93c5a/logomaker-0.8-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/d5/1f/9be29e34615a4325a0ff6da18c55994cb546dcff4423c91f80f101a9858c/logomaker-0.8.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/03/0a/4f6fed21aa246c6b49b561ca55facacc2a44b87d65b8b92362a8e99ba202/loguru-0.7.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6a/3e/4c3f2744c0a4c47662674c0e13da3bcd57b5fb48e33e35a51c4f2413ba33/modisco_lite-2.0.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6d/92/8d7aebd4430ab5ff65df2bfee6d5745f95c004284db2d8ca76dcbfd9de47/ninja-1.11.1.1-py2.py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl
@@ -1891,6 +1893,17 @@ packages:
   - pkg:pypi/entrypoints?source=hash-mapping
   size: 9199
   timestamp: 1643888357950
+- conda: https://conda.anaconda.org/conda-forge/noarch/et_xmlfile-2.0.0-pyhd8ed1ab_1.conda
+  sha256: 2209534fbf2f70c20661ff31f57ab6a97b82ee98812e8a2dcb2b36a0d345727c
+  md5: 71bf9646cbfabf3022c8da4b6b4da737
+  depends:
+  - python >=3.9
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/et-xmlfile?source=hash-mapping
+  size: 21908
+  timestamp: 1733749746332
 - conda: https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.2.0-pyhd8ed1ab_0.conda
   sha256: cf83dcaf9006015c8ccab3fc6770f478464a66a8769e1763ca5d7dff09d11d08
   md5: f6c211fee3c98229652b60a9a42ef363
@@ -4442,14 +4455,15 @@ packages:
   - pkg:pypi/llvmlite?source=hash-mapping
   size: 3410396
   timestamp: 1706921725407
-- pypi: https://files.pythonhosted.org/packages/87/6d/9a9976674e77de3eab157e8c50667a7091058fa355fd7665eb1ab4b93c5a/logomaker-0.8-py2.py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/d5/1f/9be29e34615a4325a0ff6da18c55994cb546dcff4423c91f80f101a9858c/logomaker-0.8.7-py3-none-any.whl
   name: logomaker
-  version: '0.8'
-  sha256: 6766a0d83de4990ea859366a661ba72c580a7b73ac3c8b526204a0be7d65a50d
+  version: 0.8.7
+  sha256: 8a65a5e5136a08823d199fbb5a9443674062a1c223236301accde19b0e401762
   requires_dist:
-  - numpy
   - matplotlib
+  - numpy
   - pandas
+  requires_python: '>=3.8'
 - pypi: https://files.pythonhosted.org/packages/03/0a/4f6fed21aa246c6b49b561ca55facacc2a44b87d65b8b92362a8e99ba202/loguru-0.7.2-py3-none-any.whl
   name: loguru
   version: 0.7.2
@@ -5199,6 +5213,22 @@ packages:
   purls: []
   size: 4069632
   timestamp: 1696593196408
+- conda: https://conda.anaconda.org/conda-forge/linux-64/openpyxl-3.1.5-py311h50c5138_1.conda
+  sha256: d9b392d1d7e5829f1972b94035c68a23e84b1d2067eeeee8e456d331dc1b8cfb
+  md5: 7d777fcd827bbd67fd1b8b01b7f8f333
+  depends:
+  - et_xmlfile
+  - libgcc >=13
+  - python >=3.11,<3.12.0a0
+  - python_abi 3.11.* *_cp311
+  arch: x86_64
+  platform: linux
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/openpyxl?source=hash-mapping
+  size: 707974
+  timestamp: 1725460980858
 - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.3.1-h4bc722e_2.conda
   sha256: b294b3cc706ad1048cdb514f0db3da9f37ae3fcc0c53a7104083dd0918adb200
   md5: e1b454497f9f7c1147fdde4b53f1b512

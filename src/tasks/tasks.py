@@ -507,6 +507,22 @@ class EnformerTask(BaseTask):
         x, w = decoder(x, state=state, **z)
         
         return x, y, w
+    
+class Joint(BaseTask):
+    def forward(self, batch, encoder, model, decoder, _state):
+        """Passes a batch through the encoder, backbone, and decoder"""
+        # z holds arguments such as sequence length, but we don't really care here
+        x, y, *_ = batch
+        # print(len(x)) #2 because tuple
+        # print(x[0].shape, x[1].shape)
+        # print(y[0].shape, y[1].shape)
+        # print(encoder)
+        x, _ = encoder(*x)
+        x, _ = model(x)
+        x, _ = decoder(x)
+        # print('after decoder:',x[0].shape,x[1].shape) #output of the 2 heads in tuple format
+        #return w as an empty dict so we can fill it with information
+        return x, y, {}
 
 class Basic(BaseTask):
     def forward(self, batch, encoder, model, decoder, _state):
@@ -741,4 +757,5 @@ registry = {
     'profileclass': ProfileClass,
     'enformer': EnformerTask,
     'basic': Basic,
+    'joint': Joint,
 }

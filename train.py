@@ -206,9 +206,10 @@ class SequenceLightningModule(pl.LightningModule):
                     self.hparams.model.update({"fused_dropout_add_ln": False})
         # TODO: Hacky way to get complement_map for Caduceus models; need to find a more elegant implementation
         if "caduceus" in self.hparams.model.get("_name_"):
-            OmegaConf.update(
-                self.hparams.model.config, "complement_map", self.dataset.tokenizer.complement_map, force_add=True
-            )
+            if self.dataset.tokenizer is not None and getattr(self.dataset.tokenizer, "complement_map", None) is not None:
+                OmegaConf.update(
+                    self.hparams.model.config, "complement_map", self.dataset.tokenizer.complement_map, force_add=True
+                )
         # Instantiate the config class if using hydra's _target_ paradigm for the config
         if self.hparams.model.get("config", None) is not None and self.hparams.model.config.get("_target_", None) is not None:
             model_hparams = OmegaConf.to_container(self.hparams.model, resolve=True)
@@ -386,6 +387,8 @@ class SequenceLightningModule(pl.LightningModule):
         x, y, w = self.forward(batch) #here the forward is gone through, x is actually y hat, and y is the output, w is the parameters
         if self.hparams.train.get('count_weight', None) is not None:
             w['count_weight'] = self.hparams.train.count_weight
+        if self.hparams.train.get('task2',None) is not None:
+            w['task2'] = self.hparams.train.task2
         #expect x to be long x 16 since it's the logits
         # print("x shape", x.shape) #it is correct, as we expected
         # print("y shape", y.shape)
@@ -510,37 +513,37 @@ class SequenceLightningModule(pl.LightningModule):
     #     #inherits the training_epoch_end of the parent class, which is the basic pl.lightningmodule.
     #     #we will just comment it out since it doesn't seem to do anything using the basic values, doesn't seem to be called anywhere
 
-    def on_before_optimizer_step(self, optimizer):
-        # return
-        # print('doing this before optimizer step')
-        # print(optimizer) #adamw optimizer with the groups, in this example 2
-        # print(f"\n=== Before optimizer step at global step {self.trainer.global_step} ===")
+    # def on_before_optimizer_step(self, optimizer):
+    #     # return
+    #     # print('doing this before optimizer step')
+    #     # print(optimizer) #adamw optimizer with the groups, in this example 2
+    #     # print(f"\n=== Before optimizer step at global step {self.trainer.global_step} ===")
 
-        #this is a way to test to see if there's issues with loading of the checkpoint and making sure the optimizer matches
-        if self.trainer.global_step == 0:
-            print("Skipping first step. no optimizer variables yet")
-            return
-        param_list = optimizer.param_groups[0]['params']
+    #     #this is a way to test to see if there's issues with loading of the checkpoint and making sure the optimizer matches
+    #     if self.trainer.global_step == 0:
+    #         print("Skipping first step. no optimizer variables yet")
+    #         return
+    #     param_list = optimizer.param_groups[0]['params']
         
-        optimizer_state_dict = optimizer.state_dict()['state']
+    #     optimizer_state_dict = optimizer.state_dict()['state']
 
-        for i, param in enumerate(param_list):
-            if param.grad is None:
-                continue
+    #     for i, param in enumerate(param_list):
+    #         if param.grad is None:
+    #             continue
 
-            # Log parameter shape and gradient shape
-            if param.shape != param.grad.shape:
-                print(f"Param index {i} | Param shape: {param.shape}, Grad shape: {param.grad.shape}") #this should obviously match, I don't know why it wouldn't...
+    #         # Log parameter shape and gradient shape
+    #         if param.shape != param.grad.shape:
+    #             print(f"Param index {i} | Param shape: {param.shape}, Grad shape: {param.grad.shape}") #this should obviously match, I don't know why it wouldn't...
 
-            param_state = optimizer_state_dict[i]
-            exp_avg = param_state.get('exp_avg', None)
-            if exp_avg is not None:
-                # print(f"  exp_avg shape:   {exp_avg.shape}")
-                if exp_avg.shape != param.grad.shape:
-                    print("  !!! MISMATCH: exp_avg shape does not match grad shape !!!")
-                    print(f"  Param index {i} | Param shape: {param.shape}, Grad shape: {param.grad.shape}, exp_avg shape: {exp_avg.shape}")
-            else:
-                print("  No exp_avg state found.")
+    #         param_state = optimizer_state_dict[i]
+    #         exp_avg = param_state.get('exp_avg', None)
+    #         if exp_avg is not None:
+    #             # print(f"  exp_avg shape:   {exp_avg.shape}")
+    #             if exp_avg.shape != param.grad.shape:
+    #                 print("  !!! MISMATCH: exp_avg shape does not match grad shape !!!")
+    #                 print(f"  Param index {i} | Param shape: {param.shape}, Grad shape: {param.grad.shape}, exp_avg shape: {exp_avg.shape}")
+    #         else:
+    #             print("  No exp_avg state found.")
 
     def on_validation_epoch_start(self):
         # Reset all validation torchmetrics

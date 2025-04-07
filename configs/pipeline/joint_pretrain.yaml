@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - /trainer: default
+  - /loader: default
+  - /dataset: general_dataset
+  # - /task: regression #one of the options, uses mse loss
+  - /optimizer: adamw
+  - /scheduler: constant
+  - /callbacks: [base, model_every_epoch]
+
+train:
+  monitor: val/loss # the metric to monitor for early stopping
+  mode: min
+
+encoder:
+  _name_: jointcnn
+  joint: false
+  combine: true
+
+decoder:
+  _name_: jointmask

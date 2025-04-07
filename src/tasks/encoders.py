@@ -72,7 +72,7 @@ class EnformerEncoder(Encoder):
             raise ValueError(f"Unknown pool type {self.pool_type}")
         # Pool = MaxPool if self.pool_type == 'max' else AttentionPool
         half_dim = self.dim // 2
-        twice_dim = self.dim * 2
+        # twice_dim = self.dim * 2
         
         self.stem = nn.Sequential(
             nn.Conv1d(4, half_dim, 15, padding = 7),
@@ -112,6 +112,78 @@ class CNNEmbedding(Encoder):
         #just have to appply a super simple conv that goes to model size
         self.conv = nn.Conv1d(d_input, d_model, 1)
         
+class JointCNN(Encoder):
+    """
+    A CNN-based encoder that takes in OHE and accessibility data.
+
+    If `joint` is True, the inputs are concatenated along the channel dimension and passed through a single CNN.
+    If `joint` is False, each input is processed by its own CNN, and their outputs are concatenated.
+
+    Args:
+        d_input1 (int): The number of input channels for sequence.
+        d_input2 (int): The number of input channels for accessibility.
+        d_model (int): The desired output dimension of the model.
+        joint (bool): Whether to process the inputs jointly or separately. Default is False.
+        kernel_size (int): The size of the convolutional kernel. Default is 15.
+    """
+    def __init__(self, d_model, d_input1=6, d_input2=2, joint=False, kernel_size=15, combine=True, acc_type='continuous', **kwargs):
+        super().__init__()
+        print(f"JointMaskingEncoder: d_model={d_model}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
+        # print(kwargs)
+        self.joint = joint
+        self.combine = combine
+        # print(d_input1, d_input2)
+        # print('dmodel', d_model)
+        # print('acc_type', acc_type)
+        if acc_type == 'continuous':
+            d_input2 = 2
+        elif acc_type == 'category':
+            d_input2 = 3
+
+        if joint:
+            # Single CNN for joint processing
+            self.conv = nn.Sequential(
+                nn.Conv1d(d_input1+d_input2, d_model, kernel_size, padding='same'),
+                nn.ReLU()
+            )
+        else:
+            # Separate CNNs for each input
+            self.conv1 = nn.Sequential(
+                nn.Conv1d(d_input1, d_model // 2, kernel_size, padding='same'),
+                nn.ReLU()
+            )
+            self.conv2 = nn.Sequential(
+                nn.Conv1d(d_input2, d_model // 2, kernel_size, padding='same'),
+                nn.ReLU()
+            )
+            if combine:
+                self.out = nn.Linear(d_model, d_model)
+
+    def forward(self, x1, x2):
+        """
+        Forward pass for the JointCNN.
+
+        Args:
+            x1 (torch.Tensor): The first input tensor of shape (batch_size, d_input1, seq_len).
+            x2 (torch.Tensor): The second input tensor of shape (batch_size, d_input2, seq_len).
+
+        Returns:
+            torch.Tensor: The output tensor of shape (batch_size, d_model, seq_len).
+        """
+        if self.joint:
+            # Concatenate inputs along the channel dimension and process jointly
+            x = torch.cat([x1, x2], dim=1)  # Concatenate along channel dimension
+            x = self.conv(x)
+        else:
+            # Process inputs separately and concatenate their outputs
+            x1_out = self.conv1(x1)
+            x2_out = self.conv2(x2)
+            x = torch.cat([x1_out, x2_out], dim=1)  # Concatenate along channel dimension
+            if self.combine:
+                x = self.out(x.transpose(1,2)).transpose(1,2) #applies linear layer along embedding dimension, across batch and length is independent
+
+        return x
+
 
 # For every type of encoder/decoder, specify:
 # - constructor class
@@ -124,36 +196,75 @@ registry = {
     "linear": nn.Linear,
     "onehot": OneHotEncoder,
     "enformer": EnformerEncoder,
+    "cnn": CNNEmbedding,
+    "jointcnn": JointCNN,
 }
 dataset_attrs = {
     "linear": ["d_input"],  # TODO make this d_data?
     "onehot": ["n_tokens"],
+    "jointcnn": ["acc_type"],
 }
 model_attrs = {
     "linear": ["d_model"],
     "onehot": ["d_model"],
+    "jointcnn": ["d_model"],
 }
 
 
+# def _instantiate(encoder, dataset=None, model=None):
+#     """Instantiate a single encoder"""
+#     if encoder is None:
+#         return None
+#     if isinstance(encoder, str):
+#         name = encoder
+#     else:
+#         name = encoder["_name_"]
+
+#     # Extract dataset/model arguments from attribute names
+#     dataset_args = utils.config.extract_attrs_from_obj(
+#         dataset, *dataset_attrs.get(name, [])
+#     )
+#     model_args = utils.config.extract_attrs_from_obj(model, *model_attrs.get(name, []))
+#     print('model_args:',model_args)
+#     # print('registry:',registry)
+#     # Instantiate encoder
+#     obj = utils.instantiate(registry, encoder, *dataset_args, *model_args)
+#     return obj
+
 def _instantiate(encoder, dataset=None, model=None):
-    """Instantiate a single encoder"""
     if encoder is None:
         return None
     if isinstance(encoder, str):
         name = encoder
+        encoder = {"_name_": name}
     else:
         name = encoder["_name_"]
+        encoder = encoder.copy()  # Make a copy to avoid modifying the original
 
     # Extract dataset/model arguments from attribute names
-    dataset_args = utils.config.extract_attrs_from_obj(
-        dataset, *dataset_attrs.get(name, [])
-    )
-    model_args = utils.config.extract_attrs_from_obj(model, *model_attrs.get(name, []))
-
-    # Instantiate encoder
-    obj = utils.instantiate(registry, encoder, *dataset_args, *model_args)
+    dataset_attrs_list = dataset_attrs.get(name, [])
+    model_attrs_list = model_attrs.get(name, [])
+    
+    # Get dataset attributes and add them as keyword arguments to encoder
+    if dataset and dataset_attrs_list:
+        dataset_values = utils.config.extract_attrs_from_obj(dataset, *dataset_attrs_list)
+        print('dataset_args:', dataset_values)
+        for attr, value in zip(dataset_attrs_list, dataset_values):
+            if value is not None:
+                encoder[attr] = value
+    
+    # Get model attributes and add them as keyword arguments to encoder
+    if model and model_attrs_list:
+        model_values = utils.config.extract_attrs_from_obj(model, *model_attrs_list)
+        print('model_args:', model_values)
+        for attr, value in zip(model_attrs_list, model_values):
+            if value is not None:
+                encoder[attr] = value
+    
+    # Instantiate the encoder using only keyword arguments
+    obj = utils.instantiate(registry, encoder)
+    
     return obj
-
 
 def instantiate(encoder, dataset=None, model=None):
     encoder = utils.to_list(encoder)

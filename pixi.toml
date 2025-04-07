@@ -496,6 +496,7 @@ zlib = { version = "==1.2.13", build = "hd590300_5" }
 zstandard = { version = "==0.22.0", build = "py311hb6f056b_1" }
 zstd = { version = "==1.5.6", build = "ha6fb4c9_0" }
 torchview = {version = "*" }
+openpyxl = {version = "*"}
 
 [pypi-dependencies]
 antlr4-python3-runtime = "==4.9.3"
@@ -521,7 +522,7 @@ iniconfig = "==2.0.0"
 ipdb = "==0.13.13"
 leidenalg = "==0.8.10"
 liftover = "==1.1.17"
-logomaker = "==0.8"
+logomaker = "==0.8.7"
 loguru = "==0.7.2"
 modisco-lite = "==2.0.7"
 ninja = "==1.11.1.1"

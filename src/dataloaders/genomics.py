@@ -33,6 +33,7 @@ from src.dataloaders.datasets.enformer_dataset import EnformerDataset
 from src.dataloaders.datasets.kmer_pretrain_dataset import KmerPretrain
 from src.dataloaders.datasets.graphreg_dataset import GraphRegDataset
 from src.dataloaders.datasets.GPNMSA_dataset import GPNMSADataset
+from src.dataloaders.datasets.general_dataset import GeneralDataset
 
 
 class HG38(SequenceDataset):
@@ -1175,6 +1176,54 @@ class GPNMSALoader(HG38): #for the msa gpn models
             for split, max_len in zip(['train', 'val'], [self.max_length, self.max_length_val])
         ] #uses dataset class and makes a train and validation using the basic loader
 
+    def test_dataloader(self, *args: Any, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
+        """ The test dataloader, it's a dummy loader just to make the trainer happy, we don't use it."""
+        return self._data_loader(self.dataset_val, batch_size=self.batch_size_eval)
+
+class GeneralLoader(HG38): #for joint pretraining, handles many arguments for the dataset class wrapped in kwargs
+    _name_ = "GeneralLoader"
+    
+    def __init__(self, dataset_name, dest_path=None, batch_size=32, batch_size_eval=None, num_workers=1,
+                shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
+                fast_forward_epochs=None, fast_forward_batches=None, *args, **kwargs):
+        self._name_ = kwargs.pop("_name_", self._name_)
+        self.dataset_name = dataset_name
+        self.dest_path = dest_path
+        self.batch_size = batch_size
+        self.batch_size_eval = batch_size_eval if batch_size_eval is not None else self.batch_size
+        self.num_workers = num_workers
+        self.shuffle = shuffle
+        self.pin_memory = pin_memory
+        self.drop_last = drop_last
+        self.dataset_kwargs = kwargs
+        # print(kwargs)
+        
+        if self.dest_path is None:
+            self.dest_path = default_data_path / self._name_
+
+        if fault_tolerant:
+            assert self.shuffle
+        self.fault_tolerant = fault_tolerant
+        if ddp:
+            assert fault_tolerant
+        self.ddp = ddp
+        self.fast_forward_epochs = fast_forward_epochs
+        self.fast_forward_batches = fast_forward_batches
+        if self.fast_forward_epochs is not None or self.fast_forward_batches is not None:
+            assert ddp and fault_tolerant
+            
+    def setup(self, stage=None):
+        # Create all splits: torch datasets (only train/test in this benchmark)
+
+        self.tokenizer = None #have to define as none since this is used?
+        
+        self.dataset_train, self.dataset_val = [
+            GeneralDataset(split=split,
+                            **self.dataset_kwargs
+            )
+            for split in ['train', 'val']
+        ]
+    
     def test_dataloader(self, *args: Any, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
         """ The test dataloader, it's a dummy loader just to make the trainer happy, we don't use it."""
         return self._data_loader(self.dataset_val, batch_size=self.batch_size_eval)

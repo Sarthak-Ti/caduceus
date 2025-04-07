@@ -89,6 +89,41 @@ def discard_kwargs(f):
         return f_kwargs(*args, **kwargs)[0]
     return f_
 
+# def PassthroughSequential(*modules):
+#     """Special Sequential module that chains kwargs.
+
+#     Semantics are the same as nn.Sequential, with extra convenience features:
+#     - Discard None modules
+#     - Flatten inner Sequential modules
+#     - In case with 0 or 1 Module, rename the class for ease of inspection
+#     """
+#     def flatten(module):
+#         if isinstance(module, nn.Sequential):
+#             return sum([flatten(m) for m in module], [])
+#         else:
+#             return [module]
+
+#     modules = flatten(nn.Sequential(*modules))
+#     modules = [module for module in modules if module if not None]
+
+#     class Sequential(nn.Sequential):
+#         def forward(self, x, **kwargs):
+#             for layer in self:
+#                 x, kwargs = wrap_kwargs(layer.forward)(x, **kwargs)
+#             return x, kwargs
+
+#         def step(self, x, **kwargs):
+#             for layer in self:
+#                 fn = getattr(layer, "step", layer.forward)
+#                 x, kwargs = wrap_kwargs(fn)(x, **kwargs)
+#             return x, kwargs
+
+#     if len(modules) == 0:
+#         Sequential.__name__ = "Identity"
+#     elif len(modules) == 1:
+#         Sequential.__name__ = type(modules[0]).__name__
+#     return Sequential(*modules)
+
 def PassthroughSequential(*modules):
     """Special Sequential module that chains kwargs.
 
@@ -107,15 +142,15 @@ def PassthroughSequential(*modules):
     modules = [module for module in modules if module if not None]
 
     class Sequential(nn.Sequential):
-        def forward(self, x, **kwargs):
+        def forward(self, *x, **kwargs):
             for layer in self:
-                x, kwargs = wrap_kwargs(layer.forward)(x, **kwargs)
+                x, kwargs = wrap_kwargs(layer.forward)(*x, **kwargs)
             return x, kwargs
 
-        def step(self, x, **kwargs):
+        def step(self, *x, **kwargs):
             for layer in self:
                 fn = getattr(layer, "step", layer.forward)
-                x, kwargs = wrap_kwargs(fn)(x, **kwargs)
+                x, kwargs = wrap_kwargs(fn)(*x, **kwargs)
             return x, kwargs
 
     if len(modules) == 0:

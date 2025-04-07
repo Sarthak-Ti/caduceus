@@ -513,6 +513,28 @@ class GraphRegDecoder(Decoder):
         #exponential activation
         x = torch.exp(x)
         return x
+
+class JointMaskingDecoder(Decoder):
+    """Decoder for joint masking of sequence and accessibility, so runs 2 separate output heads
+    d_output1 is sequence, so generally 4 for DNA (maybe 5 if want to do N as well)
+    d_output2 is accessibility, so 1 if only 1 track since we'll then do softplus or sigmoid in loss
+    Key issue is that this does not apply softplus or sigmoid, so need to do that in eval class
+    """
+    def __init__(self, d_model, d_output1=5, d_output2=1):
+        super().__init__()
+        print(f"JointMaskingDecoder: d_model={d_model}, d_output1={d_output1}, d_output2={d_output2}")
+
+        self.decoder1 = nn.Linear(d_model, d_output1)
+        self.decoder2 = nn.Linear(d_model, d_output2)
+
+    def forward(self, x, state=None, lengths=None, l_output=None, mask=None):
+        '''
+        x: (n_batch, l_seq, d_model)
+        Returns: (n_batch, l_seq, d_output1), (n_batch, l_seq, d_output2)
+        '''
+        x1 = self.decoder1(x)
+        x2 = self.decoder2(x)
+        return x1, x2
         
 
 class NDDecoder(Decoder):
@@ -647,6 +669,7 @@ registry = {
     "profile": ProfileDecoder,
     'enformer': EnformerDecoder,
     'graphreg': GraphRegDecoder,
+    'jointmask': JointMaskingDecoder,
 }
 model_attrs = {
     "linear": ["d_output"],
@@ -656,6 +679,7 @@ model_attrs = {
     "state": ["d_state", "state_to_tensor"],
     "forecast": ["d_output"],
     "token": ["d_output"],
+    "jointmask": ["d_model"],
 }
 
 dataset_attrs = {

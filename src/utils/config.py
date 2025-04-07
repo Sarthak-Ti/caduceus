@@ -53,11 +53,33 @@ def to_list(x, recursive=False):
             return [x]
 
 
+# def extract_attrs_from_obj(obj, *attrs):
+#     if obj is None:
+#         assert len(attrs) == 0
+#         return []
+#     return [getattr(obj, attr, None) for attr in attrs]
+
 def extract_attrs_from_obj(obj, *attrs):
     if obj is None:
         assert len(attrs) == 0
         return []
-    return [getattr(obj, attr, None) for attr in attrs]
+    
+    def get_attr_or_nested(obj, attr):
+        """First try to get the attribute directly, then check for nested attributes."""
+        # Try to get the attribute directly
+        value = getattr(obj, attr, None)
+        if value is not None:
+            return value
+        
+        # If not found, check for nested attributes
+        parts = attr.split(".")
+        for part in parts:
+            obj = getattr(obj, part, None)
+            if obj is None:
+                return None
+        return obj
+
+    return [get_attr_or_nested(obj, attr) for attr in attrs]
 
 
 def auto_assign_attrs(cls, **kwargs):
