@@ -54,11 +54,15 @@ dataset:
 
 encoder:
   acc_type: ${dataset.acc_type}
+  d_input2: ${eval:${train.num_tracks} + 1} #number of tracks in the dataset
 
 optimizer:
   lr: 6e-4
   weight_decay: 0.1
   betas: [0.9, 0.95]
+
+decoder:
+  d_output2: ${train.num_tracks} #number of tracks in the dataset
 
 train:
   gpu_mem: ${eval:"round(float(__import__('subprocess').check_output('nvidia-smi -i 0 --query-gpu=memory.total --format=csv,noheader,nounits', shell=True).strip().decode()) / 1000)"}
@@ -66,4 +70,5 @@ train:
   global_batch_size: ${dataset.batch_size}
   task2: ??? #the task for the accessibility model
   custom_metric: ??? #the custom metric for the task which you need to specify alongside the task
+  num_tracks: 1 #number of tracks in the dataset
   # pretrained_model_path: /data/leslie/sarthak/caduceus/caduceus-ps_seqlen-131k_d_model-256_n_layer-16/weights.ckpt #the path for the fine tuned model

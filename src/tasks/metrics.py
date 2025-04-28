@@ -660,7 +660,7 @@ def poisson_loss_mask(x, y):
 
 def ce_loss_mask_seq(x, y):
     """
-    Cross entropy loss for sequence classification.
+    Cross entropy loss for sequence classification. Note that if nothing is masked, it checks everything
     
     x: tuple (seq, dummy)
          - seq: (batch_size, seq_len, vocab_size)
@@ -672,11 +672,15 @@ def ce_loss_mask_seq(x, y):
     
     # Create mask from last column of seq_unmask
     mask = seq_unmask[:, :, -1] == 1
+    if mask.sum().item() == 0:
+        # If no mask is present, just calculate it on everything
+        mask = torch.ones_like(seq_unmask[:, :, -1], dtype=torch.bool)
+        
     seq_pred = seq[mask]
     # Remove mask channel from target; resulting shape is (N, vocab_size)
     seq_target = seq_unmask[mask][:, :-1]
     
-    loss = F.cross_entropy(seq_pred, seq_target)
+    loss = F.cross_entropy(seq_pred, seq_target) #can do seq_target.argmax(dim=-1) if want more "efficient" but argmax more expensive than just computing class probs
     return loss
 
 def ce_loss_mask_acc(x, y):

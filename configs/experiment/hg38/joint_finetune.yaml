@@ -1,0 +1,75 @@
+# @package _global_
+defaults:
+  - /pipeline: joint_pretrain
+  - /model: ???
+  # - override /scheduler: cosine_warmup_timm
+  # - default model/layer: mha
+  # - override /scheduler: constant
+
+task:
+  _name_: joint_finetune
+  loss:
+    _name_: poisson_loss
+  metrics:
+    - poisson_loss
+
+trainer:
+  accelerator: gpu
+  devices: 1
+  num_nodes: 1
+  accumulate_grad_batches: ${div_up:8, ${eval:${trainer.devices} * ${dataset.batch_size} * ${trainer.num_nodes}}}
+  max_epochs: 1000
+  precision: 16  # bf16 only a100
+  gradient_clip_val: 1.0
+  strategy: auto
+  limit_train_batches: 1.0   # train on full dataset, can be used to toggle quick run
+  limit_val_batches: 1.0     # validate on full dataset, can be used to toggle quick run
+  num_sanity_val_steps: 0
+
+dataset:
+  # batch_size: 32  # Per GPU
+  batch_size: 2
+  num_workers: 1
+  pin_memory: true
+  #above args are for dataloader, below are for dataset
+  data_path: ???
+  length: 524288
+  shift_sequences: 0
+  load_in: false
+  rc_aug: false
+  mlm: 0
+  acc_mlm: 0
+  acc_type: ???
+  acc_mask_size: 500
+  weight_peaks: false
+  additional_data: ??? #additional data for the task you are fine tuning on
+
+
+# scheduler:
+#   t_in_epochs: False
+#   t_initial: ${eval:${div_up:${dataset.__train_len}, ${train.global_batch_size}} * ${trainer.max_epochs}}  # num steps for 1 cycle
+#   warmup_lr_init: 1e-6  # starting point
+#   warmup_t: ${eval:${div_up:${dataset.__train_len}, ${train.global_batch_size}} * ${trainer.max_epochs} * 0.01}  # time for ramp up
+#   lr_min: ${eval:0.1 * ${optimizer.lr}}  # flatlines with this
+
+encoder:
+  acc_type: ${dataset.acc_type}
+
+optimizer:
+  lr: 6e-4
+  weight_decay: 0.1
+  betas: [0.9, 0.95]
+
+decoder:
+  _name_: enformer
+
+train:
+  gpu_mem: ${eval:"round(float(__import__('subprocess').check_output('nvidia-smi -i 0 --query-gpu=memory.total --format=csv,noheader,nounits', shell=True).strip().decode()) / 1000)"}
+  seed: 2222
+  global_batch_size: ${dataset.batch_size}
+  pretrained_model_strict_load: false
+  pretrained_model_state_hook: #note all of these are passed to the load_backbone function
+    _name_: load_full_model
+    freeze_backbone: false  # first try we just use this
+    load_encoder: true
+  # pretrained_model_path: /data/leslie/sarthak/caduceus/caduceus-ps_seqlen-131k_d_model-256_n_layer-16/weights.ckpt #the path for the fine tuned model

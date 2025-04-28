@@ -524,6 +524,19 @@ class Joint(BaseTask):
         #return w as an empty dict so we can fill it with information
         return x, y, {}
 
+class JointFinetune(BaseTask):
+    def forward(self, batch, encoder, model, decoder, _state):
+        """Passes a batch through the encoder, backbone, and decoder"""
+        # z holds arguments such as sequence length
+        x, y, *_ = batch
+        y = y[-1] #y is a tuple, the other elements are the unmasked stuff we don't care about
+
+        x,_ = encoder(*x)
+        x,_ = model(x)
+        x,_ = decoder(x)
+        
+        return x, y, {}
+
 class Basic(BaseTask):
     def forward(self, batch, encoder, model, decoder, _state):
         """Passes a batch through the encoder, backbone, and decoder
@@ -758,4 +771,5 @@ registry = {
     'enformer': EnformerTask,
     'basic': Basic,
     'joint': Joint,
+    'joint_finetune': JointFinetune,
 }

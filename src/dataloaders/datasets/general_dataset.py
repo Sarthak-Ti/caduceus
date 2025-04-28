@@ -3,10 +3,12 @@
 """
 
 This is a general dataset which uses splits based on a sequences.txt file like enformer. It will be general and can use zarr parallel to load fast, or it can simply load it in if it's a smaller part of the dataset
-The datasets are chunked in a way that loading multiple cell types won't be too hard! We can apply processing of like clipping and scaling and the unmappable regions
-Loading in makes it very slow initially, so is highly discouraged, but can do arbitrary cell types if so, and will be the same speed
+The datasets are chunked in a way that loading multiple cell types won't be too hard! You must have already applied processing of like clipping and scaling and the unmappable regions, look at data/DK_zarr/convert_zarr/convert_zarr_preprocess_chunkchrom.py
+or data/DK_zarr/process_celltype.py to see how to create zarr or npy file that works. 
+Loading in makes it very slow initially, so is highly discouraged, but can do arbitrary cell types if so, and will be the same speed. But terrible for multi gpu training!
 
 If you have presaved it to a zarr array in this folder, then it will simply access that. So cell type could be like GM12878_DNase or K562_ChIP_TF or whatever, and it willl access only that dat aloaded very efficiently since we can just load it into memory
+zarr is fast enough tho!
 
 
 """
@@ -17,6 +19,7 @@ import os
 import torch
 import pandas as pd
 from random import random
+import json
 
 # splits_dict = {
 #     'train': [1,2,5,6,7,8,9,10,11,12,15,16,17,18,19,20,21,22],
@@ -24,52 +27,7 @@ from random import random
 #     'test': [4,14]
 # }
 
-def process_data(seq, blacklist, unmap, scale, clip, clip_soft, blacklist_pct=0.5, umap_clip=0.5):
-    '''This function will process the data, it does the basenji processing where you do blacklist clipping
-    Then skip pooling (can do it later, only might affect unmappable clipping, but if doing mean pooling won't affect clipsoft and clip),
-    Then scale and clip soft then clip, 
-    then extereme clip,
-    then change unmappable regions
-    
-    Args:
-        seq: the sequence to process
-        blacklist: the already loaded values form the blacklist npz file that was loaded
-        unmappable_npz: the already loaded values from the unmappable regions npz file that was loaded
-        scale: the scale to apply (from targets.txt)
-        clip: the clip to apply (from targets.txt)
-        clip_soft: the soft clip to apply (from targets.txt)
-        blacklist_pct: the percentage to clip the blacklist to
-        
-    
-    '''
-    #first find blacklist values and if they overlap, clip them to baseline
-    if blacklist.sum() > 0:
-        baseline_cov = np.percentile(seq, 100*blacklist_pct, axis=1)
-        seq_blacklist = seq[:,blacklist==1]
-        seq_blacklist = np.minimum(seq_blacklist, baseline_cov[:,None])
-        seq[:,blacklist==1] = seq_blacklist
-    
-    #now scale and clip soft then clip
-    seq = seq * scale
-    clip_mask = (seq > 32)
-    if clip_mask.sum() > 0:
-        seq[clip_mask] = np.sqrt(seq[clip_mask] - clip_soft+1) + clip_soft-1
-        seq = np.clip(seq,0,clip)
-    
-    #now extreme clip, could be extreme values like lots of 0.0002 but then one that is 13. Not good potentially
-    extreme_clip = np.percentile(seq, 100*0.9999, axis=1)
-    seq = np.minimum(seq, extreme_clip[:,None])
-
-    #and finally, use unmappable regions
-    if unmap.sum() > 0:
-        seq_target_null = np.percentile(seq, q=[100*umap_clip], axis=1)
-        seq_unmap = seq[:,unmap==1]
-        seq_unmap = np.minimum(seq_unmap, seq_target_null[0,:,None])
-        seq[:,unmap==1] = seq_unmap
-
-    return seq
-
-def mask_seq(seq, mask_pct=0.15, replace_with_N=True, span=1, stype='category', weights=None):
+def mask_seq(seq, mask_pct=0.15, replace_with_N=True, span=1, stype='category', weights=None, mask_only=False):
     """This function will mask the sequence data, it does the BERT masking where you do 80% truly masked, 10% random, 10% unchanged
     Note that for random replacement, it cannot be the N token, sicne it's very rare anyways, always random nucleotide!
     Args:
@@ -79,23 +37,23 @@ def mask_seq(seq, mask_pct=0.15, replace_with_N=True, span=1, stype='category', 
         span: the size of the span to mask, default is 1, so it masks every element independently, but can be larger to mask chunks of size span
         stype: the type of sequence, 'category' for categorical like ohe nucleotide data and 'continuous' for continuous like raw accessibility data, default is 'category'
         weights: the weights to use for weighting regions like peaks. default is None, must be a tensor of shape (length,) to weight the peaks higher for masking. can be the same as the seq itself
+        mask_only: whether to do the 10% unchanged and 10% random replacement, default is False. If True, will only do the 100% truly masked and leave the rest unchanged
     Returns:
         seq: the masked sequence, this is a tensor of shape (length, N+1) if categorical or (length, 2) if continuous, where the last column is the mask track (only tells if masked, some are random or unchanged)
         seq_unmask: the unmasked sequence, this is a tensor of shape (length, N+1) if categorical or (length, 2), where the last column is the mask track (tells all elements that have been changed or goign to evaluate)
     """
-    # print(seq.shape)
-    if len(seq.shape) > 1:
-        if replace_with_N:
-            random_max = 5
-        else:
-            random_max = 4
-        
-    
-    num_elements = seq.shape[0]//span #chunks into chunks of size span
     
     if len(seq.shape) == 1: #if it's just a 1D tensor, we need to add a dimension for the mask track
         seq = seq.unsqueeze(1) #so now it's shape length x 1, so we can concatenate other things
     
+    if seq.shape[0]%span != 0:
+        #we append on values
+        remainder = seq.shape[0] % span
+        extra_append = span - remainder
+        seq = torch.cat([seq, torch.zeros((extra_append,seq.shape[1]), dtype=torch.float)]) #so now we can have a mask for every element in the span, so size length again
+    
+    num_elements = seq.shape[0]//span #chunks into chunks of size span
+
     # Create a probability vector (one per token) and sample which tokens to mask
     probability_matrix = torch.full((num_elements,), mask_pct) #size of length, defines for each element if we mask it or not
     
@@ -124,7 +82,7 @@ def mask_seq(seq, mask_pct=0.15, replace_with_N=True, span=1, stype='category', 
         #clip to make sure between 0 and 1
         probability_matrix = torch.clamp(probability_matrix, min=0, max=1) #clip to make sure between 0 and 1     
     
-    masked_indices = torch.bernoulli(probability_matrix).bool() #finds which indices to mask, so shape is length, and is True or False for each index
+    masked_indices = torch.bernoulli(probability_matrix.float()).bool() #finds which indices to mask, so shape is length, and is True or False for each index
 
     # Get positions that were chosen to be masked
     all_mask_positions = torch.nonzero(masked_indices).squeeze()*span #squeeze to remove the extra dimension, and multiply by span to get the actual positions in the original sequence
@@ -162,6 +120,16 @@ def mask_seq(seq, mask_pct=0.15, replace_with_N=True, span=1, stype='category', 
     seq_masked = seq_unmask.clone()  # Create a copy to modify, note that the mask track should be 0 for ones where it's not masked but is random or unchanged
     seq_masked[mask_positions, :-1] = 0  # Set to zero for every class but the last (tells it it's masked)
     
+    if mask_only:
+        #now forcibly mask the rest
+        seq_masked[unchanged_positions, :-1] = 0  # Set to zero for every class but the last (tells it it's masked)
+        seq_masked[random_positions, :-1] = 0  # Set to zero for every class but the last (tells it it's masked)
+        if span > 1:
+            seq_masked = seq_masked[:-extra_append]
+            seq_unmask = seq_unmask[:-extra_append]
+        # print(seq_masked.shape)
+        return seq_masked, seq_unmask #return the masked sequence and the unmasked sequence, so we can use it for the rest of the processing
+    
     if stype == 'category':
         # print(f'random_positions shape: {random_positions.shape}, seq shape: {seq.shape}')
         if replace_with_N:
@@ -197,6 +165,10 @@ def mask_seq(seq, mask_pct=0.15, replace_with_N=True, span=1, stype='category', 
     #and we remove the mask token from the unchanged value
     seq_masked[unchanged_positions, -1] = 0
     # seq = seq_masked #now we have the masked sequence, so we can use this for the rest of the processing
+
+    if span > 1:
+        seq_masked = seq_masked[:-extra_append]
+        seq_unmask = seq_unmask[:-extra_append]
     
     return seq_masked, seq_unmask #return the masked sequence and the unmasked sequence, so we can use it for the rest of the processing
     
@@ -205,6 +177,8 @@ Then you assign a random order, then the last 15% are defined as masked. You mas
 This can be done at the initialization of the dataloader, and this resets each epoch"""
 
 def open_data(data_path, load_in=False):
+    if data_path is None:
+        return None
     if data_path.endswith('.zarr'):
         data = zarr.open(data_path, mode='r')
         if load_in:
@@ -218,7 +192,20 @@ def open_data(data_path, load_in=False):
             data = np.load(data_path)
     return data
     
-    
+def get_data_idxs(data_path):
+    if data_path is None:
+        return None
+
+    if isinstance(data_path, list): #means inputted list
+        data_idxs = np.array(data_path)
+        
+    elif isinstance(data_path, str) and data_path.endswith('.json'):
+        with open(data_path, 'r') as f:
+            data_idxs = json.load(f)
+        data_idxs = np.array(data_idxs, dtype=int)
+    else:
+        raise ValueError(f"data_idxs must be a list or a json file, got {data_path}")
+    return data_idxs
 
 def coin_flip():
     return random() > 0.5
@@ -228,12 +215,11 @@ class GeneralDataset():
         self,
         split: str,
         data_path: str,
+        data_idxs: str = None, #if want to just get some cell types. Input json file or list
         length: int = None,
+        celltypes: int = 1,
         genome_seq_file: str = '/data1/lesliec/sarthak/data/chrombpnet_test/hg38_tokenized.npz',
-        preprocess: bool = False,
-        unmappable_file: str = '/data1/lesliec/sarthak/data/borzoi/umap.npz',
-        blacklist_file: str = '/data1/lesliec/sarthak/data/borzoi/blacklist.npz',
-        sequences_bed_file: str = '/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed',
+        sequences_bed_file: str = None,
         shift_sequences: int = 0, #whether to add some noise to the sequences and how much maxx
         load_in: bool = False,
         targets_txt_file: str = '/data1/lesliec/sarthak/data/borzoi/targets.txt',
@@ -252,14 +238,18 @@ class GeneralDataset():
         acc_threshold: float = 1, #this is the threshold for accessibility, so anything above this is accessible
         weight_peaks: bool = False, #whether to weight the peaks more for masking, default is False. Just uses the accessibility values themselves
         evaluating: bool = False, #if evaluating, removes all augmentations!
+        mask_only: bool = False, #if True, will only do the 100% truly masked and leave the rest unchanged
+        additional_data: str = None, #if you want to add additional data, like expression data, in enformer style just grab the idx!
+        additional_data_idxs: str = None, #if you want to add additional data, like expression data, in enformer style just grab the idx, get the idxs from some file with json. Can also be a list
+        additional_tracks: str = None, #if you want to add additional tracks, like expression data, in genome style
     ):
         """
         General dataset class, relies on zarr or np array data which is in chromosome format, and a sequences bed file
         
         Args:
             split (str): the split to use, train, val, test
+            data_idxs (str): the data idxs to use, only if you want a subset of the data! Json or list
             genome_seq_file (str): the path to the genome sequence file
-            preprocess (bool): whether to preprocess the data or not, like deal with unmappable values and things like that
             unmappable_file (str): the path to the unmappable regions file
             blacklist_file (str): the path to the blacklist file
             data_path (str): the path to the data file, can be npz or zarr, but must be in format of chromosome dict and then N x chrom_len where N is a number at least 1
@@ -282,10 +272,8 @@ class GeneralDataset():
             shift_sequences = 0
         
         self.split = split
+        self.celltypes = celltypes
         self.genome_seq_file = genome_seq_file
-        self.preprocess = preprocess
-        self.unmappable_file = unmappable_file
-        self.blacklist_file = blacklist_file
         self.data_path = data_path
         self.pool = pool
         self.pool_type = pool_type
@@ -304,25 +292,50 @@ class GeneralDataset():
         self.acc_type = acc_type #this is the type of accessibility, either 'category' or 'continuous', default is 'category'
         self.acc_threshold = acc_threshold #this is the threshold for accessibility, so anything above this is accessible
         self.weight_peaks = weight_peaks #whether to weight the peaks more for masking, default is False. Just uses the accessibility values themselves
+        self.mask_only = mask_only #if True, will only do the 100% truly masked and leave the rest unchanged
+        self.additional_data_path = additional_data #if you want to add additional data, like expression data, in enformer style just grab the idx!
+        self.additional_data_idxs = additional_data_idxs #if you want to add additional data, like expression data, in enformer style just grab the idx, get the idxs from some file with json
+        self.additional_tracks_path = additional_tracks #if you want to add additional tracks, like expression data, in genome style
         # self.complement_array = np.array([3, 2, 1, 0, 11]) #this is the complement array for the rc augmentation, so A->T, C->G, G->C, T->A, 11 stays as 11
 
         #and access the genome seq file
         self.genome = open_data(genome_seq_file, load_in)
         
-        if self.preprocess:
-            self.blacklist = open_data(blacklist_file, load_in)
-            self.unmappable = open_data(unmappable_file, load_in)
+        self.data_idxs = get_data_idxs(data_idxs) #get the data idxs from the data path, this is a json file with the indices of the data to use, if you want to use a subset of the data
+
+        if self.celltypes == 1 and self.data_idxs is not None:
+            print('replacing cell type number with data indices')
+            self.celltypes = len(self.data_idxs)
+        
+        self.additional_data_idxs = get_data_idxs(additional_data_idxs)
+        # if additional_data_idxs is not None:
+        #     with open(additional_data_idxs, 'r') as f:
+        #         additional_data_idxs = json.load(f)
+        #     self.additional_data_idxs = np.array(additional_data_idxs, dtype=int)
+        # else:
+        #     self.additional_data_idxs = None
         
         self.data = open_data(data_path, load_in)
         
+        self.additional_data = open_data(additional_data, load_in)
+        # if self.additional_data_path is not None:
+        #     self.additional_data = open_data(additional_data, load_in)
+        # else:
+        #     self.additional_data = None
+        
+        if additional_tracks is not None:
+            raise NotImplementedError("Additional tracks not implemented yet, need to make sure it can properly read in data and other things for the target")
+        
+        if sequences_bed_file is None:
+            sequences_bed_file = f'/data1/lesliec/sarthak/data/DK_zarr/sequences_{self.length}.bed'
         sequences = pd.read_csv(sequences_bed_file, sep='\t', header=None)
         #filter to the split
-        if self.split in sequences[3].values:
+        if self.split in sequences[3].values: #accounts if val is in there, doesn't run, but if it isn't there, tries valid
             self.sequences = sequences[sequences[3] == self.split].reset_index(drop=True)
         elif self.split == 'val':
             # Handle the case when self.split is not found, because we use val but enformer uses valid
-            self.split = 'valid'
-            self.sequences = sequences[sequences[3] == self.split].reset_index(drop=True)
+            # self.split = 'valid'
+            self.sequences = sequences[sequences[3] == 'valid'].reset_index(drop=True)
         else:
             raise ValueError(f"Split {self.split} not found in sequences bed file")
 
@@ -345,7 +358,7 @@ class GeneralDataset():
         
     def __len__(self):
         #return the length of the dataset, this is the number of sequences in the split
-        return len(self.sequences)
+        return len(self.sequences) * self.celltypes #multiply by the number of cell types, since we have multiple cell types in the dataset, but we can just use the same sequences for all of them
     
     def __getitem__(self, index):
         """Get the item at the index, this will return the sequence and the data for that sequence, and also do any processing if needed
@@ -361,14 +374,30 @@ class GeneralDataset():
         if not self.load_in: #each worker gets its own so modifying self is fine
             self.genome = open_data(self.genome_seq_file, load_in=False)
             self.data = open_data(self.data_path, load_in=False)
-            if self.preprocess:
-                self.blacklist = open_data(self.blacklist_file, load_in=False)
-                self.unmappable = open_data(self.unmappable_file, load_in=False)
+
+            self.additional_data = open_data(self.additional_data_path, load_in=False) #function returns None if path is None
+            # if self.additional_data_path is not None:
+            #     self.additional_data = open_data(self.additional_data_path, load_in=False)
+            
+            self.additional_tracks = open_data(self.additional_tracks_path, load_in=False) #function returns None if path is None
+            # if self.additional_tracks_path is not None:
+            #     self.additional_tracks = open_data(self.additional_tracks, load_in=False)
         
         seq_unmask = torch.empty(0)
         acc_umask = torch.empty(0)
         
-        chrom, start, end, split = self.sequences.iloc[index]
+        if self.celltypes > 1 or self.data_idxs is not None: #the self cell types will be more than 1 if you have data idxs
+            #we now separate out cell type from sequence
+            celltype_idx_og = index // len(self.sequences) #get the index of the cell type
+            celltype_idx = self.data_idxs[celltype_idx_og] #get the proper index!
+            index = index % len(self.sequences) #get the index of the sequence
+        else:
+            celltype_idx = 0
+        
+        # chrom, start, end, split = self.sequences.iloc[index]
+        chrom, start, end, split, *rest = self.sequences.iloc[index] #get the chromosome, start, end, and split from the sequences file
+        fold = rest if len(rest) > 0 else None #get the fold if it exists, else None. This lets us know which fold the seq is from so we can access it!
+
         if self.shift_sequences > 0:
             shift = np.random.randint(-self.shift_sequences, self.shift_sequences+1)
             start = start+shift
@@ -377,8 +406,8 @@ class GeneralDataset():
         #initialize padding if needed
         leftpad = np.zeros(0)
         rightpad = np.zeros(0)
-        diff = self.length - (end - start)
         if self.length is not None: #if we have a length and the length is greater than the sequence, we need to pad it
+            diff = self.length - (end - start)
             start = start - diff // 2
             end = end + diff // 2
             if start < 0:
@@ -389,9 +418,9 @@ class GeneralDataset():
                 rightpad = np.ones(end-chromlen)*11
                 end = chromlen
             seq = np.concatenate([leftpad.astype(np.int8), self.genome[chrom][start:end], rightpad.astype(np.int8)]) #pad with 11s if needed, but make sure they're int too
-                
-                
-        else: #just grab the sequence and data directly
+        else:
+            assert start >= 0, f"Start {start} is negative, but length is None"
+            assert end <= self.genome[chrom].shape[0], f"End {end} is greater than chromosome length {self.genome[chrom].shape[0]}"
             seq = self.genome[chrom][start:end]
         
         if self.rc_aug and coin_flip():
@@ -417,7 +446,7 @@ class GeneralDataset():
             if not self.one_hot:
                 raise ValueError("MLM only works with one hot encoding for now, but can easily be generalized to this")
 
-            seq, seq_unmask = mask_seq(seq, mask_pct=self.mlm, replace_with_N=self.replace_with_N) #this will mask the data and return the unmasked data as well, so we can use it for the rest of the processing
+            seq, seq_unmask = mask_seq(seq, mask_pct=self.mlm, replace_with_N=self.replace_with_N, mask_only=self.mask_only) #this will mask the data and return the unmasked data as well, so we can use it for the rest of the processing
             # seq_unmask = seq_unmask.transpose(1, 0) #transpose it to be 6 x length, so we can use it for the rest of the processing
         
         seq = seq.transpose(1, 0) #transpose it to be 6 x length, so we can use it for the rest of the processing
@@ -427,19 +456,18 @@ class GeneralDataset():
         
     
         #and get the data
-        data = np.concatenate([leftpad[None]*0, self.data[chrom][:,start:end], rightpad[None]*0], axis=1) #multiply by 0 to set it as 0 since it's not tokenized
+        data = np.concatenate([leftpad[None]*0, self.data[chrom][celltype_idx:celltype_idx+1,start:end], rightpad[None]*0], axis=1) #multiply by 0 to set it as 0 since it's not tokenized
         #so padsd if needed, and then pads 0s
         #broadcast along the dimension
         #now is shape N x length, where N is the number of targets
+        
+        #not sure what I was thinking, not useful
+        # if self.data_idxs is not None:
+        #     #if we have data idxs, we will only use those
+        #     data = data[self.data_idxs]
+        
         data = data.transpose(1, 0) #now is shape length x N, so we can do the pooling and stuff
         
-        if self.preprocess:
-            #now we will process the data
-            raise NotImplementedError("Processing of data is not implemented yet, below code is incorrect or uses fake functions")
-            # blacklist = np.concatenate([leftpad*0, self.blacklist[chrom][start:end], rightpad*0])
-            # unmap = np.concatenate([leftpad*0, self.unmappable[chrom][start:end], rightpad*0])
-            # scale, clip, clip_soft = self.get_target_params(chrom)
-            # data = process_data(data, self.blacklist[chrom], self.unmappable[chrom], scale, clip, clip_soft)
         
         targets = torch.FloatTensor(data)
         if flip:
@@ -481,11 +509,32 @@ class GeneralDataset():
                     #and ohe it
                     targets = torch.nn.functional.one_hot(targets, num_classes=2).float() #now input is length x 2
                 
-                targets, acc_umask = mask_seq(targets, mask_pct=self.acc_mlm, span=self.acc_mask_size, stype=self.acc_type, weights=weights) #mask the acc data
+                targets, acc_umask = mask_seq(targets, mask_pct=self.acc_mlm, span=self.acc_mask_size, stype=self.acc_type, weights=weights, mask_only=self.mask_only) #mask the acc data
                 # acc_umask = acc_umask.transpose(1, 0) #transpose it to be 2 x length, so we can use it for the rest of the processing
         
         #now transpose the targets
         targets = targets.transpose(1, 0)
+        
+        if self.additional_data is not None:
+            #this is like if using borzoi or enformer data. Point is need to be able to access the data by index, not start and end of chromosome
+            #so t index is just the sequence index of the borozi file you load!
+            if fold is not None: #basically are we doing folds or not with the additional data! 
+                split = fold[0] #fold will have 2 elements!
+                tindex = fold[1]
+            else:
+                split = self.split
+                tindex = index
+
+            #and subset to the celltypes of interest
+            if self.additional_data_idxs is not None:
+                additional_data = self.additional_data[split][tindex][:,self.additional_data_idxs] #get the additional data for the cell types of interest
+                if self.celltypes > 1:
+                    additional_data = additional_data[:,celltype_idx_og:celltype_idx_og+1]
+            else:
+                additional_data = self.additional_data[split][tindex] #with zarr can input it to not require the split, idk about npz tho! can input like path.zarr/train for train data, but then won't work for evals...
+            # additional_data = self.additional_data[index]
+            return (seq,targets), (seq_unmask,acc_umask,additional_data) #return the sequence, targets, unmasked sequence and unmasked accessibility if we do masking, else empty tensors
+
         
         return (seq, targets), (seq_unmask, acc_umask) #return the sequence, targets, unmasked sequence and unmasked accessibility if we do masking, else empty tensors
     
@@ -499,7 +548,7 @@ class GeneralDataset():
             seq (np.array): the expanded sequence, this is a numpy array of shape (length,) where length is the length of the sequence
         """
         #expand the sequences to the start and stop positions
-        
+        #TODO make this work with folds somehow! Unsure how to do so...
         new_row = pd.DataFrame([[ chr, start, stop, self.split ]], columns=self.sequences.columns)
         self.sequences = pd.concat([self.sequences, new_row], ignore_index=True)
         idx = self.sequences.index[-1] #get the index of the new row
@@ -513,7 +562,6 @@ if __name__ == "__main__":
     #example usage
     dataset = GeneralDataset(
         split='train',
-        preprocess=False,
         data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz',
         sequences_bed_file='/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed',
         length=None
@@ -523,11 +571,49 @@ if __name__ == "__main__":
 #here's some oexample things you can use
 '''
 from src.dataloaders.datasets.general_dataset import GeneralDataset
+
+#to finetune on Enformer CAGE
 dataset = GeneralDataset(
     split='train',
-    preprocess=False,
-    data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz',
+    data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/dnase_chunkchrom_processed.zarr',
     sequences_bed_file='/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed',
-    length=524288
+    length=524288,
+    mlm=0,
+    acc_mlm=0,
+    additional_data='/data1/lesliec/sarthak/data/enformer/data/labels.zarr',
+    additional_data_idxs='/data1/lesliec/sarthak/data/DK_zarr/idx_lists/nob_immune_CAGE.json',
+    data_idxs='/data1/lesliec/sarthak/data/DK_zarr/idx_lists/nob_immune.json',
 )
+
+#to finetune on all borzoi GM12878 rna
+dataset = GeneralDataset(
+    split='train',
+    data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz',
+    sequences_bed_file='/data1/lesliec/sarthak/data/DK_zarr/sequences_borzoi_fold3-4.bed',
+    length=524288,
+    mlm=0,
+    acc_mlm=0,
+    additional_data='/data1/lesliec/sarthak/data/borzoi/borzoi.zarr',
+    additional_data_idxs='/data1/lesliec/sarthak/data/DK_zarr/idx_lists/gm12878_RNA.json',
+)
+
+dataset = GeneralDataset(
+    split='train',
+    data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/test_chrom_dnase_chunkchrom.zarr',
+    length=524288,
+    mlm=0.25,
+    acc_mlm=0.25,
+    data_idxs='/data1/lesliec/sarthak/data/DK_zarr/idx_lists/all_matched_immune.json'
+)
+
+dataset = GeneralDataset(
+    split='train',
+    data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz',
+    length=524288,
+    mlm=0.25,
+    acc_mlm=0.25,
+    additional_data='/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz',
+)
+
+out = dataset[0]
 '''

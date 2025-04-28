@@ -38,7 +38,11 @@ class Evals():
                  split = 'test',
                  device = None,
                  load_data=False,
+                 **dataset_overrides #Don't pass None into overrides unless you intentionally want it to be None! Pass in items only that you need
+                #  data_idxs=None, #the actual value in the full self.dataset.data (so for GM12878 it's 12 or 69). Lets you access a new celltype or just subset to a smaller set of celltypes
+                #  sequences_bed_file=None,
                  ) -> None:
+        #TODO make it so that we can take in arbitrary dataset information in like a dict and adds options to dataset
         
         #now load the cfg from the checkpoint path
         model_cfg_path = os.path.join(os.path.dirname(os.path.dirname(ckpt_path)), '.hydra', 'config.yaml')
@@ -74,6 +78,18 @@ class Evals():
             dataset_args['split'] = split
             dataset_args['evaluating'] = True #this tells it to not do things like random shifting and rc aug, still does random masking tho, can get og sequence easily
             dataset_args['load_in'] = load_data
+            
+            for k, v in dataset_overrides.items():
+                if k in sig:
+                    dataset_args[k] = v
+                    print(f"Overriding {k} with {v}")
+                else:
+                    print(f"Warning: {k} not in dataset args, skipping")
+            
+            # if data_idxs is not None:
+            #     dataset_args['data_idxs'] = data_idxs
+            # if sequences_bed_file is not None:
+            #     dataset_args['sequences_bed_file'] = sequences_bed_file
             # dataset_args['rc_aug'] = False #we don't want to do rc aug in our evaluation class!!!
             self.dataset_args = dataset_args
             # self.dataset_args['rc_aug'] = False #we don't want to do rc aug in our evaluation class!!!

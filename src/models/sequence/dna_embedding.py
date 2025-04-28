@@ -320,20 +320,28 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, ad
     return:
         state_dict: dict, update with inflated weights
     """
+    # print('RUNNING THIS LOAD BACKBONE', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n')
     # consumes prefix from pretrained model, if necessary
+    # if load_encoder:
+    #     encoder = model.encoder
+    # if load_decoder:
+    #     decoder = model.decoder
     model = model.model #because we input the whole thing, have to specify what it is!
+    # print('state_dict', state_dict.keys())
     torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(
         state_dict, "model."
     )
 
     model_new_params_dict = model.state_dict()
     # print(model.state_dict())
-    for key in model.state_dict().keys():
-        print(key)
+    # for key in model_new_params_dict.keys():
+    #     print(key)
+    # for key in state_dict.keys():
+    #     print(key)
+    # import sys
+    # sys.exit()
     # same as in the cCRE_DNase_level_testing.ipynb
     updated_model_state_dict = {}
-    
-    # print(model_new_params_dict.keys())
     
     # print(model_new_params_dict['backbone.embeddings.word_embeddings.weight'].shape) #this is 20x128, which is from our model
 
@@ -358,54 +366,15 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, ad
             # using scratch by default, nothing needed
             used_params = model_new_params_dict[key]
 
-        
-            
-        #if you want to partially restore them, you can do this approach
-        
-        # elif add_embeddings and 'embedding' in key: #currently unused
-        #     print("adding embeddings:", key)
-        #     # Initialize a new embedding layer with the updated vocabulary size
-        #     # new_embeddings = GPT2Embeddings(model.state_dict()[key].shape[1], model.state_dict()[key].shape[0]+add_embeddings, )
-        #     #not using the GPT2Embeddings, as that just combines the position with it, we don't care about that, just want the words
-        #     # print(loaded_params)
-        #     # print(model.state_dict()[key].shape) #should be 16 x 128, and it is!
-            
-        #     old_vocab = model.state_dict()[key].shape[0]
-        #     old_dim = model.state_dict()[key].shape[1]
-            
-        #     #what we need to do is first save out the extra ones, because they were initialized in a special way
-        #     saved_embeddings = model.state_dict()[key][0:add_embeddings] #will be the amount of extra ones by 128
-            
-        #     #now we create a new nn.embeddings
-        #     new_embeddings = torch.nn.Embedding(old_vocab+add_embeddings,old_dim)
-            
-        #     # Copy the original embeddings for the known tokens
-        #     new_embeddings.weight.data[:old_vocab] = loaded_params
-        #     # Randomly initialize the embeddings for the new tokens
-        #     new_embeddings.weight.data[old_vocab:] = saved_embeddings #this is a hacky way, could just initialize the same way they did, but it's whatever
-        #     used_params = new_embeddings.weight.data #assuming that the loaded_params is indeed just the .weights.data
-        #     print(used_params.shape)
-        #     # import sys
-        #     # sys.exit()
-        
-        # elif 'embedding' in key:
-        #     print(loaded_params)
-        #     print(loaded_params.shape) #also 20 x 128
             
         elif ignore_embeddings and 'embedding' in key: #if you just want to restart the embeddings
             print("found embedding key / parameter, load from scratch", key)
             used_params = model_new_params_dict[key]
-            # print(used_params)
-            # print(used_params.shape) #is vocab size x 128
-            # import sys
-            # sys.exit()
             
-        # elif adjust_embedding and 'embedding' in key: #if you just want to change the size of the embedding but still load it
-        #     print("found embedding key / parameter, DO NOT load from scratch", key)
-        #     #create a random embedding size 20x128
-        #     new_embeddings = torch.nn.Embedding(20,128)
-        #     used_params = new_embeddings.weight.data
-
+            
+        elif "encoder" in key:
+            print("found encoder key / parameter, load from scratch", key)
+            used_params = model_new_params_dict[key]
         elif "decoder" in key:
             print("found decoder key / parameter, load from scratch", key)
             used_params = model_new_params_dict[key]
@@ -436,31 +405,48 @@ def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True, ad
     # we have updated the new model state dict with pretrained now
     return updated_model_state_dict
 
-def load_full_model(model, state_dict):
+def load_full_model(model, state_dict, load_encoder=False, load_decoder=False, freeze_backbone=False, freeze_encoder=False):
     """
-
-    Doesn't modify state dict, only allows loading of the full model
-
+    Load the full model state dict directly if it matches the current model's structure.
+    Allows selectively ignoring loading for encoder/decoder and optionally freezing.
+    Also, it enables you to have different heads in youru encoder/decoder that are ignored
+    Idea is loop through current model things, if it's a new thing in decoder/encoder, make it new. Otherwise, load it.
+    
     inputs:
-        model: nn.Module, the from 'scratch' model
-        state_dict: dict, from the pretrained weights
-
+        model: nn.Module, the from-scratch model with full architecture.
+        state_dict: dict, pretrained weights matching model.state_dict()
+        load_encoder: bool, whether to load encoder weights.
+        load_decoder: bool, whether to load decoder weights.
+        freeze_backbone: bool, freeze the backbone parameters after loading.
+        freeze_encoder: bool, freeze the encoder parameters after loading.
+    
     return:
-        state_dict: dict, update with inflated weights
+        updated_model_state_dict: dict, the state dict after loading (for further inspection if needed).
     """
     # purposely doesn't consumes prefix from pretrained model, so can get full model
 
     model_new_params_dict = model.state_dict()
     updated_model_state_dict = {}
     
+    print('state_dict', state_dict.keys())
+    
     # loop through scratch model keys (pretrained may have extra stuff)
     for key in sorted(model_new_params_dict.keys()):
         
         loaded_params = state_dict.get(key, None)
-        # make sure key is in the loaded params first, if not, then print it out
-        # print(loaded_params)
+
         
-        if loaded_params is None:
+        #first ensure that if the pretrained state dict has extra keys in the encoder or decoder (or if you simply don’t want to load them), you load the scratch weight instead.
+        
+        if 'encoder' in key and not load_encoder:
+            print("found encoder key / parameter, load from scratch", key)
+            used_params = model_new_params_dict[key]
+        
+        elif 'decoder' in key and not load_decoder: #also means that if old decoder had extra keys, those are unused!
+            print("found decoder key / parameter, load from scratch", key)
+            used_params = model_new_params_dict[key]
+                
+        elif loaded_params is None:
             # This should never happen, it should be there!
             #however it isn't there if we for example save something to model.new_embeddings, which is only to be used for adjusting embedding size
             print("Missing key in pretrained model!", key)
@@ -474,15 +460,14 @@ def load_full_model(model, state_dict):
         # key_with_prefix = 'model.' + key
         updated_model_state_dict[key] = used_params
 
-        # if add_embeddings: #now implemented in the main train.py file
-        #     print("adding embeddings:", key)
-            
-            
-        #     old_vocab = model.state_dict()[key].shape[0]
-        #     old_dim = model.state_dict()[key].shape[1]
-            
-        #     #what we need to do is first save out the extra ones, because they were initialized in a special way
-        #     saved_embeddings = model.state_dict()[key][0:add_embeddings]
-
+    if freeze_backbone:
+        print("freezing model backbone params!")
+        # note, decoder not included in backbone
+        for name, param in model.model.named_parameters():
+            param.requires_grad = False
+    if freeze_encoder:
+        print("freezing model encoder params!")
+        for name, param in model.encoder.named_parameters():
+            param.requires_grad = False
     # we have updated the new model state dict with pretrained now
     return updated_model_state_dict

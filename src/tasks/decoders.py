@@ -304,7 +304,7 @@ class EnformerDecoder(Decoder):
     def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False,
                  yshape=114688, bin_size=128, downsampled=False, dropout_rate=0.1,
                  num_downsamples=7, dim_divisible_by=128, kmer_len=None, conjoin_train=True, conjoin_test=False,
-                 mouse = False, d_output_mouse = None):
+                 mouse = False, d_output_mouse = None, d_output2=None):
         super().__init__()
         # if d_output is None:
         #     d_output = yshape//bin_size
@@ -331,18 +331,18 @@ class EnformerDecoder(Decoder):
         #     self.pool2 = nn.MaxPool1d(kernel_size=6)
         #     self.pool3 = nn.MaxPool1d(kernel_size=3)
         if convolutions:
-            half_dim = d_model//2
+            # half_dim = d_model//2
             twice_dim = d_model*2
-            filter_list = exponential_linspace_int(half_dim, d_model, num = (num_downsamples - 1), divisible_by = dim_divisible_by)
-            filter_list = [half_dim, *filter_list]
+            # filter_list = exponential_linspace_int(half_dim, d_model, num = (num_downsamples - 1), divisible_by = dim_divisible_by)
+            # filter_list = [half_dim, *filter_list] #lasta element of filter list is just d_model
             self.final_pointwise = nn.Sequential(
                 Rearrange('b n d -> b d n'),
-                ConvBlock(filter_list[-1], twice_dim, 1),
+                ConvBlock(d_model, twice_dim, 1), #just CNN of size 1 and lots of output channels
                 Rearrange('b d n -> b n d'),
                 nn.Dropout(dropout_rate / 2),
                 GELU()
             )
-            self.crop_final = TargetLengthCrop(self.yshape)
+            # self.crop_final = TargetLengthCrop(self.yshape)
             d_model = twice_dim
         
         self.output_transform = nn.Linear(d_model, d_output)
@@ -411,7 +411,17 @@ class EnformerDecoder(Decoder):
             # if self.kmer_len is not None:
             #     x = x[:,self.kmer_len:] #because we cropped that many elements from the right already when we did kmer encoding
             #again this feature is deprecated, no longer used
-            x = self.crop_final(x)
+            # x = self.crop_final(x) #we just implement it ourself
+            
+            startidx = x.shape[1]//2 - self.yshape//2
+            endidx = startidx + self.yshape
+            
+            x = x[:,startidx:endidx,:] #cuts it to size yshape which is the middle 896, not the full 1536
+            x_permute = x.permute(0,2,1)
+            # x_pooled = F.avg_pool1d(x_permute, kernel_size=self.bin_size, stride=self.bin_size)
+            x_pooled = self.pool(x_permute)
+            x = x_pooled.permute(0,2,1)
+            
             #my implementation of a separate approach
             # #now we need to do the convolution and then either pol it or figure something else out
             # x = x.permute(0, 2, 1)

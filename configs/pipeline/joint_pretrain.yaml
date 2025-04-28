@@ -19,3 +19,4 @@ encoder:
 
 decoder:
   _name_: jointmask
+  # mode: pool #to average the embeddings
