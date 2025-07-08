@@ -60,6 +60,7 @@ def to_list(x, recursive=False):
 #     return [getattr(obj, attr, None) for attr in attrs]
 
 def extract_attrs_from_obj(obj, *attrs):
+    # print(f"extract_attrs_from_obj: {obj=}, {attrs=}")
     if obj is None:
         assert len(attrs) == 0
         return []
@@ -71,13 +72,25 @@ def extract_attrs_from_obj(obj, *attrs):
         if value is not None:
             return value
         
-        # If not found, check for nested attributes
-        parts = attr.split(".")
-        for part in parts:
-            obj = getattr(obj, part, None)
-            if obj is None:
-                return None
-        return obj
+        # If not found, check for the dataset
+        dataset = getattr(obj, "dataset_train", None)
+        # print('dataset', dataset)
+        # print('attr', attr)
+        if dataset is None:
+            return None
+        else:
+            # Check if the attribute is a nested attribute
+            # print('getting the attribute now',getattr(dataset, attr, None))
+            return getattr(dataset, attr, None)
+        
+        # parts = attr.split(".")
+        # print(parts)
+        # for part in parts:
+        #     print(part)
+        #     obj = getattr(obj, part, None)
+        #     if obj is None:
+        #         return None
+        # return obj
 
     return [get_attr_or_nested(obj, attr) for attr in attrs]
 

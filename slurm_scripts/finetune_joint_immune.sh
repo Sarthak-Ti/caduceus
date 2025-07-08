@@ -6,7 +6,7 @@
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:2
-#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_nobcell
+#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_nobcell_nomlm_maskonly
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -25,7 +25,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  model=caduceus model.config.d_model=256 model.config.n_layer=16 model.config.bidirectional=true \
  model._name_=dna_embedding_caduceus model.config.bidirectional_strategy=add model.config.bidirectional_weight_tie=true model.config.rcps=false \
- optimizer.lr="1e-4" \
+ optimizer.lr="1e-4" +train.remove_test_loader_in_eval=true \
  \
  dataset.acc_type=continuous \
  \
@@ -38,7 +38,8 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  +decoder.d_model=256 +decoder.d_output=1 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/labels.zarr \
  +dataset.additional_data_idxs=/data1/lesliec/sarthak/data/DK_zarr/idx_lists/nob_immune_CAGE.json \
  +dataset.data_idxs=/data1/lesliec/sarthak/data/DK_zarr/idx_lists/nob_immune.json \
- train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-04-17/12-31-41-192495/checkpoints/last.ckpt"
+ train.ckpt="/data1/lesliec/sarthak/caduceus/outputs/2025-05-20/13-43-37-446862/checkpoints/last.ckpt" +train.pretrained_model_state_hook.load_decoder=true
+#  train.pretrained_model_path=/data1/lesliec/sarthak/caduceus/outputs/2025-04-28/15-39-56-643580/checkpoints/last.ckpt \
 
 
 #now let's set it to gpu 3 and then run it

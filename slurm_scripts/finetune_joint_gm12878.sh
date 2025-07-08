@@ -2,11 +2,11 @@
 
 #SBATCH --partition=lesliec,gpu
 #SBATCH --ntasks-per-node=2
-#SBATCH --cpus-per-task=6
+#SBATCH --cpus-per-task=8
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:2
-#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_nopretrain
+#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_nomlm_maskonly
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -25,7 +25,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  model=caduceus model.config.d_model=256 model.config.n_layer=16 model.config.bidirectional=true \
  model._name_=dna_embedding_caduceus model.config.bidirectional_strategy=add model.config.bidirectional_weight_tie=true model.config.rcps=false \
- optimizer.lr="1e-4" \
+ optimizer.lr="1e-4" +train.remove_test_loader_in_eval=true \
  \
  dataset.acc_type=continuous \
  \
@@ -36,7 +36,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  +decoder.conjoin_train=false +decoder.conjoin_test=false +decoder.convolutions=true \
  +decoder.d_model=256 +decoder.d_output=1 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz \
- train.ckpt="/data1/lesliec/sarthak/caduceus/outputs/2025-04-14/18-36-09-021037/checkpoints/last.ckpt"
+ train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-04-28/15-26-30-700432/checkpoints/last.ckpt"
 
 
 #now let's set it to gpu 3 and then run it

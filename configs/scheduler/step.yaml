@@ -4,5 +4,5 @@ train:
 scheduler:
   # _target_: torch.optim.lr_scheduler.StepLR
   _name_: step
-  step_size: 1
+  step_size: 1000
   gamma: 0.99

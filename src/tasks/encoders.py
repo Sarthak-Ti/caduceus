@@ -184,6 +184,92 @@ class JointCNN(Encoder):
 
         return x
 
+class JointCNNWithCTT(Encoder):
+    """
+    A CNN-based encoder that takes in OHE and accessibility data and also uses a cell type token
+    Replaces nucleotide 1 (accessibility and sequence) with a cell type token embedding
+
+    If `joint` is True, the inputs are concatenated along the channel dimension and passed through a single CNN.
+    If `joint` is False, each input is processed by its own CNN, and their outputs are concatenated.
+
+    Args:
+        d_input1 (int): The number of input channels for sequence.
+        d_input2 (int): The number of input channels for accessibility.
+        d_model (int): The desired output dimension of the model.
+        joint (bool): Whether to process the inputs jointly or separately. Default is False.
+        kernel_size (int): The size of the convolutional kernel. Default is 15.
+    """
+    def __init__(self, d_model, celltypes, d_input1=6, d_input2=2, joint=False, kernel_size=15, combine=True, acc_type='continuous', **kwargs):
+        super().__init__()
+        print(f"JointMaskingEncoder: d_model={d_model}, celltypes={celltypes}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
+        # print(kwargs)
+        self.joint = joint
+        self.combine = combine
+        # print(d_input1, d_input2)
+        # print('dmodel', d_model)
+        # print('acc_type', acc_type)
+        if acc_type == 'continuous':
+            d_input2 = 2
+        elif acc_type == 'category':
+            d_input2 = 3
+
+        if joint:
+            # Single CNN for joint processing
+            self.conv = nn.Sequential(
+                nn.Conv1d(d_input1+d_input2, d_model, kernel_size, padding='same'),
+                nn.ReLU()
+            )
+        else:
+            # Separate CNNs for each input
+            self.conv1 = nn.Sequential(
+                nn.Conv1d(d_input1, d_model // 2, kernel_size, padding='same'),
+                nn.ReLU()
+            )
+            self.conv2 = nn.Sequential(
+                nn.Conv1d(d_input2, d_model // 2, kernel_size, padding='same'),
+                nn.ReLU()
+            )
+            if combine:
+                self.out = nn.Linear(d_model, d_model)
+        
+        # now we get an embedding for the cell type token
+        self.ctt_embedding = nn.Embedding(celltypes, d_model)
+
+    def forward(self, x1, x2, token):
+        """
+        Forward pass for the JointCNNWithCTT.
+
+        Args:
+            x1 (torch.Tensor): The first input tensor of shape (batch_size, d_input1, seq_len).
+            x2 (torch.Tensor): The second input tensor of shape (batch_size, d_input2, seq_len).
+            token (torch.Tensor): The cell type token of shape (batch_size).
+
+        Returns:
+            torch.Tensor: The output tensor of shape (batch_size, d_model, seq_len).
+        """
+        
+        #we first remove the first nucleotide
+        x1 = x1[:,:,1:] #remove the first nucleotide
+        x2 = x2[:,:,1:] #remove the first nucleotide
+        
+        if self.joint:
+            # Concatenate inputs along the channel dimension and process jointly
+            x = torch.cat([x1, x2], dim=1)  # Concatenate along channel dimension
+            x = self.conv(x)
+        else:
+            # Process inputs separately and concatenate their outputs
+            x1_out = self.conv1(x1)
+            x2_out = self.conv2(x2)
+            x = torch.cat([x1_out, x2_out], dim=1)  # Concatenate along channel dimension
+            if self.combine:
+                x = self.out(x.transpose(1,2)).transpose(1,2) #applies linear layer along embedding dimension, across batch and length is independent
+        
+        #and now we add the cell type token
+        ctt = self.ctt_embedding(token).unsqueeze(2) #shape batch x d_model x 1
+        #now append to x
+        x = torch.cat([ctt, x], dim=2) #concatenate along the length dimension
+
+        return x
 
 # For every type of encoder/decoder, specify:
 # - constructor class
@@ -198,16 +284,19 @@ registry = {
     "enformer": EnformerEncoder,
     "cnn": CNNEmbedding,
     "jointcnn": JointCNN,
+    "jointcnn_ctt": JointCNNWithCTT,
 }
 dataset_attrs = {
     "linear": ["d_input"],  # TODO make this d_data?
     "onehot": ["n_tokens"],
     "jointcnn": ["acc_type"],
+    "jointcnn_ctt": ["acc_type", "celltypes"],
 }
 model_attrs = {
     "linear": ["d_model"],
     "onehot": ["d_model"],
     "jointcnn": ["d_model"],
+    "jointcnn_ctt": ["d_model"],
 }
 
 
@@ -247,6 +336,8 @@ def _instantiate(encoder, dataset=None, model=None):
     
     # Get dataset attributes and add them as keyword arguments to encoder
     if dataset and dataset_attrs_list:
+        print('dataset:', dataset)
+        print('dataset_attrs_list:', dataset_attrs_list)
         dataset_values = utils.config.extract_attrs_from_obj(dataset, *dataset_attrs_list)
         print('dataset_args:', dataset_values)
         for attr, value in zip(dataset_attrs_list, dataset_values):

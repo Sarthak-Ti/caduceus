@@ -17,14 +17,13 @@ cd /data1/lesliec/sarthak/caduceus/evals
 nvidia-smi
 
 
-outputs=("immune_nob.npy" "immune_all.npy")
+outputs=("primary_immune.npy")
 
 ckpts=( \
-  "/data1/lesliec/sarthak/caduceus/outputs/2025-04-17/12-31-41-192495/checkpoints/09-val_loss=1.10646.ckpt" \
-  "/data1/lesliec/sarthak/caduceus/outputs/2025-04-17/12-29-49-150674/checkpoints/06-val_loss=1.12144.ckpt" \
+  "/data1/lesliec/sarthak/caduceus/outputs/2025-06-16/15-19-15-994041/checkpoints/last.ckpt" \
 )
 
-mask_sizes=(1000 1000)
+mask_sizes=(1000)
 
 #–– pick the right one based on SLURM_ARRAY_TASK_ID ––
 i=$SLURM_ARRAY_TASK_ID
@@ -33,10 +32,15 @@ CKPT=${ckpts[$i]}
 MASK_SIZE=${mask_sizes[$i]}
 
 echo "Running task $i with output $OUTPUT, ckpt $CKPT, mask size $MASK_SIZE"
-#–– run the task ––
+#–– run the ask ––
 pixi run python dsqtl_onemodel.py \
   -o "$OUTPUT" \
   --ckpt_path "$CKPT" \
   --mask_size "$MASK_SIZE" \
+  --data_path /data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz \
   --load_data
+  # --pool 128 \
+  # --out_size 196608 \
+  # --load_data
 #data idxs is only if trained on multiple cell types
+#pool is if want to pool outputs then predict

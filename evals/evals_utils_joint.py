@@ -169,6 +169,15 @@ class Evals():
         
         return seq, acc, seq_unmask, acc_unmask
     
+    def freeze(self):
+        '''freezes the model, so that it doesn't update the weights during training'''
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+        for param in self.decoder.parameters():
+            param.requires_grad = False
+    
     def mask(self, start=None, stop=None, idx=None, data=None, run=True,
              mask_accessibility=False, mask_sequence=False,
              randomize_sequence=False, randomize_accessibility=False,

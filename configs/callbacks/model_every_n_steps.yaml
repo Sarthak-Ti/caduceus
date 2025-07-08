@@ -1,0 +1,10 @@
+model_checkpoint_every_n_steps:
+  monitor: val/loss # name of the logged metric which determines when model is improving
+  mode: min # can be "max" or "min"
+  save_top_k: -1 # Do not save any "best" models; this callback is being used to save every n train steps
+  save_last: False # save last epoch, not th elast step
+  dirpath: "checkpoints/"
+  filename: "{epoch:02d}-val_loss={val/loss:.5f}-step={step}"
+  auto_insert_metric_name: False
+  verbose: True
+  every_n_train_steps: 10000

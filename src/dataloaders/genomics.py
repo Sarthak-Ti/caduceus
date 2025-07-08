@@ -189,6 +189,7 @@ class HG38(SequenceDataset):
     def val_dataloader(self, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
         """ The val dataloader """
         kwargs["drop_last"] = False
+        # print('**Using val dataloader**, here is kwargs:', kwargs) #num loaders does indeed match!
         return self._data_loader(self.dataset_val, batch_size=self.batch_size_eval, **kwargs)
 
     def test_dataloader(self, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:

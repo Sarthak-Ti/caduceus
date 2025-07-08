@@ -42,7 +42,7 @@ dataset:
   acc_type: ???
   acc_mask_size: 500
   weight_peaks: false
-  additional_data: ??? #additional data for the task you are fine tuning on
+  additional_data: null #additional data for the task you are fine tuning on
 
 
 # scheduler:

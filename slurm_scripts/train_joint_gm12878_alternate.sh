@@ -2,11 +2,11 @@
 
 #SBATCH --partition=lesliec,gpu
 #SBATCH --ntasks-per-node=2
-#SBATCH --cpus-per-task=6
+#SBATCH --cpus-per-task=8
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:2
-#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_noaccinput
+#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_nomlm_maskonly
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -25,7 +25,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  model=caduceus model.config.d_model=256 model.config.n_layer=16 model.config.bidirectional=true \
  model._name_=dna_embedding_caduceus model.config.bidirectional_strategy=add model.config.bidirectional_weight_tie=true model.config.rcps=false \
- optimizer.lr="1e-3" \
+ optimizer.lr="1e-3" +train.remove_test_loader_in_eval=true \
  \
  train.task2=reg train.custom_metric=poisson_loss_mask dataset.acc_type=continuous \
  \
@@ -33,7 +33,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  dataset.load_in=false +dataset.sequences_bed_file=/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed \
  \
  +model.config.skip_embedding=true trainer.devices=$NUM_GPUS \
- +dataset.mask_only=true dataset.acc_mlm=1 dataset.mlm=0.15
+ +dataset.mask_only=true dataset.acc_mlm=0.25 dataset.mlm=0
 
 #now let's set it to gpu 3 and then run it
 # CUDA_VISIBLE_DEVICES=1,2 pixi run python -m train wandb=null experiment=hg38/joint_pretrain dataset.batch_size=1 \

@@ -42,7 +42,7 @@ def main(args):
     si = 524288//2 - int(args.mask_size/2)
     se = 524288//2 + int(args.mask_size/2)
 
-    output_array = np.zeros((qtls.shape[0],500,2))
+    output_array = np.zeros((qtls.shape[0],args.out_size//args.pool,2))
 
     for i in tqdm(range(qtls.shape[0])):
         rsid = qtls.iloc[i]['SNPname2']
@@ -75,8 +75,16 @@ def main(args):
         
         out2 = evals.mask(si,se, data=data, mask_accessibility=True)
         
-        pred1 = out[1][0, 524288//2-250:524288//2+250, 0].cpu().numpy()
-        pred2 = out2[1][0, 524288//2-250:524288//2+250, 0].cpu().numpy()
+        oi = 524288//2 - args.out_size//2
+        oe = 524288//2 + args.out_size//2
+        
+        pred1 = out[1][0, oi:oe, 0].cpu().numpy()
+        pred2 = out2[1][0, oi:oe, 0].cpu().numpy()
+        
+        if args.pool > 1:
+            pred1 = np.mean(pred1.reshape(-1, args.pool), axis=1)
+            pred2 = np.mean(pred2.reshape(-1, args.pool), axis=1)
+        
         output_array[i,:,0] = pred1
         output_array[i,:,1] = pred2
         
@@ -93,8 +101,10 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output', type=str, default='/data1/lesliec/sarthak/data/joint_playground/dsQTL/basic_dsqtl.npy', help='Output file path')
     parser.add_argument('--mask_size', type=int, default=500, help='Size of the mask')
     parser.add_argument('-v', '--verbose', action='store_false', help='Disable verbose output')
-    parser.add_argument('--data_idxs', nargs='+',type=int,help='List of mask sizes', default=None) #intentionally passes None as a default, tells it to not find any data idxs
+    parser.add_argument('--data_idxs', nargs='+',type=int,help='List of indices to be used to grab data', default=None) #intentionally passes None as a default, tells it to not find any data idxs
     parser.add_argument('--load_data', action='store_true', help='Load data from the checkpoint')
+    parser.add_argument('--pool', type=int, default=1, help='Amount of bins to pool')
+    parser.add_argument('--out_size', type=int, default=500, help='Output size')
     parser.add_argument('--data_path', type=str, default='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz', help='Path to the data')
     args = parser.parse_args()
     

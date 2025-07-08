@@ -22,6 +22,7 @@ import inspect
 import zarr
 from numcodecs import Blosc
 from scipy.stats import spearmanr, pearsonr
+from torch.utils.data import DataLoader
 
 #set it so only device 3 is seen
 # os.environ["CUDA_VISIBLE_DEVICES"] = "3"
@@ -41,6 +42,7 @@ class Evals():
                  split = 'test',
                  device = None,
                  load_data=False,
+                 **dataset_overrides #Don't pass None into overrides unless you intentionally want it to be None! Pass in items only that you need
                  ) -> None:
         
         #now load the cfg from the checkpoint path
@@ -72,6 +74,14 @@ class Evals():
             dataset_args['split'] = split
             dataset_args['evaluating'] = True #this tells it to not do things like random shifting and rc aug, still does random masking tho, can get og sequence easily
             dataset_args['load_in'] = load_data
+            
+            for k, v in dataset_overrides.items():
+                if k in sig:
+                    dataset_args[k] = v
+                    print(f"Overriding {k} with {v}")
+                else:
+                    print(f"Warning: {k} not in dataset args, skipping")
+            
             # dataset_args['rc_aug'] = False #we don't want to do rc aug in our evaluation class!!!
             self.dataset_args = dataset_args
             # self.dataset_args['rc_aug'] = False #we don't want to do rc aug in our evaluation class!!!
@@ -182,25 +192,56 @@ class Evals():
 # np.save('/data1/lesliec/sarthak/data/joint_playground/model_out/GM12878_base_targets_conv.npy', target_array)
 
 
-ckpt_paths = [
-    '/data1/lesliec/sarthak/caduceus/outputs/2025-04-11/17-59-55-471925/checkpoints/07-val_loss=-0.47649.ckpt',
-    '/data1/lesliec/sarthak/caduceus/outputs/2025-04-14/18-29-44-495215/checkpoints/06-val_loss=-0.45494.ckpt',
-    '/data1/lesliec/sarthak/caduceus/outputs/2025-04-14/18-36-09-021037/checkpoints/13-val_loss=-0.36632.ckpt',
-]
+# ckpt_paths = [
+#     '/data1/lesliec/sarthak/caduceus/outputs/2025-04-11/17-59-55-471925/checkpoints/07-val_loss=-0.47649.ckpt',
+#     '/data1/lesliec/sarthak/caduceus/outputs/2025-04-14/18-29-44-495215/checkpoints/06-val_loss=-0.45494.ckpt',
+#     '/data1/lesliec/sarthak/caduceus/outputs/2025-04-14/18-36-09-021037/checkpoints/13-val_loss=-0.36632.ckpt',
+# ]
 
-model_names = ['GM12878_base_more_train', 'GM12878_no_mlm', 'GM12878_no_finetune']
+# model_names = ['GM12878_base_more_train', 'GM12878_no_mlm', 'GM12878_no_finetune']
+
+ckpt_paths = ['/data1/lesliec/sarthak/caduceus/outputs/2025-04-21/15-40-14-845019/checkpoints/26-val_loss=-0.40909.ckpt']
+model_names = ['nopretrain']
+
+# for ckpt_path, model_name in zip(ckpt_paths, model_names):
+#     evals = Evals(ckpt_path, load_data=False)
+#     out = evals(0)
+#     output_array = np.zeros((len(evals.dataset), out[0].shape[1], out[0].shape[2]))
+#     target_array = output_array.copy()
+
+#     # output_array = np.zeros((len(evals.dataset), 896))
+#     # target_array = np.zeros((len(evals.dataset), 896))
+#     for i in tqdm(range(len(evals.dataset))):
+#         out = evals(i)
+#         output = out[0][0].cpu().numpy()
+#         target = out[1]
+#         output_array[i] = output
+#         target_array[i] = target
+
+#     #now save them
+#     np.save(f'/data1/lesliec/sarthak/data/joint_playground/model_out/{model_name}_predictions.npy', output_array)
+#     np.save(f'/data1/lesliec/sarthak/data/joint_playground/model_out/{model_name}_targets.npy', target_array)
 
 for ckpt_path, model_name in zip(ckpt_paths, model_names):
-    evals = Evals(ckpt_path, load_data=True)
+    # evals = Evals(ckpt_path, load_data=False, sequences_bed_file='/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed',
+    #               data_idxs=[457], additional_data_idxs=[4759]) #for t cell
+    evals = Evals(ckpt_path, load_data=False, sequences_bed_file='/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed',
+                  data_idxs=None, data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz') #, additional_data_idxs=[5110]) #the 5110 is for if additional data covers all cell types but just want one
+    #if trained on model that just does one cell type, additional data is a npz file
+    out = evals(0)
+    output_array = np.zeros((len(evals.dataset), out[0].shape[1], out[0].shape[2]))
+    target_array = output_array.copy()
+    
+    loader = DataLoader(evals.dataset, batch_size=1, shuffle=False, num_workers=8)
+    
+    for idx, data in enumerate(tqdm(loader)):
+        # Now data is a batch (batch_size=1), so pass it properly
+        out = evals(data=data)
+        output = out[0][0].cpu().numpy()  # output shape (1, X, Y), take [0]
+        target = out[1]                   # already numpy or tensor
 
-    output_array = np.zeros((len(evals.dataset), 896))
-    target_array = np.zeros((len(evals.dataset), 896))
-    for i in tqdm(range(len(evals.dataset))):
-        out = evals(i)
-        output = out[0][0,:,0].cpu().numpy()
-        target = out[1][:,0]
-        output_array[i] = output
-        target_array[i] = target
+        output_array[idx] = output
+        target_array[idx] = target
 
     #now save them
     np.save(f'/data1/lesliec/sarthak/data/joint_playground/model_out/{model_name}_predictions.npy', output_array)

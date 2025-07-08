@@ -546,6 +546,9 @@ class SequenceLightningModule(pl.LightningModule):
     #             print("  No exp_avg state found.")
 
     def on_validation_epoch_start(self):
+        if getattr(self, "stop_training_due_to_time", False):
+            print("Stopping training due to time limit.")
+            raise SystemExit("Stopping training due to time limit.")
         # Reset all validation torchmetrics
         for name in self.val_loader_names:
             self.task._reset_torchmetrics(name)
@@ -567,6 +570,7 @@ class SequenceLightningModule(pl.LightningModule):
         if remaining_time < avg_epoch_time:
             print(f"Not enough time for another epoch! Stopping training. Avg epoch time: {avg_epoch_time:.2f}s")
             self.trainer.should_stop = True  # Stop training early
+            self.stop_training_due_to_time = True
 
     def on_test_epoch_start(self):
         # Reset all test torchmetrics
@@ -736,8 +740,11 @@ class SequenceLightningModule(pl.LightningModule):
             return [prefix], [loaders]
 
     def _eval_dataloaders(self):
-        # Return all val + test loaders
+        #here hparams still has num workers being 4
         val_loaders = self.dataset.val_dataloader(**self.hparams.loader)
+        # print('val loaders:', val_loaders) #works, val loaders has the right number!
+        print('num workers:', val_loaders.num_workers)
+        # print('num workers:', val_loaders[0].num_workers)
         test_loaders = self.dataset.test_dataloader(**self.hparams.loader)
         val_loader_names, val_loaders = self._eval_dataloaders_names(val_loaders, "val")
         test_loader_names, test_loaders = self._eval_dataloaders_names(
@@ -760,11 +767,17 @@ class SequenceLightningModule(pl.LightningModule):
         if not self.hparams.train.get("remove_test_loader_in_eval", False):
             eval_loader_names += test_loader_names
             eval_loaders += test_loaders
+            # print('yup, issue!') This just means redo the val dataset basically, not good!
+            # import sys
+            # sys.exit()
+        else:
+            print('skipping test loader in eval')
         return eval_loader_names, eval_loaders
 
     def val_dataloader(self):
         val_loader_names, val_loaders = self._eval_dataloaders()
         self.val_loader_names = val_loader_names
+        #now print the number of workers
         return val_loaders
 
     def test_dataloader(self):

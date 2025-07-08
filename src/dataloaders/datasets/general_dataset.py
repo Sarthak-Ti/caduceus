@@ -192,11 +192,14 @@ def open_data(data_path, load_in=False):
             data = np.load(data_path)
     return data
     
-def get_data_idxs(data_path):
+def get_data_idxs(data_path, data):
     if data_path is None:
         return None
+    
+    if data_path == 'all':
+        data_idxs = np.array(range(data['chr22'].shape[0])) #just is the number of data points in the full npz or zarr file
 
-    if isinstance(data_path, list): #means inputted list
+    elif isinstance(data_path, list): #means inputted list
         data_idxs = np.array(data_path)
         
     elif isinstance(data_path, str) and data_path.endswith('.json'):
@@ -242,6 +245,7 @@ class GeneralDataset():
         additional_data: str = None, #if you want to add additional data, like expression data, in enformer style just grab the idx!
         additional_data_idxs: str = None, #if you want to add additional data, like expression data, in enformer style just grab the idx, get the idxs from some file with json. Can also be a list
         additional_tracks: str = None, #if you want to add additional tracks, like expression data, in genome style
+        return_celltype_idx_og: bool = False, #if True, will return the celltype index as well, this is used if you want the cell type token
     ):
         """
         General dataset class, relies on zarr or np array data which is in chromosome format, and a sequences bed file
@@ -296,35 +300,25 @@ class GeneralDataset():
         self.additional_data_path = additional_data #if you want to add additional data, like expression data, in enformer style just grab the idx!
         self.additional_data_idxs = additional_data_idxs #if you want to add additional data, like expression data, in enformer style just grab the idx, get the idxs from some file with json
         self.additional_tracks_path = additional_tracks #if you want to add additional tracks, like expression data, in genome style
+        self.return_celltype_idx_og = return_celltype_idx_og
         # self.complement_array = np.array([3, 2, 1, 0, 11]) #this is the complement array for the rc augmentation, so A->T, C->G, G->C, T->A, 11 stays as 11
 
         #and access the genome seq file
         self.genome = open_data(genome_seq_file, load_in)
         
-        self.data_idxs = get_data_idxs(data_idxs) #get the data idxs from the data path, this is a json file with the indices of the data to use, if you want to use a subset of the data
-
-        if self.celltypes == 1 and self.data_idxs is not None:
-            print('replacing cell type number with data indices')
-            self.celltypes = len(self.data_idxs)
-        
-        self.additional_data_idxs = get_data_idxs(additional_data_idxs)
-        # if additional_data_idxs is not None:
-        #     with open(additional_data_idxs, 'r') as f:
-        #         additional_data_idxs = json.load(f)
-        #     self.additional_data_idxs = np.array(additional_data_idxs, dtype=int)
-        # else:
-        #     self.additional_data_idxs = None
-        
+        #load in data
         self.data = open_data(data_path, load_in)
-        
         self.additional_data = open_data(additional_data, load_in)
-        # if self.additional_data_path is not None:
-        #     self.additional_data = open_data(additional_data, load_in)
-        # else:
-        #     self.additional_data = None
+        self.additional_tracks = open_data(additional_tracks, load_in) #function returns None if path is None
+
+        self.data_idxs = get_data_idxs(data_idxs, self.data) #get the data idxs from the data path, this is a json file with the indices of the data to use, if you want to use a subset of the data
+        if self.celltypes == 1 and self.data_idxs is not None:
+            print(f'replacing cell type number with data indices, {len(self.data_idxs)}')
+            self.celltypes = len(self.data_idxs)
+        self.additional_data_idxs = get_data_idxs(additional_data_idxs, self.data)
         
-        if additional_tracks is not None:
-            raise NotImplementedError("Additional tracks not implemented yet, need to make sure it can properly read in data and other things for the target")
+        # if additional_tracks is not None:
+        #     raise NotImplementedError("Additional tracks not implemented yet, need to make sure it can properly read in data and other things for the target")
         
         if sequences_bed_file is None:
             sequences_bed_file = f'/data1/lesliec/sarthak/data/DK_zarr/sequences_{self.length}.bed'
@@ -514,6 +508,9 @@ class GeneralDataset():
         
         #now transpose the targets
         targets = targets.transpose(1, 0)
+
+        outputs1 = [seq, targets]
+        outputs2 = [seq_unmask, acc_umask]
         
         if self.additional_data is not None:
             #this is like if using borzoi or enformer data. Point is need to be able to access the data by index, not start and end of chromosome
@@ -527,19 +524,38 @@ class GeneralDataset():
 
             #and subset to the celltypes of interest
             if self.additional_data_idxs is not None:
-                additional_data = self.additional_data[split][tindex][:,self.additional_data_idxs] #get the additional data for the cell types of interest
+                # additional_data = self.additional_data[split][tindex][:,self.additional_data_idxs] #get the additional data for the cell types of interest
+                # if self.celltypes > 1:
+                #     additional_data = additional_data[:,celltype_idx_og:celltype_idx_og+1] #if many celltypes, we specify getting like the 5th value which is celltype 5 of the original indexx
+                #more concise form of the above that only loads the data once
+                additional_data_celltypeidx = self.additional_data_idxs
                 if self.celltypes > 1:
-                    additional_data = additional_data[:,celltype_idx_og:celltype_idx_og+1]
+                    additional_data_celltypeidx =  [ self.additional_data_idxs[celltype_idx_og] ] #get the data idxs and make it a list so we preserve the last dimension
+                additional_data = self.additional_data[split][tindex][:,additional_data_celltypeidx] #get the additional data for the cell types of interest
+                
             else:
                 additional_data = self.additional_data[split][tindex] #with zarr can input it to not require the split, idk about npz tho! can input like path.zarr/train for train data, but then won't work for evals...
             # additional_data = self.additional_data[index]
-            return (seq,targets), (seq_unmask,acc_umask,additional_data) #return the sequence, targets, unmasked sequence and unmasked accessibility if we do masking, else empty tensors
-
+            outputs2.append(additional_data) #append the additional data to the outputs2 list
+        elif self.additional_tracks is not None:
+            #this is if you have like genome arrays that you're predicting over. So it will be like need the chormosome and start and stop like the data
+            tracks = self.additional_tracks[chrom][:, start:end] # (n_tracks, seq_len)
+            lpad = np.zeros((tracks.shape[0], len(leftpad)), dtype=tracks.dtype) #left padding
+            rpad = np.zeros((tracks.shape[0], len(rightpad)), dtype=tracks.dtype)
+            additional_data = np.concatenate([lpad, tracks, rpad], axis=1) #this is a way to get all the additional track data, so now is shape n_tracks x seq_len
+            
+            # additional_data = np.concatenate([leftpad[None]*0, self.additional_tracks[chrom][:,start:end], rightpad[None]*0], axis=1) #this is a way to get all the additional track data?
+            if self.additional_data_idxs is not None:
+                raise NotImplementedError("Additional tracks with data idxs not implemented yet, need to figure out how to handle this")
+            outputs2.append(additional_data.transpose(1,0)) #transpose it to be seq_len x n_tracks, so we can use it for the rest of the processing
         
-        return (seq, targets), (seq_unmask, acc_umask) #return the sequence, targets, unmasked sequence and unmasked accessibility if we do masking, else empty tensors
+        if self.return_celltype_idx_og:
+            outputs1.append(torch.tensor(celltype_idx_og))
+
+        return tuple(outputs1), tuple(outputs2) #return the sequence, targets, unmasked sequence and unmasked accessibility if we do masking, else empty tensors
     
     def expand_seqs(self,chr,start,stop):
-        """This function will expand the sequences to include a new sequence centered around whatever you want
+        """This function will expand the sequences to include a new sequence centered around whatever you want. Note that this doesn't work for a specific cell type
         Args:
             chr (str): the chromosome to expand
             start (int): the start position to expand to
@@ -549,6 +565,10 @@ class GeneralDataset():
         """
         #expand the sequences to the start and stop positions
         #TODO make this work with folds somehow! Unsure how to do so...
+        
+        if self.celltypes > 1:
+            raise ValueError("Cannot expand sequences for multiple cell types, would need to edit the get item function or something? idk how to do it")
+        
         new_row = pd.DataFrame([[ chr, start, stop, self.split ]], columns=self.sequences.columns)
         self.sequences = pd.concat([self.sequences, new_row], ignore_index=True)
         idx = self.sequences.index[-1] #get the index of the new row
