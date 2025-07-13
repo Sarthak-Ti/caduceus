@@ -141,8 +141,10 @@ class UpResBlock(nn.Module):
 
 
 '''example how to use this encoder:
+sample_ratio = 2
+d_model = 512
 from src.tasks.encoders import *
-a = JointCNN(d_model=256, joint=False, downsample=2)
+a = JointCNN(d_model=d_model, joint=False, downsample=sample_ratio)
 test_tensor1 = torch.randn(2, 6, 1000)  # Example input for sequence
 test_tensor2 = torch.randn(2, 2, 1000)  # Example input for accessibility
 output, intermediates = a(test_tensor1, test_tensor2)
@@ -154,7 +156,7 @@ output = output.permute(0, 2, 1)  # (batch, length, dim)
 #then the model happens, but outputs it the same shape
 
 from src.tasks.decoders import JointMaskingDecoder
-decoder = JointMaskingDecoderUpSample(d_model=256, d_output1=5, d_output2=1, upsample=8)
+decoder = JointMaskingDecoder(d_model=d_model, d_output1=5, d_output2=1, upsample=sample_ratio)
 out1, out2 = decoder(output, intermediates=intermediates)
 print('Decoder output shapes:', out1.shape, out2.shape)
 '''

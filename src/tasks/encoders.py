@@ -137,9 +137,13 @@ class JointCNN(Encoder):
         
         if downsample > 1:
             #we allow the max dimension to be smaller
-            d_model = d_model // 2
-            self.n_pools = int(math.log2(downsample)) - 1
-            grow_channels = d_model // self.n_pools
+            self.n_pools = int(math.log2(downsample))
+            if self.n_pools == 1:
+                grow_channels = 0 #only do pooling, we have cnn embedding of model
+            else:
+                d_model = d_model // 2
+                grow_channels = d_model // (self.n_pools-1)
+            # out_dim = [d_model + i * d_model // self.n_pools for i in range(self.n_pools + 1)]
         
         # print(d_input1, d_input2)
         # print('dmodel', d_model)
@@ -179,7 +183,7 @@ class JointCNN(Encoder):
             # self.pool_layers = nn.ModuleList()
             # self.conv_layers = nn.ModuleList()
             self.down_blocks = nn.ModuleList()
-            for i in range(self.n_pools):
+            for i in range(self.n_pools - 1):
                 in_dim = d_model + i * grow_channels
                 self.down_blocks.append(
                     DownsampleBlock(in_dim, grow_channels, pool_type=pool_type)

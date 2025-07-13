@@ -563,14 +563,17 @@ class JointMaskingDecoder(Decoder):
         self.upsample = upsample
 
         if self.upsample > 1:
-            d_model = d_model // 2
-            self.n_ups = int(math.log2(upsample)) - 1
-            grow_channels = d_model // self.n_ups  # how much to shrink channels at each upsample step
+            self.n_ups = int(math.log2(upsample))
+            if self.n_ups == 1:
+                grow_channels = 0 #doesn't change because only did a pooling operation
+            else:
+                d_model = d_model // 2
+                grow_channels = d_model // (self.n_ups-1)  # how much to shrink channels at each upsample step
             # Channel schedule:           bottleneck → ... → final width
             # e.g. d_model=256, up=4  ==> [256, 256, 192]
             # in_channels = [d_model + i * grow_channels for i in range(self.n_ups)]
             # out_channels = [d_model + (i + 1) * grow_channels for i in range(self.n_ups)]
-            ch = [d_model + i * grow_channels for i in range(self.n_ups + 1)]
+            ch = [d_model + i * grow_channels for i in range(self.n_ups)]
             ch.append(ch[-1]) #the first one is a repeat
             ch = ch[::-1]  # reverse to go from bottleneck to final width
             # print(ch)
@@ -578,7 +581,7 @@ class JointMaskingDecoder(Decoder):
             assert upsample & (upsample - 1) == 0, "upsample must be a power of 2"
             self.up_blocks = nn.ModuleList()
 
-            for i in range(self.n_ups+1):
+            for i in range(self.n_ups):
                 self.up_blocks.append(UpResBlock(ch[i], ch[i+1]))
                 # if i == 0:
                 #     self.up_blocks.append(UpResBlock(ch[i], 0))
@@ -602,8 +605,8 @@ class JointMaskingDecoder(Decoder):
         if self.upsample > 1:
             assert intermediates is not None, "intermediates must be provided for upsampling"
             x = x.permute(0, 2, 1)  # (n_batch, d_model, l_seq)
-            for i in range(self.n_ups+1): #+ 1 to include the last upsample block
-                bin_size = 2 ** (self.n_ups - i)     # e.g. 4,2
+            for i in range(self.n_ups): #+ 1 to include the last upsample block
+                bin_size = 2 ** (self.n_ups - 1 - i)     # e.g. 4,2
                 skip = intermediates[f'bin_size_{bin_size}'] # (initially were stored as the wrong shape)
                 x = self.up_blocks[i](x, skip)
                 
