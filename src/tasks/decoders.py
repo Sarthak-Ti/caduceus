@@ -7,6 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange, reduce
 
+import math
+
 import src.models.nn.utils as U
 import src.utils as utils
 import src.utils.train
@@ -16,6 +18,7 @@ log = src.utils.train.get_logger(__name__)
 import inspect
 from einops.layers.torch import Rearrange
 from src.utils.enformer_pytorch import exponential_linspace_int, MaxPool, AttentionPool, ConvBlock, Residual, GELU, TargetLengthCrop
+from src.utils.UNET import ConvBlock2, UpResBlock
 
 # def trace_call():
 #     stack = inspect.stack()
@@ -524,24 +527,90 @@ class GraphRegDecoder(Decoder):
         x = torch.exp(x)
         return x
 
+# class JointMaskingDecoder(Decoder):
+#     """Decoder for joint masking of sequence and accessibility, so runs 2 separate output heads
+#     d_output1 is sequence, so generally 4 for DNA (maybe 5 if want to do N as well)
+#     d_output2 is accessibility, so 1 if only 1 track since we'll then do softplus or sigmoid in loss
+#     Key issue is that this does not apply softplus or sigmoid, so need to do that in eval class
+#     """
+#     def __init__(self, d_model, d_output1=5, d_output2=1):
+#         super().__init__()
+#         print(f"JointMaskingDecoder: d_model={d_model}, d_output1={d_output1}, d_output2={d_output2}")
+
+#         self.decoder1 = nn.Linear(d_model, d_output1)
+#         self.decoder2 = nn.Linear(d_model, d_output2)
+
+#     def forward(self, x, state=None, lengths=None, l_output=None, mask=None):
+#         '''
+#         x: (n_batch, l_seq, d_model)
+#         Returns: (n_batch, l_seq, d_output1), (n_batch, l_seq, d_output2)
+#         '''
+#         x1 = self.decoder1(x)
+#         x2 = self.decoder2(x)
+#         return x1, x2
+    
 class JointMaskingDecoder(Decoder):
-    """Decoder for joint masking of sequence and accessibility, so runs 2 separate output heads
+    """Decoder for joint masking of sequence and accessibility, so runs 2 separate output heads after upsampling
     d_output1 is sequence, so generally 4 for DNA (maybe 5 if want to do N as well)
     d_output2 is accessibility, so 1 if only 1 track since we'll then do softplus or sigmoid in loss
+    upsample is the factor by which to upsample the input sequence
     Key issue is that this does not apply softplus or sigmoid, so need to do that in eval class
     """
-    def __init__(self, d_model, d_output1=5, d_output2=1):
+    def __init__(self, d_model, d_output1=5, d_output2=1, upsample=1):
         super().__init__()
-        print(f"JointMaskingDecoder: d_model={d_model}, d_output1={d_output1}, d_output2={d_output2}")
+        print(f"JointMaskingDecoder: d_model={d_model}, d_output1={d_output1}, d_output2={d_output2}, upsample={upsample}")
 
+        self.upsample = upsample
+
+        if self.upsample > 1:
+            d_model = d_model // 2
+            self.n_ups = int(math.log2(upsample)) - 1
+            grow_channels = d_model // self.n_ups  # how much to shrink channels at each upsample step
+            # Channel schedule:           bottleneck → ... → final width
+            # e.g. d_model=256, up=4  ==> [256, 256, 192]
+            # in_channels = [d_model + i * grow_channels for i in range(self.n_ups)]
+            # out_channels = [d_model + (i + 1) * grow_channels for i in range(self.n_ups)]
+            ch = [d_model + i * grow_channels for i in range(self.n_ups + 1)]
+            ch.append(ch[-1]) #the first one is a repeat
+            ch = ch[::-1]  # reverse to go from bottleneck to final width
+            # print(ch)
+            
+            assert upsample & (upsample - 1) == 0, "upsample must be a power of 2"
+            self.up_blocks = nn.ModuleList()
+
+            for i in range(self.n_ups+1):
+                self.up_blocks.append(UpResBlock(ch[i], ch[i+1]))
+                # if i == 0:
+                #     self.up_blocks.append(UpResBlock(ch[i], 0))
+                # else:                
+                #     self.up_blocks.append(UpResBlock(ch[i], grow_channels))
+            
+            # self.final_conv = ConvBlock2(ch[-2], ch[-1]) #do a final convolution to reduce dimensionality
+        else:
+            self.n_ups = 0
+        
         self.decoder1 = nn.Linear(d_model, d_output1)
         self.decoder2 = nn.Linear(d_model, d_output2)
+            
 
-    def forward(self, x, state=None, lengths=None, l_output=None, mask=None):
+    def forward(self, x, intermediates=None, state=None, lengths=None, l_output=None, mask=None):
         '''
         x: (n_batch, l_seq, d_model)
         Returns: (n_batch, l_seq, d_output1), (n_batch, l_seq, d_output2)
         '''
+        
+        if self.upsample > 1:
+            assert intermediates is not None, "intermediates must be provided for upsampling"
+            x = x.permute(0, 2, 1)  # (n_batch, d_model, l_seq)
+            for i in range(self.n_ups+1): #+ 1 to include the last upsample block
+                bin_size = 2 ** (self.n_ups - i)     # e.g. 4,2
+                skip = intermediates[f'bin_size_{bin_size}'] # (initially were stored as the wrong shape)
+                x = self.up_blocks[i](x, skip)
+                
+            # x = self.final_conv(x)  # perform a final convolution to reduce dimensionality
+            x = x.permute(0, 2, 1)  # (n_batch, l_seq, d_model)
+            # print(x.shape)
+        
         x1 = self.decoder1(x)
         x2 = self.decoder2(x)
         return x1, x2

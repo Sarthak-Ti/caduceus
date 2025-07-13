@@ -159,9 +159,9 @@ class Evals():
         x,y = x.to(self.device), y.to(self.device)
         
         with torch.no_grad():
-            x1 = self.encoder(x,y)
+            x1,intermediates = self.encoder(x,y)
             x1,_ = self.backbone(x1)
-            x1 = self.decoder(x1)
+            x1 = self.decoder(x1, intermediates=intermediates)
             seq,acc = x1
 
             if softplus and not self.skip_softplus:

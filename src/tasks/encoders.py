@@ -9,6 +9,7 @@ import src.models.nn.utils as U
 import src.utils as utils
 import src.utils.config
 from src.utils.enformer_pytorch import exponential_linspace_int, MaxPool, AttentionPool, ConvBlock, Residual, NoPool
+from src.utils.UNET import ConvBlock2, DownsampleBlock
 
 
 class Encoder(nn.Module):
@@ -111,7 +112,7 @@ class CNNEmbedding(Encoder):
         super().__init__()
         #just have to appply a super simple conv that goes to model size
         self.conv = nn.Conv1d(d_input, d_model, 1)
-        
+                
 class JointCNN(Encoder):
     """
     A CNN-based encoder that takes in OHE and accessibility data.
@@ -126,12 +127,20 @@ class JointCNN(Encoder):
         joint (bool): Whether to process the inputs jointly or separately. Default is False.
         kernel_size (int): The size of the convolutional kernel. Default is 15.
     """
-    def __init__(self, d_model, d_input1=6, d_input2=2, joint=False, kernel_size=15, combine=True, acc_type='continuous', **kwargs):
+    def __init__(self, d_model, d_input1=6, d_input2=2, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', **kwargs):
         super().__init__()
         print(f"JointMaskingEncoder: d_model={d_model}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
         # print(kwargs)
         self.joint = joint
         self.combine = combine
+        self.downsample = downsample
+        
+        if downsample > 1:
+            #we allow the max dimension to be smaller
+            d_model = d_model // 2
+            self.n_pools = int(math.log2(downsample)) - 1
+            grow_channels = d_model // self.n_pools
+        
         # print(d_input1, d_input2)
         # print('dmodel', d_model)
         # print('acc_type', acc_type)
@@ -158,7 +167,31 @@ class JointCNN(Encoder):
             )
             if combine:
                 self.out = nn.Linear(d_model, d_model)
-
+        
+        #now handle downsamples and define the convolution and pooling layers
+        if self.downsample != 1:
+            assert self.downsample > 0 and (self.downsample & (self.downsample - 1)) == 0, "downsample must be a power of 2"
+            # now do the downsampling
+            #make a list that goes form 2**0 to 2**(n_pools-1) of the number of channels to grow
+            # self.bin_sizes = [2 ** i for i in range(1,self.n_pools)]
+            # layers = [ConvBlock2(d_model, d_model+d_diff)]
+            
+            # self.pool_layers = nn.ModuleList()
+            # self.conv_layers = nn.ModuleList()
+            self.down_blocks = nn.ModuleList()
+            for i in range(self.n_pools):
+                in_dim = d_model + i * grow_channels
+                self.down_blocks.append(
+                    DownsampleBlock(in_dim, grow_channels, pool_type=pool_type)
+                )
+            # for i in range(self.n_pools):
+            #     in_dim = d_model + i * d_diff
+            #     out_dim = d_model + (i + 1) * d_diff
+            #     self.conv_layers.append(ConvBlock2(in_dim, out_dim))
+            #     self.pool_layers.append(pool_cls(kernel_size=2, stride=2))
+        else:
+            self.n_pools = 0
+                
     def forward(self, x1, x2):
         """
         Forward pass for the JointCNN.
@@ -169,6 +202,9 @@ class JointCNN(Encoder):
 
         Returns:
             torch.Tensor: The output tensor of shape (batch_size, d_model, seq_len).
+            If downsample > 1, seq_len is divided by downsample.
+            torch.Tensor: A dictionary containing intermediate outputs at different bin sizes.
+            The keys are "bin_size_2", "bin_size_4", etc., corresponding to the downsampled outputs. each will be of shape (batch_size, d_model + i * grow_channels, seq_len // (2 ** (i + 1)))
         """
         if self.joint:
             # Concatenate inputs along the channel dimension and process jointly
@@ -181,8 +217,20 @@ class JointCNN(Encoder):
             x = torch.cat([x1_out, x2_out], dim=1)  # Concatenate along channel dimension
             if self.combine:
                 x = self.out(x.transpose(1,2)).transpose(1,2) #applies linear layer along embedding dimension, across batch and length is independent
+        
+        intermediates = {}
+        if self.downsample != 1:
+            intermediates["bin_size_1"] = x  # Store the initial output before convs
+            # print(x.shape)
+            x = nn.MaxPool1d(kernel_size=2, stride=2)(x)  # Initial downsample
+            # print(x.shape)
+            for i, block in enumerate(self.down_blocks):
+                x, intermediate = block(x)
+                bin_size = 2 ** (i + 1)
+                intermediates[f"bin_size_{bin_size}"] = intermediate
 
-        return x
+        return x, intermediates
+
 
 class JointCNNWithCTT(Encoder):
     """
