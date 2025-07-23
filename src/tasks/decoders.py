@@ -556,7 +556,7 @@ class JointMaskingDecoder(Decoder):
     upsample is the factor by which to upsample the input sequence
     Key issue is that this does not apply softplus or sigmoid, so need to do that in eval class
     """
-    def __init__(self, d_model, d_output1=5, d_output2=1, upsample=1):
+    def __init__(self, d_model, d_output1=5, d_output2=1, upsample=1,):
         super().__init__()
         print(f"JointMaskingDecoder: d_model={d_model}, d_output1={d_output1}, d_output2={d_output2}, upsample={upsample}")
 

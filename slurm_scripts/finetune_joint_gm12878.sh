@@ -6,7 +6,7 @@
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:2
-#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_nomlm_maskonly
+#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878only_finetune_primary_immune
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -36,7 +36,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  +decoder.conjoin_train=false +decoder.conjoin_test=false +decoder.convolutions=true \
  +decoder.d_model=256 +decoder.d_output=1 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz \
- train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-04-28/15-26-30-700432/checkpoints/last.ckpt"
+ train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-06-16/15-19-15-994041/checkpoints/last.ckpt"
 
 
 #now let's set it to gpu 3 and then run it

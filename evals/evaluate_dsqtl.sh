@@ -2,13 +2,13 @@
 
 #SBATCH --partition=lesliec,gpu
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
-#SBATCH --time=18:00:00
+#SBATCH --cpus-per-task=2
+#SBATCH --time=50:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:1
 #SBATCH --job-name=dsqtl_benchmark
 #SBATCH --output=jobs/%x_%A_%a.out
-#SBATCH --array=0-1
+#SBATCH --array=0-0
 
 # 4 tasks: IDs 0,1,2,3 if 0-3
 
@@ -17,10 +17,10 @@ cd /data1/lesliec/sarthak/caduceus/evals
 nvidia-smi
 
 
-outputs=("primary_immune.npy")
+outputs=("gm12878_pool4.npy")
 
 ckpts=( \
-  "/data1/lesliec/sarthak/caduceus/outputs/2025-06-16/15-19-15-994041/checkpoints/last.ckpt" \
+  "/data1/lesliec/sarthak/caduceus/outputs/2025-07-16/13-03-44-206220/checkpoints/15-val_loss=0.27247.ckpt"
 )
 
 mask_sizes=(1000)
