@@ -36,7 +36,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  +decoder.conjoin_train=false +decoder.conjoin_test=false +decoder.convolutions=true \
  +decoder.d_model=256 +decoder.d_output=1 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz \
- train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-06-16/15-19-15-994041/checkpoints/last.ckpt"
+ train.ckpt="/data1/lesliec/sarthak/caduceus/outputs/2025-07-30/15-18-08-367924/checkpoints/last.ckpt" +train.pretrained_model_state_hook.load_decoder=true \
 
 
 #now let's set it to gpu 3 and then run it

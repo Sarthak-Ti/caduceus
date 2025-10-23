@@ -531,9 +531,9 @@ class JointFinetune(BaseTask):
         x, y, *_ = batch
         y = y[-1] #y is a tuple, the other elements are the unmasked stuff we don't care about
 
-        x,_ = encoder(*x)
+        x,intermediates = encoder(*x)
         x,_ = model(x)
-        x,_ = decoder(x)
+        x,_ = decoder(x, intermediates=intermediates)
         
         return x, y, {}
 

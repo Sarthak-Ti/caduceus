@@ -887,9 +887,16 @@ def train(config):
     if config.train.seed is not None:
         pl.seed_everything(config.train.seed, workers=True)
     trainer = create_trainer(config)
+    print(trainer.checkpoint_callbacks)
+    for i, cb in enumerate(trainer.checkpoint_callbacks):
+        print(f"--- Checkpoint Callback {i} ---")
+        for k, v in cb.__dict__.items():
+            print(f"{k}: {v}")
+
+    # import sys
+    # sys.exit()
     #print all trainer options
-    # print(trainer)
-    # print(vars(trainer))
+
     
     model = SequenceLightningModule(config)
     # print(model)

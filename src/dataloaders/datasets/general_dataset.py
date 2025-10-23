@@ -199,6 +199,9 @@ def get_data_idxs(data_path, data):
     if data_path == 'all':
         data_idxs = np.array(range(data['chr22'].shape[0])) #just is the number of data points in the full npz or zarr file
 
+    elif isinstance(data_path, int): #means inputted single number
+        data_idxs = np.array([data_path]) #just is the number of data points in the full npz or zarr file, so just a single number
+
     elif isinstance(data_path, list): #means inputted list
         data_idxs = np.array(data_path)
         
@@ -450,6 +453,7 @@ class GeneralDataset():
         
     
         #and get the data
+        # print(leftpad.shape, rightpad.shape, self.data[chrom].shape, celltype_idx)
         data = np.concatenate([leftpad[None]*0, self.data[chrom][celltype_idx:celltype_idx+1,start:end], rightpad[None]*0], axis=1) #multiply by 0 to set it as 0 since it's not tokenized
         #so padsd if needed, and then pads 0s
         #broadcast along the dimension

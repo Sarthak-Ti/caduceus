@@ -364,7 +364,7 @@ class EnformerDecoder(Decoder):
         self.bin_size = bin_size
         self.softplus = nn.Softplus()
 
-    def forward(self, x, state=None, lengths=None, l_output=None, mask=None, mouse=False):
+    def forward(self, x, state=None, lengths=None, l_output=None, mask=None, mouse=False, intermediates=None):
         """
         Forward pass for the EnformerDecoder.
 
@@ -375,6 +375,7 @@ class EnformerDecoder(Decoder):
             l_output (optional): Not used.
             mask (optional): Not used.
             mouse (bool mask): size of batch_size, tells you per batch .
+            intermediates (optional): Useless, need to allow it to be passed in
 
         Returns:
             Tensor: Output tensor of shape (batch_size, num_bins, d_output).
@@ -554,13 +555,15 @@ class JointMaskingDecoder(Decoder):
     d_output1 is sequence, so generally 4 for DNA (maybe 5 if want to do N as well)
     d_output2 is accessibility, so 1 if only 1 track since we'll then do softplus or sigmoid in loss
     upsample is the factor by which to upsample the input sequence
+    finetune is whether we are finetuning, if so only output the value of the decoder2
     Key issue is that this does not apply softplus or sigmoid, so need to do that in eval class
     """
-    def __init__(self, d_model, d_output1=5, d_output2=1, upsample=1,):
+    def __init__(self, d_model, d_output1=5, d_output2=1, upsample=1, finetune=False):
         super().__init__()
         print(f"JointMaskingDecoder: d_model={d_model}, d_output1={d_output1}, d_output2={d_output2}, upsample={upsample}")
 
         self.upsample = upsample
+        self.finetune = finetune
 
         if self.upsample > 1:
             self.n_ups = int(math.log2(upsample))
@@ -592,7 +595,8 @@ class JointMaskingDecoder(Decoder):
         else:
             self.n_ups = 0
         
-        self.decoder1 = nn.Linear(d_model, d_output1)
+        if not self.finetune:
+            self.decoder1 = nn.Linear(d_model, d_output1)
         self.decoder2 = nn.Linear(d_model, d_output2)
             
 
@@ -614,8 +618,12 @@ class JointMaskingDecoder(Decoder):
             x = x.permute(0, 2, 1)  # (n_batch, l_seq, d_model)
             # print(x.shape)
         
-        x1 = self.decoder1(x)
         x2 = self.decoder2(x)
+        if self.finetune:
+            #do softplus on x2, because this poisson loss expects it to be softplussed
+            x2 = F.softplus(x2)
+            return x2
+        x1 = self.decoder1(x)
         return x1, x2
         
 

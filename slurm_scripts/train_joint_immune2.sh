@@ -34,7 +34,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  +model.config.skip_embedding=true trainer.devices=$NUM_GPUS \
  +dataset.mask_only=true dataset.acc_mlm=0.25 dataset.mlm=0 +decoder.upsample=4 +encoder.downsample=4 \
- train.ckpt=/data1/lesliec/sarthak/caduceus/outputs/2025-07-13/12-48-30-768251/checkpoints/last.ckpt +train.pretrained_model_state_hook.load_decoder=true
+ train.ckpt=/data1/lesliec/sarthak/caduceus/outputs/2025-07-30/15-18-09-005848/checkpoints/last.ckpt +train.pretrained_model_state_hook.load_decoder=true
 
 #now let's set it to gpu 3 and then run it
 # CUDA_VISIBLE_DEVICES=2 python -m train wandb=null experiment=hg38/joint_pretrain dataset.batch_size=1 \

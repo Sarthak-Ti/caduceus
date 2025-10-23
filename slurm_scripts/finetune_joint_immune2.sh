@@ -6,9 +6,10 @@
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:4
-#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_primary_immune
+#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_primary_immune_2
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
+#use this to start it later sbatch --begin=now+55hours slurm_scripts/finetune_joint_immune2.sh
 # Source the bashrc file
 source ~/.bashrc
 
@@ -38,7 +39,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  +decoder.d_model=256 +decoder.d_output=1 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/labels.zarr \
  +dataset.additional_data_idxs=/data1/lesliec/sarthak/data/DK_zarr/idx_lists/all_matched_immune_CAGE.json \
  +dataset.data_idxs=/data1/lesliec/sarthak/data/DK_zarr/idx_lists/all_matched_immune.json \
- train.ckpt="/data1/lesliec/sarthak/caduceus/outputs/2025-07-15/09-59-40-094118/checkpoints/last.ckpt" +train.pretrained_model_state_hook.load_decoder=true \
+ train.ckpt="/data1/lesliec/sarthak/caduceus/outputs/2025-08-01/06-40-17-632468/checkpoints/last.ckpt" +train.pretrained_model_state_hook.load_decoder=true \
 #  train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-07-15/09-59-40-094118/checkpoints/last.ckpt"
 #either finetune model or continue training, if continue training then load decoder!
 

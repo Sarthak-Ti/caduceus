@@ -6,7 +6,7 @@
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:2
-#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_3
+#SBATCH --job-name=joint_gm12878_DNase_AG_Borzoi_2
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -29,10 +29,10 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  train.task2=reg train.custom_metric=poisson_loss_mask dataset.acc_type=continuous \
  \
- dataset.data_path=/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz \
+ dataset.data_path=/data1/lesliec/sarthak/data/alphagenome/processed_bigwigs/gm12878_full_borzoi.npz dataset.acc_mlm=0.25 dataset.mlm=0 \
  dataset.load_in=false +dataset.sequences_bed_file=/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed \
  \
- +model.config.skip_embedding=true trainer.devices=$NUM_GPUS \
+ +model.config.skip_embedding=true +dataset.mask_only=true trainer.devices=$NUM_GPUS \
 #  +dataset.mask_only=true
 
 #now let's set it to gpu 3 and then run it

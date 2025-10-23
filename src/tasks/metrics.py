@@ -467,7 +467,7 @@ def cbpnet_multinomial_nll(logits,true_counts, len_batch=None, ignore_index=-100
     
 def poisson_loss_nll(profile, label_profile, len_batch=None, ignore_index=-100, mask = True, count_weight = 3.6):
     '''
-    simply provides a poisson loss
+    simply provides a poisson loss, assumes softplus has been applied to the profile
     '''
     if isinstance(profile, tuple) or isinstance(profile,list):
         profile = profile[0].squeeze()
