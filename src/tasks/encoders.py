@@ -126,14 +126,22 @@ class JointCNN(Encoder):
         d_model (int): The desired output dimension of the model.
         joint (bool): Whether to process the inputs jointly or separately. Default is False.
         kernel_size (int): The size of the convolutional kernel. Default is 15.
+        combine (bool): Whether to combine the outputs of separate CNNs using a linear layer. Default is True.
+        acc_type (str): The type of accessibility data ('continuous' or 'category'). Default is 'continuous' like continuous accessibility values.
+        downsample (int): Factor by which to downsample the output sequence length. Must be a power of 2. Default is 1 (no downsampling).
+        pool_type (str): The type of pooling to use during downsampling ('max' or 'attention'). Default is 'max'.
+        ctt (bool): Whether you are both providing and want to include a cell type token. Default is False
     """
-    def __init__(self, d_model, d_input1=6, d_input2=2, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', **kwargs):
+    def __init__(self, d_model, celltypes=None, d_input1=6, d_input2=None, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', ctt=False, **kwargs):
         super().__init__()
-        print(f"JointMaskingEncoder: d_model={d_model}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
+        print(f"JointMaskingEncoder: d_model={d_model}, celltypes={celltypes}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
         # print(kwargs)
         self.joint = joint
         self.combine = combine
         self.downsample = downsample
+        self.ctt = ctt
+        if self.ctt and downsample > 1:
+            print("Warning: When using cell type token with downsampling, the cell type token removes a lot of the input.")
         
         if downsample > 1:
             #we allow the max dimension to be smaller
@@ -148,10 +156,12 @@ class JointCNN(Encoder):
         # print(d_input1, d_input2)
         # print('dmodel', d_model)
         # print('acc_type', acc_type)
-        if acc_type == 'continuous':
-            d_input2 = 2
-        elif acc_type == 'category':
-            d_input2 = 3
+        if d_input2 is None:
+            #define default d_input2 based on acc_type
+            if acc_type == 'continuous':
+                d_input2 = 2
+            elif acc_type == 'category':
+                d_input2 = 3
 
         if joint:
             # Single CNN for joint processing
@@ -195,14 +205,19 @@ class JointCNN(Encoder):
             #     self.pool_layers.append(pool_cls(kernel_size=2, stride=2))
         else:
             self.n_pools = 0
+            
+        if self.ctt:
+            assert celltypes is not None, "celltypes must be provided when ctt is True"
+            self.ctt_embedding = nn.Embedding(celltypes, d_model)  #dummy embedding, just to have the right shape
                 
-    def forward(self, x1, x2):
+    def forward(self, x1, x2, ctt_token=None):
         """
         Forward pass for the JointCNN.
 
         Args:
             x1 (torch.Tensor): The first input tensor of shape (batch_size, d_input1, seq_len).
             x2 (torch.Tensor): The second input tensor of shape (batch_size, d_input2, seq_len).
+            ctt_token (torch.Tensor, optional): The cell type token of shape (batch_size). Not used unless `ctt` is True.
 
         Returns:
             torch.Tensor: The output tensor of shape (batch_size, d_model, seq_len).
@@ -232,6 +247,15 @@ class JointCNN(Encoder):
                 x, intermediate = block(x)
                 bin_size = 2 ** (i + 1)
                 intermediates[f"bin_size_{bin_size}"] = intermediate
+                
+        if self.ctt:
+            assert ctt_token is not None, "ctt_token must be provided when ctt is True"
+            #now we remove the first and append the cell type token
+            x = x[:,:,1:] #remove the first nucleotide
+            ctt = self.ctt_embedding(ctt_token).unsqueeze(2) #shape batch x d_model x 1
+            #now append to x
+            x = torch.cat([ctt, x], dim=2) #concatenate along the length dimension
+
 
         return x, intermediates
 
@@ -251,7 +275,7 @@ class JointCNNWithCTT(Encoder):
         joint (bool): Whether to process the inputs jointly or separately. Default is False.
         kernel_size (int): The size of the convolutional kernel. Default is 15.
     """
-    def __init__(self, d_model, celltypes, d_input1=6, d_input2=2, joint=False, kernel_size=15, combine=True, acc_type='continuous', **kwargs):
+    def __init__(self, d_model, celltypes, d_input1=6, d_input2=None, joint=False, kernel_size=15, combine=True, acc_type='continuous', **kwargs):
         super().__init__()
         print(f"JointMaskingEncoder: d_model={d_model}, celltypes={celltypes}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
         # print(kwargs)
@@ -260,10 +284,12 @@ class JointCNNWithCTT(Encoder):
         # print(d_input1, d_input2)
         # print('dmodel', d_model)
         # print('acc_type', acc_type)
-        if acc_type == 'continuous':
-            d_input2 = 2
-        elif acc_type == 'category':
-            d_input2 = 3
+        if d_input2 is None:
+            #define default d_input2 based on acc_type
+            if acc_type == 'continuous':
+                d_input2 = 2
+            elif acc_type == 'category':
+                d_input2 = 3
 
         if joint:
             # Single CNN for joint processing
@@ -341,7 +367,7 @@ registry = {
 dataset_attrs = {
     "linear": ["d_input"],  # TODO make this d_data?
     "onehot": ["n_tokens"],
-    "jointcnn": ["acc_type"],
+    "jointcnn": ["acc_type", "celltypes"],
     "jointcnn_ctt": ["acc_type", "celltypes"],
 }
 model_attrs = {

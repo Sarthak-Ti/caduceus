@@ -12,7 +12,8 @@ import argparse
 
 def main(args):
     ckpt_path = args.ckpt_path
-    evals = Evals(ckpt_path,load_data=args.load_data, data_idxs=args.data_idxs, data_path=args.data_path)
+    evals = Evals(ckpt_path,load_data=args.load_data, data_idxs=args.data_idxs, data_path=args.data_path, encoder_numcelltypes=args.encoder_numcelltypes)
+    evals.dataset.return_celltype_idx_og = False #we don't want cell type token, use the hard coded value!
 
     mapping = {
         'A': torch.tensor([1, 0, 0, 0], dtype=torch.float32),
@@ -58,7 +59,7 @@ def main(args):
         
         ((s,a),(su,au)) = evals.dataset[idx]
         data = (None,None,su,au) #can be s and a or None, it isn't used by the mask function
-        out = evals.mask(si,se, data=data, mask_accessibility=True)
+        out = evals.mask(si,se, data=data, mask_accessibility=True, ctt_val=args.ctt_val)
         
         current_nuc = out[2][524288//2].cpu().numpy()
         current_nuc = np.argmax(current_nuc)
@@ -72,9 +73,9 @@ def main(args):
             raise ValueError("Neither of the alleles match the current nucleotide")
         
         data[2][524288//2,:4] = mapping[bimval[alt_key]]
-        
-        out2 = evals.mask(si,se, data=data, mask_accessibility=True)
-        
+
+        out2 = evals.mask(si,se, data=data, mask_accessibility=True, ctt_val=args.ctt_val)
+
         oi = 524288//2 - args.out_size//2
         oe = 524288//2 + args.out_size//2
         
@@ -106,6 +107,9 @@ if __name__ == "__main__":
     parser.add_argument('--pool', type=int, default=1, help='Amount of bins to pool')
     parser.add_argument('--out_size', type=int, default=500, help='Output size')
     parser.add_argument('--data_path', type=str, default='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz', help='Path to the data')
+    parser.add_argument('--ctt_val', type=int, default=6, help='Cell type token value to use for masking')
+    parser.add_argument('--encoder_numcelltypes', type=int, default=None, help='Number of cell types for the encoder')
+    # parser.add_argument('--ctt_override', type=int, default=None, help='Override for the cell type token value used during training')
     args = parser.parse_args()
     
     print(args)

@@ -6,7 +6,7 @@
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:2
-#SBATCH --job-name=joint_cont_sepcnn_combined_nomlm_maskonly_immune_ctt
+#SBATCH --job-name=joint_cont_sepcnn_combined_nomlm_maskonly_immune_ctt_new
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -18,6 +18,8 @@ nvidia-smi
 
 WORKERS=$((SLURM_CPUS_PER_TASK - 1))
 NUM_GPUS=$(nvidia-smi -L |  wc -l)
+
+#NOTE PLEASE NOTE!!! If you want to run again, make sure you use the normal class without ctt in the name and att ctt argument as a bool that is true. Keep dataset arguments
 
 #if want to continue, set pretrained model path and safetensors path to null but define checkpoint
 pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_NAME experiment=hg38/joint_pretrain dataset.batch_size=1 \
@@ -31,7 +33,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  dataset.data_path=/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/dnase_chunkchrom_processed.zarr \
  dataset.load_in=false +dataset.data_idxs=/data1/lesliec/sarthak/data/DK_zarr/idx_lists/all_matched_immune.json \
- encoder._name_=jointcnn_ctt +dataset.return_celltype_idx_og=true \
+ +dataset.return_celltype_idx_og=true +encoder.ctt=true \
  \
  +model.config.skip_embedding=true trainer.devices=$NUM_GPUS \
  +dataset.mask_only=true dataset.acc_mlm=0.25 dataset.mlm=0 \

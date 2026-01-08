@@ -389,6 +389,10 @@ class SequenceLightningModule(pl.LightningModule):
             w['count_weight'] = self.hparams.train.count_weight
         if self.hparams.train.get('task2',None) is not None:
             w['task2'] = self.hparams.train.task2
+        if self.hparams.train.get('reweight_loss', None) is not None:
+            w['reweight_loss'] = self.hparams.train.reweight_loss
+        # if self.hparams.train.get('reweight_loss2', None) is not None:
+        #     w['reweight_loss2'] = self.hparams.train.reweight_loss2
         #expect x to be long x 16 since it's the logits
         # print("x shape", x.shape) #it is correct, as we expected
         # print("y shape", y.shape)
@@ -983,6 +987,7 @@ def train(config):
 
         model.load_state_dict(state_dict, strict=config.train.pretrained_model_strict_load)
 
+    
     # Run initial validation epoch (useful for debugging, fine-tuning)
     if config.train.validate_at_start:
         log.info("Running validation before training")
@@ -991,6 +996,7 @@ def train(config):
     log.info(f'{config.train.ckpt=} {fsspec_exists(config.train.ckpt)=}')
     # if config.train.get("compile_model", False):
     #     model = torch.compile(model, mode="reduce-overhead")
+    #     print('compiled model!')
     # print(model)
     if config.train.ckpt is not None and fsspec_exists(config.train.ckpt): #makes sure it's a real path!
         print('restoring checkpoint!!')

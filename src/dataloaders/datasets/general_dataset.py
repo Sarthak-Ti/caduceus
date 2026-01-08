@@ -20,161 +20,18 @@ import torch
 import pandas as pd
 from random import random
 import json
+import sys
+sys.path.append('/data1/lesliec/sarthak/caduceus/')
+from src.dataloaders.utils.mask_seq import mask_seq
+# from ..utils.mask_seq import mask_seq
 
 # splits_dict = {
 #     'train': [1,2,5,6,7,8,9,10,11,12,15,16,17,18,19,20,21,22],
 #     'val': [3,13],
 #     'test': [4,14]
 # }
+    
 
-def mask_seq(seq, mask_pct=0.15, replace_with_N=True, span=1, stype='category', weights=None, mask_only=False):
-    """This function will mask the sequence data, it does the BERT masking where you do 80% truly masked, 10% random, 10% unchanged
-    Note that for random replacement, it cannot be the N token, sicne it's very rare anyways, always random nucleotide!
-    Args:
-        seq: the sequence to mask, this is a tensor of shape (length, N) if categorical, or (length,1) if continuous, N is the number of classes (5 for ohe nucleotide data)
-        mask_pct: the percentage of the sequence to mask, default is 0.15 or 15%
-        replace_with_N: whether to allow random replacement of values with N (for one hot encoded data). Keep True for other categorical data
-        span: the size of the span to mask, default is 1, so it masks every element independently, but can be larger to mask chunks of size span
-        stype: the type of sequence, 'category' for categorical like ohe nucleotide data and 'continuous' for continuous like raw accessibility data, default is 'category'
-        weights: the weights to use for weighting regions like peaks. default is None, must be a tensor of shape (length,) to weight the peaks higher for masking. can be the same as the seq itself
-        mask_only: whether to do the 10% unchanged and 10% random replacement, default is False. If True, will only do the 100% truly masked and leave the rest unchanged
-    Returns:
-        seq: the masked sequence, this is a tensor of shape (length, N+1) if categorical or (length, 2) if continuous, where the last column is the mask track (only tells if masked, some are random or unchanged)
-        seq_unmask: the unmasked sequence, this is a tensor of shape (length, N+1) if categorical or (length, 2), where the last column is the mask track (tells all elements that have been changed or goign to evaluate)
-    """
-    
-    if len(seq.shape) == 1: #if it's just a 1D tensor, we need to add a dimension for the mask track
-        seq = seq.unsqueeze(1) #so now it's shape length x 1, so we can concatenate other things
-    
-    if seq.shape[0]%span != 0:
-        #we append on values
-        remainder = seq.shape[0] % span
-        extra_append = span - remainder
-        seq = torch.cat([seq, torch.zeros((extra_append,seq.shape[1]), dtype=torch.float)]) #so now we can have a mask for every element in the span, so size length again
-    
-    num_elements = seq.shape[0]//span #chunks into chunks of size span
-
-    # Create a probability vector (one per token) and sample which tokens to mask
-    probability_matrix = torch.full((num_elements,), mask_pct) #size of length, defines for each element if we mask it or not
-    
-    #we can also weight peak regions more
-    if weights is not None:
-        weights = weights.squeeze()
-        assert weights.ndim == 1, f"weights must be a 1D tensor, got {weights.shape}"
-
-        #Trim weights to match the required size
-        if weights.shape[0] % span != 0:
-            #remove values until it is the right size
-            weights = weights[:num_elements*span]
-        
-        #compute mean over spans
-        weights = weights.view(num_elements, span).mean(1) #average the weights over the span, so now it's size length
-        
-        #normalize weights to have range 0.5 to 1.5
-        weights = torch.log(weights + 1) #log transform to reduce the scale of values
-        weights = (weights - weights.min()) / (weights.max() - weights.min()) + .5 #normalize to have different range, downweights small values, upweights large ones to almost 3x
-
-        #scale probability matrix by weights
-        probability_matrix = probability_matrix * weights #so now we have a weighted probability matrix, so we can mask more in peak regions
-        #and scale up probability matrix so that the mean is mask_pct
-        probability_matrix = probability_matrix / probability_matrix.mean() * mask_pct #so now we have a weighted probability matrix, so we can mask more in peak regions
-        
-        #clip to make sure between 0 and 1
-        probability_matrix = torch.clamp(probability_matrix, min=0, max=1) #clip to make sure between 0 and 1     
-    
-    masked_indices = torch.bernoulli(probability_matrix.float()).bool() #finds which indices to mask, so shape is length, and is True or False for each index
-
-    # Get positions that were chosen to be masked
-    all_mask_positions = torch.nonzero(masked_indices).squeeze()*span #squeeze to remove the extra dimension, and multiply by span to get the actual positions in the original sequence
-    num_masked = all_mask_positions.numel()
-    
-    # Determine counts for the three groups: 80% truly masked, 10% random, 10% unchanged
-    num_mask = int(0.8 * num_masked)
-    num_random = int(0.1 * num_masked)
-    # To avoid rounding issues, let the remaining be unchanged
-    # num_unchanged = num_masked - num_mask - num_random
-    
-    # Shuffle the masked positions to randomly assign each to a category
-    permuted = all_mask_positions[torch.randperm(num_masked)]
-    mask_positions = permuted[:num_mask]  # 80%: replace with mask token
-    random_positions = permuted[num_mask:num_mask+num_random]  # 10%: random token
-    unchanged_positions = permuted[num_mask+num_random:]  # 10%: leave as is
-
-    if span > 1:
-        masked_indices = masked_indices.repeat_interleave(span) #so now we have a mask for every element in the span, so size length again
-        #and append zeros until the size of seq
-        extra = seq.shape[0] % span
-        if extra > 0:
-            masked_indices = torch.cat([masked_indices, torch.zeros(extra, dtype=torch.bool)]) #so now we have a mask for every element in the span, so size length again
-        
-        #now for each of the positions, we need to expand and then make masking apply per index
-        mask_positions = (mask_positions.unsqueeze(1) + torch.arange(span)).flatten()
-        random_positions = (random_positions.unsqueeze(1) + torch.arange(span)).flatten()
-        unchanged_positions = (unchanged_positions.unsqueeze(1) + torch.arange(span)).flatten()
-        #and now they are grouped and we can just deal with them
-
-    # Append the mask track to the sequence, resulting in a tensor of shape [seq_len, 6], or [seq_len, 2] if acc data
-    # where the last column is the mask track
-    seq_unmask = torch.cat([seq, masked_indices.unsqueeze(1).float()], dim=1) #so now seq_unmask is shape length x 6, where 6 is the 5 one hot classes and the mask
-    
-    seq_masked = seq_unmask.clone()  # Create a copy to modify, note that the mask track should be 0 for ones where it's not masked but is random or unchanged
-    seq_masked[mask_positions, :-1] = 0  # Set to zero for every class but the last (tells it it's masked)
-    
-    if mask_only:
-        #now forcibly mask the rest
-        seq_masked[unchanged_positions, :-1] = 0  # Set to zero for every class but the last (tells it it's masked)
-        seq_masked[random_positions, :-1] = 0  # Set to zero for every class but the last (tells it it's masked)
-        if span > 1:
-            seq_masked = seq_masked[:-extra_append]
-            seq_unmask = seq_unmask[:-extra_append]
-        # print(seq_masked.shape)
-        return seq_masked, seq_unmask #return the masked sequence and the unmasked sequence, so we can use it for the rest of the processing
-    
-    if stype == 'category':
-        # print(f'random_positions shape: {random_positions.shape}, seq shape: {seq.shape}')
-        if replace_with_N:
-            random_max = seq.shape[1]
-        else:
-            random_max = seq.shape[1] - 1
-        random_tokens = torch.randint(0, random_max, (random_positions.numel()//span,)) #generate random values for each position
-        random_one_hot = torch.zeros((random_positions.numel()//span, seq.shape[1])) #one hot encode them
-        random_one_hot.scatter_(1, random_tokens.unsqueeze(1), 1.0)
-        #now repeat with the span
-        random_one_hot = random_one_hot.repeat_interleave(span, dim=0) #so now we have a one hot for each position in the span
-        seq_masked[random_positions, :seq.shape[1]] = random_one_hot #assign them to the set positions
-        
-    elif stype == 'continuous':
-        #for accessibility, we will select random values from somewhere else in the sequence and then slightly shift and noise them
-        #get a random value between 0 and len(seq)-span
-        rand_start = torch.randint(0, seq.shape[0]-span, (random_positions.numel()//span,)) #definitely divisble by span since it was extended by size span
-        rand_idx = (rand_start.unsqueeze(1) + torch.arange(span)) #so now we have a random index for each of the random positions, and we can just select from there
-        rand_vals = seq.squeeze(1)[rand_idx] #get the values from the sequence at those random positions, so now we have a random value for each of the random positions
-        #and we can add some noise to it, so we can just add a small random value to it. Noise will be values between -0.1 and 0.1
-        rand_vals_mean = rand_vals.mean(1, keepdim=True) #get the mean of the random values for each position, keeps the dim so we can broadcast it
-        noise = torch.randn(rand_vals.shape) * rand_vals_mean * 0.1 #gaussian noise with std of 0.1 times the mean of the random values, so we can add some larger nosie to larger values
-        rand_vals = torch.clamp((rand_vals + noise).flatten(), min = 0) #make sure values are at least 0, else obvious there's noise in the region
-        #and now set the values
-        seq_masked[random_positions, 0] = rand_vals #set the values to the random values with noise, so now we have a random value for each of the random positions
-    
-    else:
-        raise ValueError("stype must be either 'category' or 'continuous'")
-    
-    #and remove the masked value, it doesn't know it's masked
-    seq_masked[random_positions, -1] = 0
-    
-    #and we remove the mask token from the unchanged value
-    seq_masked[unchanged_positions, -1] = 0
-    # seq = seq_masked #now we have the masked sequence, so we can use this for the rest of the processing
-
-    if span > 1:
-        seq_masked = seq_masked[:-extra_append]
-        seq_unmask = seq_unmask[:-extra_append]
-    
-    return seq_masked, seq_unmask #return the masked sequence and the unmasked sequence, so we can use it for the rest of the processing
-    
-"""another idea is to basically define a list of numbers of random size, from negative binomial mean 500. Varying length for a lot of them. poisson if want more tight
-Then you assign a random order, then the last 15% are defined as masked. You mask those, then for the genome you can have a list of 0 or 1 for every element, but it's in spans of whatever was defined by the negative binomial
-This can be done at the initialization of the dataloader, and this resets each epoch"""
 
 def open_data(data_path, load_in=False):
     if data_path is None:
@@ -249,6 +106,17 @@ class GeneralDataset():
         additional_data_idxs: str = None, #if you want to add additional data, like expression data, in enformer style just grab the idx, get the idxs from some file with json. Can also be a list
         additional_tracks: str = None, #if you want to add additional tracks, like expression data, in genome style
         return_celltype_idx_og: bool = False, #if True, will return the celltype index as well, this is used if you want the cell type token
+        multitasking: bool = False, #if True, will return all cell types for the given file, so shape will be (celltypes, length, channels)
+        mask_tie: float = 1.0, #how much masking is tied across categories. 1 means fully tied, so all tracks are masked the same, 0 means fully indepdendent masking across categories
+        independent_tracks: bool = False, #if True, will treat each track as independent for masking purposes, so each track will have its own masking
+        weights_seq: str = None, #path to weights for the sequence masking, must be a npz or zarr which has each chromosome giving a value of shape (length,)
+        binary_score_threshold: float = None, #the threshold for binary scores if using binary accessibility
+        max_neg_to_pos_ratio: float = 0.1,
+        max_scale: float = 3, #the maximum scaling factor for the weights, so that they don't get too large for continuous values
+        log_weights: bool = False, #whether to log the weights or not, helps reduce the effect of outliers
+        neg_maskrate: float = None, #the negative class mask rate, only used if weights are provided and binary weights are used
+        minimum_neg_masks: float = 0, #the number of negative values minimum
+        weight_floor: float = 0.1, #the floor for the weights, so that the lowest weight is not zero
     ):
         """
         General dataset class, relies on zarr or np array data which is in chromosome format, and a sequences bed file
@@ -304,7 +172,33 @@ class GeneralDataset():
         self.additional_data_idxs = additional_data_idxs #if you want to add additional data, like expression data, in enformer style just grab the idx, get the idxs from some file with json
         self.additional_tracks_path = additional_tracks #if you want to add additional tracks, like expression data, in genome style
         self.return_celltype_idx_og = return_celltype_idx_og
+        self.mask_tie = mask_tie
+        self.multitasking = multitasking
+        self.weights_seq_path = weights_seq #path to weights for the sequence masking, must be a npz or zarr which has each chromosome giving a value of shape (length,)
+        self.independent_tracks = independent_tracks
+        self.weight_options = {
+            'max_scale': max_scale,
+            'binary_score_threshold': binary_score_threshold,
+            'max_neg_to_pos_ratio': max_neg_to_pos_ratio,
+            'neg_maskrate': neg_maskrate,
+            'log_weights': log_weights,
+            'weight_floor': weight_floor,
+            'minimum_neg_masks': minimum_neg_masks,
+            }
+        # self.binary_score_threshold = binary_score_threshold
+        # self.max_neg_to_pos_ratio = max_neg_to_pos_ratio
+        # self.neg_maskrate = neg_maskrate
         # self.complement_array = np.array([3, 2, 1, 0, 11]) #this is the complement array for the rc augmentation, so A->T, C->G, G->C, T->A, 11 stays as 11
+        if mask_only:
+            if mask_only == 1:
+                self.mask_only_seq = True
+                self.mask_only_acc = True
+            if mask_only == 0.5:
+                self.mask_only_seq = False
+                self.mask_only_acc = True
+        else:
+            self.mask_only_seq = False
+            self.mask_only_acc = False
 
         #and access the genome seq file
         self.genome = open_data(genome_seq_file, load_in)
@@ -313,9 +207,10 @@ class GeneralDataset():
         self.data = open_data(data_path, load_in)
         self.additional_data = open_data(additional_data, load_in)
         self.additional_tracks = open_data(additional_tracks, load_in) #function returns None if path is None
+        self.weights_seq = open_data(weights_seq, load_in) #function returns None if path is None
 
         self.data_idxs = get_data_idxs(data_idxs, self.data) #get the data idxs from the data path, this is a json file with the indices of the data to use, if you want to use a subset of the data
-        if self.celltypes == 1 and self.data_idxs is not None:
+        if self.celltypes == 1 and self.data_idxs is not None and not self.multitasking: #if we are multitasking, then we keep celltypes as is
             print(f'replacing cell type number with data indices, {len(self.data_idxs)}')
             self.celltypes = len(self.data_idxs)
         self.additional_data_idxs = get_data_idxs(additional_data_idxs, self.data)
@@ -379,11 +274,13 @@ class GeneralDataset():
             self.additional_tracks = open_data(self.additional_tracks_path, load_in=False) #function returns None if path is None
             # if self.additional_tracks_path is not None:
             #     self.additional_tracks = open_data(self.additional_tracks, load_in=False)
+            self.weights_seq = open_data(self.weights_seq_path, load_in=False) #function returns None if path is None
         
         seq_unmask = torch.empty(0)
         acc_umask = torch.empty(0)
         
-        if self.celltypes > 1 or self.data_idxs is not None: #the self cell types will be more than 1 if you have data idxs
+        celltype_idx_og = 0 #just a default value
+        if (self.celltypes > 1 or self.data_idxs is not None) and not self.multitasking: #the self cell types will be more than 1 if you have data idxs
             #we now separate out cell type from sequence
             celltype_idx_og = index // len(self.sequences) #get the index of the cell type
             celltype_idx = self.data_idxs[celltype_idx_og] #get the proper index!
@@ -442,8 +339,17 @@ class GeneralDataset():
         if self.mlm is not None:
             if not self.one_hot:
                 raise ValueError("MLM only works with one hot encoding for now, but can easily be generalized to this")
+            
+            if self.weights_seq is not None:
+                # print(leftpad.shape, rightpad.shape, self.weights_seq[chrom][start:end].shape, start, end)
+                weights = np.concatenate((leftpad*0, self.weights_seq[chrom][start:end], rightpad*0))
+                weights = torch.FloatTensor(weights)
+                # print(weights.shape)
+                # weights = self.weights_seq[chrom][start:end]
+            else:
+                weights = None
 
-            seq, seq_unmask = mask_seq(seq, mask_pct=self.mlm, replace_with_N=self.replace_with_N, mask_only=self.mask_only) #this will mask the data and return the unmasked data as well, so we can use it for the rest of the processing
+            seq, seq_unmask = mask_seq(seq, mask_pct=self.mlm, replace_with_N=self.replace_with_N, mask_only=self.mask_only_seq, weights=weights, **self.weight_options) #this will mask the data and return the unmasked data as well, so we can use it for the rest of the processing
             # seq_unmask = seq_unmask.transpose(1, 0) #transpose it to be 6 x length, so we can use it for the rest of the processing
         
         seq = seq.transpose(1, 0) #transpose it to be 6 x length, so we can use it for the rest of the processing
@@ -454,7 +360,14 @@ class GeneralDataset():
     
         #and get the data
         # print(leftpad.shape, rightpad.shape, self.data[chrom].shape, celltype_idx)
-        data = np.concatenate([leftpad[None]*0, self.data[chrom][celltype_idx:celltype_idx+1,start:end], rightpad[None]*0], axis=1) #multiply by 0 to set it as 0 since it's not tokenized
+        if not self.multitasking:
+            data = np.concatenate([leftpad[None]*0, self.data[chrom][celltype_idx:celltype_idx+1,start:end], rightpad[None]*0], axis=1) #multiply by 0 to set it as 0 since it's not tokenized
+        else:
+            tempdata = self.data[chrom][:,start:end] #get all cell types
+            num_celltypes = tempdata.shape[0]
+            #have to pad across all cell tyypes, repeat leftpad across celltypes
+            data = np.concatenate([0*leftpad[None].repeat(num_celltypes, axis=0), tempdata, 0*rightpad[None].repeat(num_celltypes, axis=0)], axis=1)
+            # data = np.concatenate([leftpad[None]*0, self.data[chrom][:,start:end], rightpad[None]*0], axis=1)
         #so padsd if needed, and then pads 0s
         #broadcast along the dimension
         #now is shape N x length, where N is the number of targets
@@ -488,26 +401,28 @@ class GeneralDataset():
             
         if self.acc_mlm is not None:
             #now we will do the accessibility masking, this is done on the targets, so we can mask the targets and the sequence at the same time
-            if targets.shape[1] > 1:
-                raise NotImplementedError("I don't know yet how to broadcast the masking effectively, can just do a for loop but maybe some more efficient way?")
-            else:
-                targets = targets.squeeze(1)
-            
+            assert not self.pair_mask, "Pair masking not implemented yet"
             if self.weight_peaks:
                 weights = targets #this will be used to weight the peaks more for masking, so we can use the accessibility values themselves
             else:
                 weights = None
-
-            if self.pair_mask:
-                raise NotImplementedError("Pair masking is not implemented yet")
+            
+            if targets.shape[1] > 1:
+                # raise NotImplementedError("I don't know yet how to broadcast the masking effectively, can just do a for loop but maybe some more efficient way?")
+                assert self.acc_type=='continuous', "Only continuous acc type implemented for multiple target tracks"
+                # print(f'Multiple target tracks detected, applying tied masking across all tracks with parameter {self.mask_tie}') #yes this is called as expected
+                # print(targets.shape)
+                targets, acc_umask = mask_seq(targets, mask_pct=self.acc_mlm, span=self.acc_mask_size, stype=self.acc_type, weights=weights, mask_only=self.mask_only_acc, mask_tie=self.mask_tie, independent_tracks=self.independent_tracks) #mask the acc data, tie the masking since multiple tracks
             else:
+                targets = targets.squeeze(1)
+
                 if self.acc_type == 'category':
                     #we have to bin the data
                     targets = (targets > self.acc_threshold).long() #this will bin the data, so anything above the threshold is 1, else 0
                     #and ohe it
                     targets = torch.nn.functional.one_hot(targets, num_classes=2).float() #now input is length x 2
-                
-                targets, acc_umask = mask_seq(targets, mask_pct=self.acc_mlm, span=self.acc_mask_size, stype=self.acc_type, weights=weights, mask_only=self.mask_only) #mask the acc data
+            
+                targets, acc_umask = mask_seq(targets, mask_pct=self.acc_mlm, span=self.acc_mask_size, stype=self.acc_type, weights=weights, mask_only=self.mask_only_acc, mask_tie=1) #mask the acc data, no mask tie because nothing to mask
                 # acc_umask = acc_umask.transpose(1, 0) #transpose it to be 2 x length, so we can use it for the rest of the processing
         
         #now transpose the targets
@@ -572,6 +487,7 @@ class GeneralDataset():
         
         if self.celltypes > 1:
             raise ValueError("Cannot expand sequences for multiple cell types, would need to edit the get item function or something? idk how to do it")
+            # print('potential error, may not work for multiple cell types, be careful!')
         
         new_row = pd.DataFrame([[ chr, start, stop, self.split ]], columns=self.sequences.columns)
         self.sequences = pd.concat([self.sequences, new_row], ignore_index=True)
@@ -637,6 +553,16 @@ dataset = GeneralDataset(
     mlm=0.25,
     acc_mlm=0.25,
     additional_data='/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz',
+)
+
+from src.dataloaders.datasets.general_dataset import GeneralDataset
+dataset = GeneralDataset(
+    split='train',
+    data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz',
+    length=524288,
+    mlm=0.25,
+    acc_mlm=0.25,
+    weights_seq='/data1/lesliec/sarthak/data/gpn/hg38_phastcons100way.npz',
 )
 
 out = dataset[0]

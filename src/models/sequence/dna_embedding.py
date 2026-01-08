@@ -214,7 +214,7 @@ class DNAEmbeddingModelCaduceus(DNAEmbeddingModel):
             conjoin_train=False,
             conjoin_test=False,
     ):
-        super(DNAEmbeddingModel, self).__init__()  # nn.Module.__init__()
+        super(DNAEmbeddingModel, self).__init__()  # nn.Module.__init__() idk why they do it this way, but just nn.Module init
         self.config = config
         self.d_model = config.d_model  # for decoder
         factory_kwargs = {"device": device, "dtype": dtype}

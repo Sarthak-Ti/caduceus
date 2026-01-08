@@ -595,7 +595,7 @@ def custom_profile_poisson_loss(outs,y,len_batch=None, ignore_index=-100, mask =
 #     return loss
 
 
-def joint_loss(x, y, task1='mlm', task2='mlm', count_weight=1):
+def joint_loss(x, y, task1='mlm', task2='mlm', count_weight=1, reweight_loss=None):
     """
     Joint loss function for sequence and accessibility masking.
     
@@ -627,8 +627,9 @@ def joint_loss(x, y, task1='mlm', task2='mlm', count_weight=1):
     # Compute sequence loss (task1 must be 'mlm')
     if task1 != 'mlm':
         raise ValueError('task1 not recognized')
-    loss1 = ce_loss_mask_seq((seq, None), (seq_unmask, None))
-    
+    loss1 = ce_loss_mask_seq((seq, None), (seq_unmask, None), reweight_loss=reweight_loss)
+    # print(f"Loss1: {loss1.item()}, Loss2: {loss2.item()}, Scale2: {scale2}") #see that generally loss 2 is about 1/4 of loss 1 especially with a few epochs
+        
     return loss1 + loss2 * scale2
 
 def poisson_loss_mask(x, y):
@@ -636,31 +637,37 @@ def poisson_loss_mask(x, y):
     Poisson loss for accessibility regression.
     
     x: tuple (dummy, acc)
-         - acc: (batch_size, seq_len, 1)
+         - acc: (batch_size, seq_len, num_categories)
     y: tuple (dummy, acc_unmask)
-         - acc_unmask: (batch_size, seq_len, 2)   (last channel is the mask)
+         - acc_unmask: (batch_size, seq_len, 2*num_categoreies)   (last half channel is the mask)
     """
+
     # We only use the accessibility part.
-    acc = x[1]      # shape: (batch_size, seq_len, 1)
-    acc_unmask = y[1]  # shape: (batch_size, seq_len, 2)
+    acc = x[1]      # shape: (batch_size, seq_len, num_categories)
+    acc_unmask = y[1]  # shape: (batch_size, seq_len, 2*num_categories)
+    
+    num_categories = acc.shape[2]
     
     # Squeeze the last channel
-    acc = acc.squeeze(-1)
-    # Create mask from second channel (index 1)
-    mask = acc_unmask[:, :, 1] == 1
-    acc = acc[mask]
-    # Use the first channel (index 0) as the target, remove mask dim
-    acc_target = acc_unmask[mask][:, 0]
+    # Create mask from second half channels
+    mask = acc_unmask[:, :, num_categories:] == 1  # shape: (batch_size, seq_len, num_categories)
+    
+    # Use the first half channels as the target
+    acc_target = acc_unmask[:, :, :num_categories]  # shape: (batch_size, seq_len, num_categories)
     
     # Make sure predictions are positive.
     acc = F.softplus(acc)
     
+    # Apply mask
+    acc = acc[mask]
+    acc_target = acc_target[mask]
+    
     loss = F.poisson_nll_loss(acc, acc_target, log_input=False, full=False)
     return loss
 
-def ce_loss_mask_seq(x, y):
+def ce_loss_mask_seq(x, y, reweight_loss=None):
     """
-    Cross entropy loss for sequence classification. Note that if nothing is masked, it checks everything
+    Cross entropy loss for sequence classification. Note that if nothing is masked, it checks nothing
     
     x: tuple (seq, dummy)
          - seq: (batch_size, seq_len, vocab_size)
@@ -672,16 +679,29 @@ def ce_loss_mask_seq(x, y):
     
     # Create mask from last column of seq_unmask
     mask = seq_unmask[:, :, -1] == 1
+    multiplier = 1
     if mask.sum().item() == 0:
-        # If no mask is present, just calculate it on everything
-        mask = torch.ones_like(seq_unmask[:, :, -1], dtype=torch.bool)
+        # If no mask is present, calculate it on nothing
+        # return torch.zeros([]).to(seq.device)
+        mask = torch.ones_like(seq_unmask[:, :, -1], dtype=torch.bool) #calculate for everything
+        multiplier = 0
         
     seq_pred = seq[mask]
     # Remove mask channel from target; resulting shape is (N, vocab_size)
     seq_target = seq_unmask[mask][:, :-1]
     
     loss = F.cross_entropy(seq_pred, seq_target) #can do seq_target.argmax(dim=-1) if want more "efficient" but argmax more expensive than just computing class probs
-    return loss
+    # print(f"CE Loss before reweighting: {loss.item()}")
+    # print(f"reweight loss: {reweight_loss}")
+    if reweight_loss is not None: #means it is a numeric value
+        #reweight loss based on how many elements are being predicted
+        total_elements = mask.numel()
+        predicted_elements = mask.sum().item()
+        target_vals = total_elements*float(reweight_loss)
+        loss = loss * (predicted_elements/target_vals)
+        # print(f"predicted_elements: {predicted_elements}, total_elements: {total_elements}, target_vals: {target_vals}")
+        # print(f"CE Loss after reweighting: {loss.item()}")
+    return loss * multiplier
 
 def ce_loss_mask_acc(x, y):
     """
