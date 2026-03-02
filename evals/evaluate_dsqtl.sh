@@ -17,11 +17,11 @@ cd /data1/lesliec/sarthak/caduceus/evals
 nvidia-smi
 
 
-outputs=("eqtlpip_cont.npy" "eqtlscaled_binary.npy")
+outputs=("alternating_2.npy" "gm12878_5seqmask_countweight16.npy")
 
 ckpts=( \
-  "/data1/lesliec/sarthak/caduceus/outputs/2025-12-06/22-01-02-304317/checkpoints/last.ckpt" \
-  "/data1/lesliec/sarthak/caduceus/outputs/2025-12-06/22-05-01-508538/checkpoints/last.ckpt" \
+  "/data1/lesliec/sarthak/caduceus/outputs/2026-02-16/14-57-20-463663/checkpoints/last.ckpt" \
+  "/data1/lesliec/sarthak/caduceus/outputs/2025-11-19/21-02-33-010281/checkpoints/last.ckpt" \
 )
 
 data_paths=( \
@@ -40,7 +40,7 @@ data_path=${data_paths[$i]}
 
 echo "Running task $i with output $OUTPUT, ckpt $CKPT, mask size $MASK_SIZE"
 #–– run the ask ––
-pixi run python dsqtl_onemodel.py \
+pixi run python -u dsqtl_onemodel.py \
   -o "$OUTPUT" \
   --ckpt_path "$CKPT" \
   --mask_size "$MASK_SIZE" \

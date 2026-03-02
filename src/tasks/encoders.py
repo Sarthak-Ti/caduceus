@@ -132,7 +132,7 @@ class JointCNN(Encoder):
         pool_type (str): The type of pooling to use during downsampling ('max' or 'attention'). Default is 'max'.
         ctt (bool): Whether you are both providing and want to include a cell type token. Default is False
     """
-    def __init__(self, d_model, celltypes=None, d_input1=6, d_input2=None, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', ctt=False, **kwargs):
+    def __init__(self, d_model, celltypes=None, d_input1=6, d_input2=None, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', ctt=False, norm=None, **kwargs):
         super().__init__()
         print(f"JointMaskingEncoder: d_model={d_model}, celltypes={celltypes}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
         # print(kwargs)
@@ -152,7 +152,6 @@ class JointCNN(Encoder):
                 d_model = d_model // 2
                 grow_channels = d_model // (self.n_pools-1)
             # out_dim = [d_model + i * d_model // self.n_pools for i in range(self.n_pools + 1)]
-        
         # print(d_input1, d_input2)
         # print('dmodel', d_model)
         # print('acc_type', acc_type)
@@ -162,21 +161,40 @@ class JointCNN(Encoder):
                 d_input2 = 2
             elif acc_type == 'category':
                 d_input2 = 3
+        
+        if norm == 'InstanceNorm' or norm == True:
+            norm_seq = nn.InstanceNorm1d
+            norm_rest = nn.InstanceNorm1d
+        elif norm == 'mixed':
+            norm_seq = nn.BatchNorm1d
+            norm_rest = nn.InstanceNorm1d 
+        elif norm == 'BatchNorm':
+            norm_seq = nn.BatchNorm1d
+            norm_rest = nn.BatchNorm1d
+        elif norm is None or norm == 'None' or norm == False:
+            norm_seq = nn.Identity
+            norm_rest = nn.Identity
+        else:
+            raise ValueError(f"Unknown norm type {norm}")
+        print(f"Using norm: seq={norm_seq}, rest={norm_rest}")
 
         if joint:
             # Single CNN for joint processing
             self.conv = nn.Sequential(
                 nn.Conv1d(d_input1+d_input2, d_model, kernel_size, padding='same'),
+                norm_rest(d_model, affine=True),
                 nn.ReLU()
             )
         else:
             # Separate CNNs for each input
             self.conv1 = nn.Sequential(
                 nn.Conv1d(d_input1, d_model // 2, kernel_size, padding='same'),
+                norm_seq(d_model // 2, affine=True),
                 nn.ReLU()
             )
             self.conv2 = nn.Sequential(
                 nn.Conv1d(d_input2, d_model // 2, kernel_size, padding='same'),
+                norm_rest(d_model // 2, affine=True),
                 nn.ReLU()
             )
             if combine:

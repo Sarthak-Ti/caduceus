@@ -651,6 +651,10 @@ def poisson_loss_mask(x, y):
     # Squeeze the last channel
     # Create mask from second half channels
     mask = acc_unmask[:, :, num_categories:] == 1  # shape: (batch_size, seq_len, num_categories)
+    multiplier = 1
+    if mask.sum().item() == 0:
+        mask = torch.ones_like(acc_unmask[:, :, :num_categories], dtype=torch.bool) #calculate for everything because have to use data for loss for ddp
+        multiplier = 0
     
     # Use the first half channels as the target
     acc_target = acc_unmask[:, :, :num_categories]  # shape: (batch_size, seq_len, num_categories)
@@ -663,7 +667,7 @@ def poisson_loss_mask(x, y):
     acc_target = acc_target[mask]
     
     loss = F.poisson_nll_loss(acc, acc_target, log_input=False, full=False)
-    return loss
+    return loss * multiplier
 
 def ce_loss_mask_seq(x, y, reweight_loss=None):
     """

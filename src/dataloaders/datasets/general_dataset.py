@@ -109,6 +109,7 @@ class GeneralDataset():
         multitasking: bool = False, #if True, will return all cell types for the given file, so shape will be (celltypes, length, channels)
         mask_tie: float = 1.0, #how much masking is tied across categories. 1 means fully tied, so all tracks are masked the same, 0 means fully indepdendent masking across categories
         independent_tracks: bool = False, #if True, will treat each track as independent for masking purposes, so each track will have its own masking
+        alternating: int = 0, #if True, will alternate masking between sequence and accessibility on a per sample basis
         weights_seq: str = None, #path to weights for the sequence masking, must be a npz or zarr which has each chromosome giving a value of shape (length,)
         binary_score_threshold: float = None, #the threshold for binary scores if using binary accessibility
         max_neg_to_pos_ratio: float = 0.1,
@@ -174,6 +175,11 @@ class GeneralDataset():
         self.return_celltype_idx_og = return_celltype_idx_og
         self.mask_tie = mask_tie
         self.multitasking = multitasking
+        self.alternating = alternating
+        if self.alternating:
+            self.mlm_backup = self.mlm
+            self.acc_mlm_backup = self.acc_mlm
+        
         self.weights_seq_path = weights_seq #path to weights for the sequence masking, must be a npz or zarr which has each chromosome giving a value of shape (length,)
         self.independent_tracks = independent_tracks
         self.weight_options = {
@@ -276,6 +282,23 @@ class GeneralDataset():
             #     self.additional_tracks = open_data(self.additional_tracks, load_in=False)
             self.weights_seq = open_data(self.weights_seq_path, load_in=False) #function returns None if path is None
         
+        acc_mlm_rate = self.acc_mlm
+        mlm_rate = self.mlm
+        
+        if self.alternating:
+            #flip a coin to decide whether we are doing 1 or both
+            outcome = random()
+            if outcome <= self.alternating:
+                mlm_rate = self.mlm_backup
+                acc_mlm_rate = 0
+            else:
+                mlm_rate = 0
+                acc_mlm_rate = self.acc_mlm_backup
+            # else:
+            #     self.mlm = self.mlm_backup
+            #     self.acc_mlm = self.acc_mlm_backup
+        
+        
         seq_unmask = torch.empty(0)
         acc_umask = torch.empty(0)
         
@@ -349,7 +372,7 @@ class GeneralDataset():
             else:
                 weights = None
 
-            seq, seq_unmask = mask_seq(seq, mask_pct=self.mlm, replace_with_N=self.replace_with_N, mask_only=self.mask_only_seq, weights=weights, **self.weight_options) #this will mask the data and return the unmasked data as well, so we can use it for the rest of the processing
+            seq, seq_unmask = mask_seq(seq, mask_pct=mlm_rate, replace_with_N=self.replace_with_N, mask_only=self.mask_only_seq, weights=weights, **self.weight_options) #this will mask the data and return the unmasked data as well, so we can use it for the rest of the processing
             # seq_unmask = seq_unmask.transpose(1, 0) #transpose it to be 6 x length, so we can use it for the rest of the processing
         
         seq = seq.transpose(1, 0) #transpose it to be 6 x length, so we can use it for the rest of the processing
@@ -412,7 +435,7 @@ class GeneralDataset():
                 assert self.acc_type=='continuous', "Only continuous acc type implemented for multiple target tracks"
                 # print(f'Multiple target tracks detected, applying tied masking across all tracks with parameter {self.mask_tie}') #yes this is called as expected
                 # print(targets.shape)
-                targets, acc_umask = mask_seq(targets, mask_pct=self.acc_mlm, span=self.acc_mask_size, stype=self.acc_type, weights=weights, mask_only=self.mask_only_acc, mask_tie=self.mask_tie, independent_tracks=self.independent_tracks) #mask the acc data, tie the masking since multiple tracks
+                targets, acc_umask = mask_seq(targets, mask_pct=acc_mlm_rate, span=self.acc_mask_size, stype=self.acc_type, weights=weights, mask_only=self.mask_only_acc, mask_tie=self.mask_tie, independent_tracks=self.independent_tracks) #mask the acc data, tie the masking since multiple tracks
             else:
                 targets = targets.squeeze(1)
 
@@ -422,7 +445,7 @@ class GeneralDataset():
                     #and ohe it
                     targets = torch.nn.functional.one_hot(targets, num_classes=2).float() #now input is length x 2
             
-                targets, acc_umask = mask_seq(targets, mask_pct=self.acc_mlm, span=self.acc_mask_size, stype=self.acc_type, weights=weights, mask_only=self.mask_only_acc, mask_tie=1) #mask the acc data, no mask tie because nothing to mask
+                targets, acc_umask = mask_seq(targets, mask_pct=acc_mlm_rate, span=self.acc_mask_size, stype=self.acc_type, weights=weights, mask_only=self.mask_only_acc, mask_tie=1) #mask the acc data, no mask tie because nothing to mask
                 # acc_umask = acc_umask.transpose(1, 0) #transpose it to be 2 x length, so we can use it for the rest of the processing
         
         #now transpose the targets
@@ -563,6 +586,7 @@ dataset = GeneralDataset(
     mlm=0.25,
     acc_mlm=0.25,
     weights_seq='/data1/lesliec/sarthak/data/gpn/hg38_phastcons100way.npz',
+    alternating=True,
 )
 
 out = dataset[0]
