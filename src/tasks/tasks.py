@@ -537,6 +537,18 @@ class JointFinetune(BaseTask):
         
         return x, y, {}
 
+class JointTSS(BaseTask):
+    def forward(self, batch, encoder, model, decoder, _state):
+        """Passes a batch through the encoder, backbone, and decoder. Here we have additional arguments"""
+        x, y, *_ = batch
+        #here, y contains additional information about the mask needed to predict
+
+        x,intermediates = encoder(*x)
+        x,_ = model(x)
+        x,_ = decoder(x, intermediates=intermediates, mask=y[3]) #pass the mask to the decoder, which will use it to only calculate loss on the TSS positions   
+        
+        return x, y, {}
+
 class Basic(BaseTask):
     def forward(self, batch, encoder, model, decoder, _state):
         """Passes a batch through the encoder, backbone, and decoder
@@ -772,4 +784,5 @@ registry = {
     'basic': Basic,
     'joint': Joint,
     'joint_finetune': JointFinetune,
+    'joint_tss': JointTSS,
 }

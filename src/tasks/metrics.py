@@ -731,6 +731,18 @@ def ce_loss_mask_acc(x, y):
 
     
 
+def mse_tss(outs, y, len_batch=None):
+    """MSE loss for TSS expression prediction.
+
+    outs: (batch, 1) - model predictions (already softplus-activated)
+    y:    tuple/list where y[2] is shape (batch,) - log2(TPM+1) targets
+    """
+    preds = outs.squeeze(-1)   # (batch,)
+    targets = y[2].float()     # (batch,)
+    #can do huber loss if you want.
+    return F.mse_loss(preds, targets)
+
+
 # Metrics that can depend on the loss
 def loss(x, y, loss_fn):
     """ This metric may be useful because the training loss may add extra regularization (e.g. weight decay implemented as L2 penalty), while adding this as a metric skips the additional losses """
@@ -792,6 +804,7 @@ output_metric_fns = {
     'poisson_loss_mask': poisson_loss_mask,
     'ce_loss_mask_seq': ce_loss_mask_seq,
     'ce_loss_mask_acc': ce_loss_mask_acc,
+    'mse_tss': mse_tss,
 }
 
 loss_metric_fns = {

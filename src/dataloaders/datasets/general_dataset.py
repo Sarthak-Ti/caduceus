@@ -478,6 +478,8 @@ class GeneralDataset():
             else:
                 additional_data = self.additional_data[split][tindex] #with zarr can input it to not require the split, idk about npz tho! can input like path.zarr/train for train data, but then won't work for evals...
             # additional_data = self.additional_data[index]
+            if flip:
+                additional_data = additional_data.flip(dims=[0]) #flip the additional data if we flipped the seq, this assumes that the additional data is in the same order as the sequence, which is true for enformer style data but may not be true for other types of data, so may need to modify this for other types of data
             outputs2.append(additional_data) #append the additional data to the outputs2 list
         elif self.additional_tracks is not None:
             #this is if you have like genome arrays that you're predicting over. So it will be like need the chormosome and start and stop like the data
@@ -489,6 +491,8 @@ class GeneralDataset():
             # additional_data = np.concatenate([leftpad[None]*0, self.additional_tracks[chrom][:,start:end], rightpad[None]*0], axis=1) #this is a way to get all the additional track data?
             if self.additional_data_idxs is not None:
                 raise NotImplementedError("Additional tracks with data idxs not implemented yet, need to figure out how to handle this")
+            if flip:
+                additional_data = additional_data.flip(dims=[1]) #flip the additional data if we flipped the seq, this assumes that the additional data is in the same order as the sequence, which is true for enformer style data but may not be true for other types of data, so may need to modify this for other types of data
             outputs2.append(additional_data.transpose(1,0)) #transpose it to be seq_len x n_tracks, so we can use it for the rest of the processing
         
         if self.return_celltype_idx_og:

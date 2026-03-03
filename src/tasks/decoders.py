@@ -627,6 +627,38 @@ class JointMaskingDecoder(Decoder):
         return x1, x2
         
 
+class TSSDecoder(Decoder):
+    """Decoder that averages embeddings over a mask region and predicts a single value.
+
+    Takes per-base-pair embeddings and a mask indicating which positions to average,
+    then maps the averaged embedding to a scalar prediction.
+    """
+    def __init__(self, d_model, d_output=1, hidden_dim=128):
+        super().__init__()
+        # Upgraded to an MLP for non-linear capacity
+        self.output_transform = nn.Sequential(
+            nn.Linear(d_model, hidden_dim),
+            nn.LayerNorm(hidden_dim), # Optional, but highly recommended for training stability
+            nn.GELU(),
+            nn.Linear(hidden_dim, d_output),
+            nn.Softplus() # Enforces outputs >= 0 to match log2(Count + 1) targets
+        )
+
+    def forward(self, x, mask, state=None, **kwargs):
+        """
+        x:    (batch, length, d_model) - per-base-pair embeddings
+        mask: (batch, length)          - float or bool; 1/True marks positions to average over
+
+        Returns:
+            (batch, d_output) - scalar prediction per sequence
+        """
+        mask = mask.unsqueeze(-1).float()                          # (batch, length, 1)
+        #pool across mask length
+        avg_embedding = (x * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)  # (batch, d_model)
+        #map to scalar output
+        return self.output_transform(avg_embedding)                # (batch, d_output)
+
+
 class NDDecoder(Decoder):
     """Decoder for single target (e.g. classification or regression)"""
     def __init__(
@@ -760,6 +792,7 @@ registry = {
     'enformer': EnformerDecoder,
     'graphreg': GraphRegDecoder,
     'jointmask': JointMaskingDecoder,
+    'tss': TSSDecoder,
 }
 model_attrs = {
     "linear": ["d_output"],
@@ -770,6 +803,7 @@ model_attrs = {
     "forecast": ["d_output"],
     "token": ["d_output"],
     "jointmask": ["d_model"],
+    "tss": ["d_model"],
 }
 
 dataset_attrs = {

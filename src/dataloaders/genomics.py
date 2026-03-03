@@ -34,6 +34,7 @@ from src.dataloaders.datasets.kmer_pretrain_dataset import KmerPretrain
 from src.dataloaders.datasets.graphreg_dataset import GraphRegDataset
 from src.dataloaders.datasets.GPNMSA_dataset import GPNMSADataset
 from src.dataloaders.datasets.general_dataset import GeneralDataset
+from src.dataloaders.datasets.tss_dataset import TSSDataset
 
 
 class HG38(SequenceDataset):
@@ -1228,7 +1229,51 @@ class GeneralLoader(HG38): #for joint pretraining, handles many arguments for th
     def test_dataloader(self, *args: Any, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
         """ The test dataloader, it's a dummy loader just to make the trainer happy, we don't use it."""
         return self._data_loader(self.dataset_val, batch_size=self.batch_size_eval)
-    
+
+
+class TSSLoader(HG38):
+    """DataModule wrapping TSSDataset for TSS-centered expression prediction."""
+    _name_ = "TSSLoader"
+
+    def __init__(self, dest_path=None, batch_size=32, batch_size_eval=None, num_workers=1,
+                 shuffle=True, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
+                 fast_forward_epochs=None, fast_forward_batches=None, *args, **kwargs):
+        self._name_ = kwargs.pop("_name_", self._name_)
+        kwargs.pop("dataset_name", None)   # inherited from general_dataset.yaml, not used by TSSDataset
+        kwargs.pop("additional_data", None)  # from joint_finetune experiment config, not used by TSSDataset
+        self.dest_path = dest_path
+        self.batch_size = batch_size
+        self.batch_size_eval = batch_size_eval if batch_size_eval is not None else self.batch_size
+        self.num_workers = num_workers
+        self.shuffle = shuffle
+        self.pin_memory = pin_memory
+        self.drop_last = drop_last
+        self.dataset_kwargs = kwargs
+
+        if self.dest_path is None:
+            self.dest_path = default_data_path / self._name_
+
+        if fault_tolerant:
+            assert self.shuffle
+        self.fault_tolerant = fault_tolerant
+        if ddp:
+            assert fault_tolerant
+        self.ddp = ddp
+        self.fast_forward_epochs = fast_forward_epochs
+        self.fast_forward_batches = fast_forward_batches
+        if self.fast_forward_epochs is not None or self.fast_forward_batches is not None:
+            assert ddp and fault_tolerant
+
+    def setup(self, stage=None):
+        self.tokenizer = None
+        self.dataset_train, self.dataset_val = [
+            TSSDataset(split=split, **self.dataset_kwargs)
+            for split in ['train', 'val']
+        ]
+
+    def test_dataloader(self, *args: Any, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
+        return self._data_loader(self.dataset_val, batch_size=self.batch_size_eval)
+
 
 class GenomicBenchmark(HG38):
     _name_ = "genomic_benchmark"
