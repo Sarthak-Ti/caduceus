@@ -326,7 +326,8 @@ class GeneralDataset():
         if self.length is not None: #if we have a length and the length is greater than the sequence, we need to pad it
             diff = self.length - (end - start)
             start = start - diff // 2
-            end = end + diff // 2
+            # end = end + diff // 2
+            end = start + self.length #just safer if diff is odd for some reason
             if start < 0:
                 leftpad = np.ones(-start)*11
                 start = 0
@@ -516,7 +517,10 @@ class GeneralDataset():
             raise ValueError("Cannot expand sequences for multiple cell types, would need to edit the get item function or something? idk how to do it")
             # print('potential error, may not work for multiple cell types, be careful!')
         
-        new_row = pd.DataFrame([[ chr, start, stop, self.split ]], columns=self.sequences.columns)
+        if self.sequences.shape[1] > 4: #borzoi format
+            new_row = pd.DataFrame([[ chr, start, stop, self.split, None, None ]], columns=self.sequences.columns)
+        else: #enformer format
+            new_row = pd.DataFrame([[ chr, start, stop, self.split ]], columns=self.sequences.columns)
         self.sequences = pd.concat([self.sequences, new_row], ignore_index=True)
         idx = self.sequences.index[-1] #get the index of the new row
         return idx

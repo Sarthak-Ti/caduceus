@@ -6,7 +6,7 @@
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:2
-#SBATCH --job-name=k562_tss_bulk_finetune_simple_decoder
+#SBATCH --job-name=k562_tss_sc_finetune_bp_sum
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -31,7 +31,7 @@ pixi run srun python -m train wandb.group=tss_finetune wandb.name=$SLURM_JOB_NAM
  dataset.load_in=false \
  dataset.shift_sequences=2000 \
  +dataset.rc_strand=true \
- +dataset.tss_json_file=/data1/lesliec/sarthak/data/DE_danwei/k562_bulk_rna_info.json \
+ +dataset.tss_json_file=/data1/lesliec/sarthak/data/DE_danwei/k562_sc_rna_info.json \
  dataset.acc_type=continuous \
  \
  +model.config.skip_embedding=true trainer.devices=$NUM_GPUS \
@@ -40,7 +40,7 @@ pixi run srun python -m train wandb.group=tss_finetune wandb.name=$SLURM_JOB_NAM
  task.loss._name_=mse_tss \
  task.metrics=[mse_tss] \
  \
- decoder._name_=tss +decoder.d_output=1 +decoder.hidden_dim=128 +decoder.simple=true trainer.accumulate_grad_batches=16 \
+ decoder._name_=tss +decoder.d_output=1 +decoder.hidden_dim=128 +decoder.bp_predictor=true trainer.accumulate_grad_batches=16 \
  train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-07-18/00-23-52-538795/checkpoints/last.ckpt"
 
 

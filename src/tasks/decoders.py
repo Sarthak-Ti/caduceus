@@ -628,35 +628,64 @@ class JointMaskingDecoder(Decoder):
         
 
 class TSSDecoder(Decoder):
-    """Decoder that averages embeddings over a mask region and predicts a single value.
+    """Decoder that predicts a single expression value from masked base-pair embeddings.
 
-    Takes per-base-pair embeddings and a mask indicating which positions to average,
-    then maps the averaged embedding to a scalar prediction.
+    Two modes:
+    - bp_predictor=False (default): averages embeddings over the mask region, then maps
+      the averaged embedding to a scalar via an MLP or linear head.
+    - bp_predictor=True: projects each position independently (d_model -> 1), applies the
+      mask, sums the per-position predictions, then applies Softplus. This is an additive
+      model where each base pair contributes independently to the total expression.
     """
-    def __init__(self, d_model, d_output=1, hidden_dim=128):
+    def __init__(self, d_model, d_output=1, hidden_dim=128, dropout=0, simple=False, bp_predictor=False):
         super().__init__()
-        # Upgraded to an MLP for non-linear capacity
-        self.output_transform = nn.Sequential(
-            nn.Linear(d_model, hidden_dim),
-            nn.LayerNorm(hidden_dim), # Optional, but highly recommended for training stability
-            nn.GELU(),
-            nn.Linear(hidden_dim, d_output),
-            nn.Softplus() # Enforces outputs >= 0 to match log2(Count + 1) targets
-        )
+
+        self.bp_predictor = bp_predictor
+
+        if bp_predictor:
+            # Per-position linear: d_model -> 1, then sum over masked positions.
+            # bias=False: a bias would be summed n_masked times, scaling with mask
+            # length rather than sequence content — not useful or well-defined.
+            self.bp_linear = nn.Linear(d_model, 1, bias=False)
+            # Softplus applied per-position before summing, so each bp contributes
+            # a non-negative count. This matches the additive counts interpretation.
+            self.softplus = nn.Softplus()
+        elif simple:
+            self.output_transform = nn.Sequential(
+                nn.Linear(d_model, d_output),
+                nn.Softplus()  # Enforces outputs >= 0 to match log2(Count + 1) targets
+            )
+        else:
+            # Upgraded to an MLP for non-linear capacity
+            self.output_transform = nn.Sequential(
+                nn.Linear(d_model, hidden_dim),
+                nn.LayerNorm(hidden_dim),
+                nn.GELU(),
+                nn.Dropout(p=dropout),
+                nn.Linear(hidden_dim, d_output),
+                nn.Softplus()
+            )
 
     def forward(self, x, mask, state=None, **kwargs):
         """
         x:    (batch, length, d_model) - per-base-pair embeddings
-        mask: (batch, length)          - float or bool; 1/True marks positions to average over
+        mask: (batch, length)          - float or bool; 1/True marks positions to include
 
         Returns:
-            (batch, d_output) - scalar prediction per sequence
+            (batch, 1) - scalar prediction per sequence
         """
-        mask = mask.unsqueeze(-1).float()                          # (batch, length, 1)
-        #pool across mask length
+        mask = mask.unsqueeze(-1).float()  # (batch, length, 1)
+
+        if self.bp_predictor:
+            # Each position predicts a non-negative contribution, then sum over mask
+            per_bp = self.softplus(self.bp_linear(x))  # (batch, length, 1), >= 0
+            linear_sum = (per_bp * mask).sum(dim=1)    # (batch, 1)
+            return torch.log2(linear_sum + 1)          # Explicit log transformation
+
+        # Averaging mode: pool over masked positions then apply head
         avg_embedding = (x * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)  # (batch, d_model)
-        #map to scalar output
-        return self.output_transform(avg_embedding)                # (batch, d_output)
+        linear_pred = self.output_transform(avg_embedding)  # (batch, d_output)
+        return torch.log2(linear_pred + 1)  # Explicit log transformation to match log2(Count + 1) targets
 
 
 class NDDecoder(Decoder):
