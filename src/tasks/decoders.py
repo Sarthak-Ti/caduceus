@@ -674,7 +674,7 @@ class TSSDecoder(Decoder):
         Returns:
             (batch, 1) - scalar prediction per sequence
         """
-        mask = mask.unsqueeze(-1).float()  # (batch, length, 1)
+        mask = mask.unsqueeze(-1).float()  # (batch, length, 1
 
         if self.bp_predictor:
             # Each position predicts a non-negative contribution, then sum over mask

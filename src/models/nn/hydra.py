@@ -167,6 +167,7 @@ class Hydra(nn.Module):
         xBC = self.act(
             self.conv1d(xBC.transpose(1, 2)).transpose(1, 2)
         )  # (B, L, self.d_inner + 2 * (2 * ngroups * d_state))
+        print('xBC shape should be X,L,X, otherwise do xBC = xBC[:, :seqlen, :]', xBC.shape) #leave this in, for debugging
 
         # Split into 3 main branches: X, B, C
         # These correspond to V, K, Q respectively in the SSM/attention duality

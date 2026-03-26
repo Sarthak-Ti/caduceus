@@ -218,7 +218,9 @@ class TSSDataset():
         with open(tss_json_file, 'r') as f:
             self.tss_dict = json.load(f)
         split_aliases = {'val', 'valid'} if split in ('val', 'valid') else {split} #basically val and valid are used interchangabelyy, this solves this problem
-        self.tss_dict = {k: v for k, v in self.tss_dict.items() if v.get('split') in split_aliases}
+        if split is not None:
+            self.tss_dict = {k: v for k, v in self.tss_dict.items() if v.get('split') in split_aliases}
+        
         self.genes = list(self.tss_dict.keys())
         print(f"TSSDataset: {len(self.genes)} genes in split '{split}'")
 
@@ -455,3 +457,5 @@ class TSSDataset():
         outputs2 = [seq_unmask, acc_umask, torch.tensor(counts, dtype=torch.float32), tss_mask, torch.tensor(strand)]
 
         return tuple(outputs1), tuple(outputs2)
+    
+    
