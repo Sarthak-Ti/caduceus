@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from einops import rearrange, repeat
+from einops import rearrange, repeat, einsum
 
 try:
     from mamba_ssm.ops.triton.layernorm_gated import RMSNorm as RMSNormGated
@@ -33,6 +33,7 @@ class Hydra(nn.Module):
         dt_max=0.1,
         dt_init_floor=1e-4,
         dt_limit=(0.0, float("inf")),
+        a_log_clamp_min=None,
         learnable_init_states=False,
         activation="swish",
         bias=False,
@@ -44,6 +45,7 @@ class Hydra(nn.Module):
         device=None,
         dtype=None,
     ):
+        # print('Hydra dt_limit:', dt_limit)
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.d_model = d_model
@@ -57,6 +59,7 @@ class Hydra(nn.Module):
         assert self.d_inner % self.headdim == 0
         self.nheads = self.d_inner // self.headdim
         self.dt_limit = dt_limit
+        self.a_log_clamp_min = a_log_clamp_min
         self.learnable_init_states = learnable_init_states
         self.activation = activation
         self.chunk_size = chunk_size
@@ -126,7 +129,8 @@ class Hydra(nn.Module):
         batch, seqlen, dim = u.shape
 
         zxbcdt = self.in_proj(u)  # (B, L, d_in_proj)
-        A = -torch.exp(self.A_log.float())  # (nheads) or (d_inner, d_state)
+        a_log = self.A_log.float() if self.a_log_clamp_min is None else self.A_log.float().clamp(min=self.a_log_clamp_min)
+        A = -torch.exp(a_log)  # (nheads) or (d_inner, d_state)
         initial_states = repeat(self.init_states, "... -> b ...", b=2*batch) if self.learnable_init_states else None
         dt_limit_kwargs = {} if self.dt_limit == (0.0, float("inf")) else dict(dt_limit=self.dt_limit)
 
@@ -167,7 +171,8 @@ class Hydra(nn.Module):
         xBC = self.act(
             self.conv1d(xBC.transpose(1, 2)).transpose(1, 2)
         )  # (B, L, self.d_inner + 2 * (2 * ngroups * d_state))
-        print('xBC shape should be X,L,X, otherwise do xBC = xBC[:, :seqlen, :]', xBC.shape) #leave this in, for debugging
+        # print('xBC shape should be X,L,X, otherwise do xBC = xBC[:, :seqlen, :]', xBC.shape) #leave this in, for debugging
+        xBC = xBC[:, :seqlen, :]  # trim to seqlen (handles even d_conv symmetric padding)
 
         # Split into 3 main branches: X, B, C
         # These correspond to V, K, Q respectively in the SSM/attention duality
@@ -212,9 +217,9 @@ class Hydra(nn.Module):
 
 #and now the file for the hydra.ops
 
-import torch
-import torch.nn.functional as F
-from einops import einsum, rearrange, repeat
+# import torch
+# import torch.nn.functional as F
+# from einops import einsum, rearrange, repeat
 from mamba_ssm.ops.triton.layernorm_gated import (
     _layer_norm_fwd,
     _layer_norm_bwd,

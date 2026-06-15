@@ -1,248 +1,140 @@
-#we have joint model, let's see how it evaluates expression
+#!/usr/bin/env python3
+"""
+Evaluate expression predictions from a joint accessibility-expression model.
+
+Single pass over the dataset. Results are preallocated into
+(num_regions, num_celltypes, L, C) arrays using the known dataset layout:
+    dataset index i  ->  ct = i // num_regions,  region = i % num_regions
+
+Usage:
+    python eval_joint_expression.py --ckpt_path <path> [options]
+
+Key options:
+    --pool P        spatially pool P consecutive bins before computing correlations
+    --skip_softplus disable softplus on model output
+    --split         dataset split to evaluate (default: test)
+    --out_name NAME save per-sample Pearson/Spearman arrays to
+                    /data1/lesliec/sarthak/data/joint_playground/model_out/NAME_{pearson,spearman}.npy
+                    shape: (num_regions, num_celltypes, num_strands)
+"""
 import sys
 sys.path.append('/data1/lesliec/sarthak/caduceus/')
-# print(sys.path)
-from src.models.sequence.dna_embedding import DNAEmbeddingModelCaduceus
-from src.tasks.decoders import EnformerDecoder
-from src.tasks.encoders import JointCNN
-# from src.tasks.encoders import EnformerEncoder
-from caduceus.configuration_caduceus import CaduceusConfig
-import torch
-import numpy as np
-from src.dataloaders.datasets.general_dataset import GeneralDataset
-import yaml
-from omegaconf import OmegaConf
-import os
-import matplotlib.pyplot as plt
-# import seaborn as sns
-from tqdm import tqdm
+
 import argparse
-import itertools
-import inspect
-import zarr
-from numcodecs import Blosc
+import os
+import numpy as np
+from tqdm import tqdm
 from scipy.stats import spearmanr, pearsonr
 from torch.utils.data import DataLoader
 
-#set it so only device 3 is seen
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+from evals.evals_utils_joint import Evals
 
-try:
-    OmegaConf.register_new_resolver('eval', eval)
-    OmegaConf.register_new_resolver('div_up', lambda x, y: (x + y - 1) // y)
-except ValueError as e:
-    if "Resolver already registered" in str(e):
-            print("Resolver already exists, skipping registration.")
-            
-#edit evals class
-class Evals():
-    def __init__(self,
-                 ckpt_path,
-                 dataset=None,
-                 split = 'test',
-                 device = None,
-                 load_data=False,
-                 **dataset_overrides #Don't pass None into overrides unless you intentionally want it to be None! Pass in items only that you need
-                 ) -> None:
-        
-        #now load the cfg from the checkpoint path
-        model_cfg_path = os.path.join(os.path.dirname(os.path.dirname(ckpt_path)), '.hydra', 'config.yaml')
-        cfg = yaml.load(open(model_cfg_path, 'r'), Loader=yaml.FullLoader)
-        cfg = OmegaConf.create(cfg)
-        self.cfg = OmegaConf.to_container(cfg, resolve=True)
-        
-        state_dict = torch.load(ckpt_path, map_location='cpu')
-        if device is not None:
-            #if we are given a device, we will use that device
-            self.device = torch.device(device)
-        else:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.split = split
-
-        #now set up dataset
-        if dataset is None:
-            dataset_args = self.cfg['dataset']
-            sig = inspect.signature(GeneralDataset.__init__)
-            sig = {k: v for k, v in sig.parameters.items() if k != 'self'}
-            to_remove = []
-            for k, v in dataset_args.items():
-                if k not in sig:
-                    # del dataset_args[k]
-                    to_remove.append(k)
-            for k in to_remove:
-                del dataset_args[k]
-            dataset_args['split'] = split
-            dataset_args['evaluating'] = True #this tells it to not do things like random shifting and rc aug, still does random masking tho, can get og sequence easily
-            dataset_args['load_in'] = load_data
-            
-            for k, v in dataset_overrides.items():
-                if k in sig:
-                    dataset_args[k] = v
-                    print(f"Overriding {k} with {v}")
-                else:
-                    print(f"Warning: {k} not in dataset args, skipping")
-            
-            # dataset_args['rc_aug'] = False #we don't want to do rc aug in our evaluation class!!!
-            self.dataset_args = dataset_args
-            # self.dataset_args['rc_aug'] = False #we don't want to do rc aug in our evaluation class!!!
-            self.dataset = GeneralDataset(**dataset_args)
-            
-            # self.kmer_len = dataset_args['kmer_len']
-            # self.dataset = enformer_dataset.EnformerDataset(split, dataset_args['max_length'], rc_aug = dataset_args['rc_aug'],
-            #                                                 return_CAGE=dataset_args['return_CAGE'], cell_type=dataset_args.get('cell_type', None),
-            #                                                 kmer_len=dataset_args['kmer_len']) #could use dataloader instead, but again kinda complex
-        else:
-            self.dataset = dataset
-         
-        torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(
-            state_dict["state_dict"], "model."
-        )
-        model_state_dict = state_dict["state_dict"]
-        # need to remove torchmetrics. to remove keys, need to convert to list first
-        for key in list(model_state_dict.keys()):
-            if "torchmetrics" in key:
-                model_state_dict.pop(key)
-        # the state_dict keys slightly mismatch from Lightning..., so we fix it here
-        decoder_state_dict = {}
-        for key in list(model_state_dict.keys()):
-            if "decoder" in key:
-                decoder_state_dict[key[10:]] = model_state_dict.pop(key)
-        encoder_state_dict = {}
-        for key in list(model_state_dict.keys()):
-            if "encoder" in key:
-                encoder_state_dict[key[10:]] = model_state_dict.pop(key)
-        
-        cfg['model']['config'].pop('_target_')
-        # cfg['model']['config']['complement_map'] = self.dataset.tokenizer.complement_map
-        caduceus_cfg = CaduceusConfig(**cfg['model']['config'])
-        
-        self.backbone = DNAEmbeddingModelCaduceus(config=caduceus_cfg)
-        self.backbone.load_state_dict(model_state_dict, strict=True)
-        
-        #remove self.cfg['decoder']['_name_']
-        del self.cfg['decoder']['_name_']
-        self.cfg['decoder']['d_model'] = self.cfg['model']['config']['d_model']
-        self.decoder = EnformerDecoder(**self.cfg['decoder']) #could do with instantiating, but that is rather complex
-        self.decoder.load_state_dict(decoder_state_dict, strict=True)
-        
-        del self.cfg['encoder']['_name_']
-        self.cfg['encoder']['d_model'] = self.cfg['model']['config']['d_model']
-        self.encoder = JointCNN(**self.cfg['encoder'])
-        self.encoder.load_state_dict(encoder_state_dict, strict=True)
-        
-        self.encoder.to(self.device).eval()
-        self.backbone.to(self.device).eval()
-        self.decoder.to(self.device).eval()
-        
-    def __call__(self, idx=None, data=None):
-        #now evaluate the model on one example
-        if data is None:
-            (seq,acc),(seq_unmask,acc_unmask,exp) = self.dataset[idx]
-            
-            x = seq.unsqueeze(0)
-            y = acc.unsqueeze(0)
-        else:
-            (x,y),(seq_unmask,acc_unmask,exp) = data
-
-            if x.dim() == 2:
-                x = x.unsqueeze(0) #add batch dim
-                y = y.unsqueeze(0) #add batch dim
-        
-        x,y = x.to(self.device), y.to(self.device)
-        
-        with torch.no_grad():
-            x1 = self.encoder(x,y)
-            x1,_ = self.backbone(x1)
-            x1 = self.decoder(x1)
-        
-        return x1, exp
-    
-
-# ckpt_path = '/data1/lesliec/sarthak/caduceus/outputs/2025-04-11/17-59-55-471925/checkpoints/04-val_loss=-0.44593.ckpt'
-# evals = Evals(ckpt_path, load_data=True)
-
-# output_array = np.zeros((len(evals.dataset), 896))
-# target_array = np.zeros((len(evals.dataset), 896))
-# for i in tqdm(range(len(evals.dataset))):
-#     out = evals(i)
-#     output = out[0][0,:,0].cpu().numpy()
-#     target = out[1][:,0]
-#     output_array[i] = output
-#     target_array[i] = target
-
-# #now save them
-# np.save('/data1/lesliec/sarthak/data/joint_playground/model_out/GM12878_base_predictions.npy', output_array)
-# np.save('/data1/lesliec/sarthak/data/joint_playground/model_out/GM12878_base_targets.npy', target_array)
-
-# #now let's do the next one
-# ckpt_path = '/data1/lesliec/sarthak/caduceus/outputs/2025-04-11/18-07-46-083163/checkpoints/03-val_loss=-0.48683.ckpt'
-# evals = Evals(ckpt_path, load_data=True)
-
-# output_array = np.zeros((len(evals.dataset), 896))
-# target_array = np.zeros((len(evals.dataset), 896))
-# for i in tqdm(range(len(evals.dataset))):
-#     out = evals(i)
-#     output = out[0][0,:,0].cpu().numpy()
-#     target = out[1][:,0]
-#     output_array[i] = output
-#     target_array[i] = target
-    
-# #now save them
-# np.save('/data1/lesliec/sarthak/data/joint_playground/model_out/GM12878_base_predictions_conv.npy', output_array)
-# np.save('/data1/lesliec/sarthak/data/joint_playground/model_out/GM12878_base_targets_conv.npy', target_array)
+OUT_DIR = '/data1/lesliec/sarthak/data/joint_playground/model_out'
 
 
-# ckpt_paths = [
-#     '/data1/lesliec/sarthak/caduceus/outputs/2025-04-11/17-59-55-471925/checkpoints/07-val_loss=-0.47649.ckpt',
-#     '/data1/lesliec/sarthak/caduceus/outputs/2025-04-14/18-29-44-495215/checkpoints/06-val_loss=-0.45494.ckpt',
-#     '/data1/lesliec/sarthak/caduceus/outputs/2025-04-14/18-36-09-021037/checkpoints/13-val_loss=-0.36632.ckpt',
-# ]
+def pool_spatial(arr, pool_size):
+    """Mean-pool arr along the length axis (axis 0) by pool_size. Truncates tail to fit."""
+    if pool_size == 1:
+        return arr
+    L = (arr.shape[0] // pool_size) * pool_size
+    return arr[:L].reshape(-1, pool_size, arr.shape[1]).mean(axis=1)
 
-# model_names = ['GM12878_base_more_train', 'GM12878_no_mlm', 'GM12878_no_finetune']
 
-ckpt_paths = ['/data1/lesliec/sarthak/caduceus/outputs/2025-04-21/15-40-14-845019/checkpoints/26-val_loss=-0.40909.ckpt']
-model_names = ['nopretrain']
+def evaluate_all(evals, pool, num_workers=4):
+    """
+    Single pass over the full dataset. Computes per-region correlations on the fly
+    to avoid storing the full (num_regions, num_celltypes, L, C) arrays.
+    Dataset layout: index i -> ct = i // num_regions, region = i % num_regions
+    Returns pearson_arr, spearman_arr each of shape (num_regions, num_celltypes, C).
+    """
+    num_regions = len(evals.dataset.sequences)
+    num_celltypes = evals.dataset.celltypes
+    loader = DataLoader(evals.dataset, batch_size=1, shuffle=False, num_workers=num_workers)
 
-# for ckpt_path, model_name in zip(ckpt_paths, model_names):
-#     evals = Evals(ckpt_path, load_data=False)
-#     out = evals(0)
-#     output_array = np.zeros((len(evals.dataset), out[0].shape[1], out[0].shape[2]))
-#     target_array = output_array.copy()
+    pearson_arr = None
+    spearman_arr = None
 
-#     # output_array = np.zeros((len(evals.dataset), 896))
-#     # target_array = np.zeros((len(evals.dataset), 896))
-#     for i in tqdm(range(len(evals.dataset))):
-#         out = evals(i)
-#         output = out[0][0].cpu().numpy()
-#         target = out[1]
-#         output_array[i] = output
-#         target_array[i] = target
-
-#     #now save them
-#     np.save(f'/data1/lesliec/sarthak/data/joint_playground/model_out/{model_name}_predictions.npy', output_array)
-#     np.save(f'/data1/lesliec/sarthak/data/joint_playground/model_out/{model_name}_targets.npy', target_array)
-
-for ckpt_path, model_name in zip(ckpt_paths, model_names):
-    # evals = Evals(ckpt_path, load_data=False, sequences_bed_file='/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed',
-    #               data_idxs=[457], additional_data_idxs=[4759]) #for t cell
-    evals = Evals(ckpt_path, load_data=False, sequences_bed_file='/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed',
-                  data_idxs=None, data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz') #, additional_data_idxs=[5110]) #the 5110 is for if additional data covers all cell types but just want one
-    #if trained on model that just does one cell type, additional data is a npz file
-    out = evals(0)
-    output_array = np.zeros((len(evals.dataset), out[0].shape[1], out[0].shape[2]))
-    target_array = output_array.copy()
-    
-    loader = DataLoader(evals.dataset, batch_size=1, shuffle=False, num_workers=8)
-    
-    for idx, data in enumerate(tqdm(loader)):
-        # Now data is a batch (batch_size=1), so pass it properly
+    for i, data in enumerate(tqdm(loader, desc='evaluating', leave=False)):
         out = evals(data=data)
-        output = out[0][0].cpu().numpy()  # output shape (1, X, Y), take [0]
-        target = out[1]                   # already numpy or tensor
+        if len(out) < 5:
+            continue
 
-        output_array[idx] = output
-        target_array[idx] = target
+        pred = out[1].squeeze(0).detach().cpu().float().numpy()  # (L, C)
+        tgt = out[4].squeeze(0).detach().cpu().float().numpy()   # (L, C)
 
-    #now save them
-    np.save(f'/data1/lesliec/sarthak/data/joint_playground/model_out/{model_name}_predictions.npy', output_array)
-    np.save(f'/data1/lesliec/sarthak/data/joint_playground/model_out/{model_name}_targets.npy', target_array)
+        if pred.ndim == 1:
+            pred = pred[:, None]
+        if tgt.ndim == 1:
+            tgt = tgt[:, None]
+
+        if pool > 1:
+            pred = pool_spatial(pred, pool)
+            tgt = pool_spatial(tgt, pool)
+
+        if pearson_arr is None: #create after knowing some shapes
+            C = pred.shape[1]
+            pearson_arr = np.full((num_regions, num_celltypes, C), np.nan, dtype=np.float32)
+            spearman_arr = np.full_like(pearson_arr, np.nan)
+
+        ct = i // num_regions
+        assert ct == data[0][2].item(), f"Expected cell type {ct} from index {i}, but got {data[0][2].item()}"
+        region = i % num_regions
+        for c in range(pred.shape[1]):
+            pearson_arr[region, ct, c] = pearsonr(pred[:, c], tgt[:, c])[0]
+            spearman_arr[region, ct, c] = spearmanr(pred[:, c], tgt[:, c])[0]
+
+    return pearson_arr, spearman_arr  # (num_regions, num_celltypes, C)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Evaluate expression predictions')
+    parser.add_argument('--ckpt_path', help='Path to model checkpoint')
+    parser.add_argument('--split', default='test',
+                        help='Dataset split to evaluate (default: test)')
+    parser.add_argument('--pool', type=int, default=1,
+                        help='Spatial pooling factor: average this many consecutive bins '
+                             'before computing correlations (default: 1 = no pooling)')
+    parser.add_argument('--skip_softplus', action='store_true',
+                        help='Disable softplus activation on model output')
+    parser.add_argument('--device', default=None,
+                        help='Torch device string, e.g. "cuda:0" (default: auto)')
+    parser.add_argument('--num_workers', type=int, default=4,
+                        help='Number of DataLoader worker processes for prefetching (default: 4)')
+    parser.add_argument('--out_name', default=None,
+                        help='If set, save per-sample correlation arrays as '
+                             f'{OUT_DIR}/<out_name>_pearson.npy and _spearman.npy  '
+                             'Shape: (num_regions, num_celltypes, num_strands)')
+    args = parser.parse_args()
+
+    evals = Evals(args.ckpt_path, split=args.split, device=args.device)
+    if args.skip_softplus:
+        evals.skip_softplus = True
+
+    num_regions = len(evals.dataset.sequences)
+    num_celltypes = evals.dataset.celltypes
+
+    print(f"Checkpoint   : {args.ckpt_path}")
+    print(f"Split        : {args.split}  ({len(evals.dataset)} examples)")
+    print(f"Regions      : {num_regions}")
+    print(f"Cell types   : {num_celltypes}")
+    print(f"Pool         : {args.pool} bins")
+    print(f"skip_softplus: {evals.skip_softplus}")
+
+    pearson_arr, spearman_arr = evaluate_all(evals, pool=args.pool, num_workers=args.num_workers)
+    # shape: (num_regions, num_celltypes, num_strands)
+
+    print(f"\nMean Pearson : {np.nanmean(pearson_arr):.4f}")
+    print(f"Mean Spearman: {np.nanmean(spearman_arr):.4f}")
+
+    if args.out_name:
+        os.makedirs(OUT_DIR, exist_ok=True)
+        pearson_path = os.path.join(OUT_DIR, f'{args.out_name}_pearson.npy')
+        spearman_path = os.path.join(OUT_DIR, f'{args.out_name}_spearman.npy')
+        np.save(pearson_path, pearson_arr)
+        np.save(spearman_path, spearman_arr)
+        print(f"Saved Pearson  {pearson_arr.shape} → {pearson_path}")
+        print(f"Saved Spearman {spearman_arr.shape} → {spearman_path}")
+
+
+if __name__ == '__main__':
+    main()

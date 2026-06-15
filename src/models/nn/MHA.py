@@ -319,6 +319,43 @@ class Qwen3RMSNorm(nn.Module):
     def extra_repr(self):
         return f"{tuple(self.weight.shape)}, eps={self.variance_epsilon}"
 
+def enformer_position_basis(
+    seq_len: int,
+    pos_emb_dim: int,
+    device=None,
+    dtype=None,
+) -> Tensor:
+    """Log-spaced position basis for Enformer-style relative attention biases.
+
+    Computes unsigned and signed indicator bases over log-spaced distance buckets,
+    following the Enformer formulation (Avsec et al. 2021).
+
+    Args:
+        seq_len: sequence length L
+        pos_emb_dim: number of basis dimensions (must be even; split evenly into
+                     unsigned and signed halves)
+        device, dtype: passed to created tensors
+
+    Returns:
+        (L, L, pos_emb_dim) basis tensor
+    """
+    assert pos_emb_dim % 2 == 0, "pos_emb_dim must be even"
+    half = pos_emb_dim // 2
+
+    # Use float32 for position/distance arithmetic — bf16 can only represent
+    # integers exactly up to 128, causing collisions for longer sequences.
+    pos = torch.arange(seq_len, device=device, dtype=torch.float32)
+    distance = pos[:, None] - pos[None, :]  # (L, L), signed distance i - j
+
+    # Log-spaced bucket widths: center_widths[k] = ((L+1)/2)^((k+1)/half)
+    pow_rate = math.exp(math.log((seq_len + 1) / 2) / half)
+    center_widths = pow_rate ** torch.arange(1, half + 1, device=device, dtype=torch.float32)  # (half,)
+
+    unsigned_basis = (distance.abs().unsqueeze(-1) <= center_widths).to(dtype)   # (L, L, half)
+    signed_basis = distance.sign().unsqueeze(-1) * unsigned_basis                 # (L, L, half)
+    return torch.cat([unsigned_basis, signed_basis], dim=-1)                      # (L, L, pos_emb_dim)
+
+
 class SelfAttention(nn.Module):
     """Implement the scaled dot product attention with softmax when FlashAttention
     is not used
@@ -337,19 +374,24 @@ class SelfAttention(nn.Module):
 
         self.drop = nn.Dropout(attention_dropout)
 
-    def forward(self, qkv, key_padding_mask=None):
+    def forward(self, qkv, key_padding_mask=None, attn_bias=None):
         """Implements the multihead softmax attention.
         Arguments
         ---------
             qkv: The tensor containing the query, key, and value. (B, S, 3, H, D)
             key_padding_mask: boolean mask to apply to the attention weights. True means
                 to keep, False means to mask out. (B, S)
+            attn_bias: optional additive bias added to attention logits before softmax. Enformer positional encodings
+                (B, H, S, S) or broadcastable.
         """
         batch_size, seqlen = qkv.shape[0], qkv.shape[1]
         q, k, v = qkv.unbind(dim=2)
         softmax_scale = 1.0 / math.sqrt(q.shape[-1])
 
         scores = torch.einsum("bthd,bshd->bhts", q, k * softmax_scale)
+
+        if attn_bias is not None:
+            scores = scores + attn_bias
 
         if key_padding_mask is not None:
             padding_mask = torch.full(
@@ -391,6 +433,8 @@ class MHAGate(nn.Module):
         dropout: float = 0.0,
         use_qk_norm: bool = False,
         bias: bool = False,
+        use_enformer_bias: bool = False,
+        pos_emb_dim: int = 32,
         device: str | torch.device | None = None,
     ):
         super().__init__()
@@ -465,6 +509,55 @@ class MHAGate(nn.Module):
 
         self.out_proj = nn.Linear(dim, dim, bias=bias)
 
+        self.use_enformer_bias = use_enformer_bias
+        if use_enformer_bias:
+            raise NotImplementedError("I think it's implemented but have to verify this makes sense and is actually what we expect")
+            if use_flash_attn:
+                raise ValueError("use_enformer_bias=True requires use_flash_attn=False")
+            assert pos_emb_dim % 2 == 0, "pos_emb_dim must be even"
+            self.pos_emb_dim = pos_emb_dim
+            # w: projects position basis to key-dim space, per head
+            # u, v: global content and position biases, per head
+            self.enformer_w = nn.Parameter(torch.empty(self.num_heads, head_dim, pos_emb_dim))
+            self.enformer_u = nn.Parameter(torch.zeros(self.num_heads, head_dim))
+            self.enformer_v = nn.Parameter(torch.zeros(self.num_heads, head_dim))
+            nn.init.normal_(self.enformer_w, std=0.02)
+
+    def _enformer_bias(self, query: Tensor, key: Tensor) -> Tensor:
+        """Compute Enformer-style relative position bias.
+
+        Args:
+            query: (B, L, H, head_dim) — after any RoPE/QK-norm
+            key:   (B, L, H, head_dim)
+        Returns:
+            (B, H, L, L) additive attention bias (already scaled by 1/sqrt(head_dim))
+        """
+        seq_len = query.shape[1]
+        dtype = query.dtype
+        basis = enformer_position_basis(seq_len, self.pos_emb_dim, device=query.device, dtype=dtype)
+        w = self.enformer_w.to(dtype)
+        u = self.enformer_u.to(dtype)
+        v = self.enformer_v.to(dtype)
+        #note this r matrix ix very very large if L is large, memory bottleneck
+        r = torch.einsum('hdn,ijn->hijd', w, basis)                              # (H, L, L, head_dim)
+        #an alternative to save memory is this
+        # qw = torch.einsum('bihd,hdn->bihn', query, w)
+        # Then multiply by basis: (B, L, H, n) * (L, L, n) -> (B, H, L, L)
+        # qr_term = torch.einsum('bihn,ijn->bhij', qw, basis)
+        # 2. Optimize VR term: Avoid (H, L, L, D) intermediate
+        # First project v: (H, d) * (H, d, n) -> (H, n)
+        # vw = torch.einsum('hd,hdn->hn', v, w)
+        # Then multiply by basis: (H, n) * (L, L, n) -> (H, L, L)
+        # vr_term = torch.einsum('hn,ijn->hij', vw, basis).unsqueeze(0) # (1, H, L, L)
+        
+        # 3. UK term remains the same
+        # uk_term = torch.einsum('hd,bjhd->bhj', u, key).unsqueeze(2)   # (B, H, 1, L)
+
+        qr_term = torch.einsum('bihd,hijd->bhij', query, r)                      # (B, H, L, L)
+        uk_term = torch.einsum('hd,bjhd->bhj', u, key).unsqueeze(2)              # (B, H, 1, L)
+        vr_term = torch.einsum('hd,hijd->hij', v, r).unsqueeze(0)                # (1, H, L, L)
+        return (qr_term + uk_term + vr_term) / math.sqrt(query.shape[-1])
+
     def forward(
         self,
         x: Float[Tensor, "b l d"] | Float[Tensor, "total_tokens d"],
@@ -516,11 +609,14 @@ class MHAGate(nn.Module):
             qkv = self._apply_qk_norm(qkv)
 
         # To support both with and without FlashAttention, create a kwargs for self_attn
-        kwargs = (
-            {"cu_seqlens": cu_seqlens, "max_seqlen": max_seqlen}
-            if self.use_flash_attn
-            else {"key_padding_mask": key_padding_mask}
-        )
+        if self.use_flash_attn:
+            kwargs = {"cu_seqlens": cu_seqlens, "max_seqlen": max_seqlen}
+        else:
+            kwargs = {"key_padding_mask": key_padding_mask}
+            if self.use_enformer_bias:
+                q_for_bias = qkv[..., 0, :, :]  # (B, L, H, head_dim)
+                k_for_bias = qkv[..., 1, :, :]
+                kwargs["attn_bias"] = self._enformer_bias(q_for_bias, k_for_bias)
         output = self.self_attn(qkv, **kwargs)
 
         # Apply gating

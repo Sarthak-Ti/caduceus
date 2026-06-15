@@ -2,9 +2,9 @@
 import sys
 sys.path.append('/data1/lesliec/sarthak/caduceus/')
 # print(sys.path)
-from src.models.sequence.dna_embedding import DNAEmbeddingModelCaduceus
-from src.tasks.decoders import JointMaskingDecoder
-from src.tasks.encoders import JointCNN
+from src.models.sequence.dna_embedding import DNAEmbeddingModelCaduceus, DNAEmbeddingModelStriped
+from src.tasks import decoders as decoders_module
+from src.tasks import encoders as encoders_module
 # from src.tasks.encoders import EnformerEncoder
 from caduceus.configuration_caduceus import CaduceusConfig
 import torch
@@ -121,26 +121,35 @@ class Evals():
             if "encoder" in key:
                 encoder_state_dict[key[10:]] = model_state_dict.pop(key)
         
-        cfg['model']['config'].pop('_target_')
-        # cfg['model']['config']['complement_map'] = self.dataset.tokenizer.complement_map
-        caduceus_cfg = CaduceusConfig(**cfg['model']['config'])
-        
-        self.backbone = DNAEmbeddingModelCaduceus(config=caduceus_cfg)
+        model_name = cfg['model']['_name_']
+        model_config = dict(cfg['model']['config'])
+        if model_name == 'dna_embedding_striped':
+            self.backbone = DNAEmbeddingModelStriped(config=model_config)
+        else:  # dna_embedding_caduceus and variants
+            model_config.pop('_target_', None)
+            # cfg['model']['config']['complement_map'] = self.dataset.tokenizer.complement_map
+            caduceus_cfg = CaduceusConfig(**model_config)
+            self.backbone = DNAEmbeddingModelCaduceus(config=caduceus_cfg)
         self.backbone.load_state_dict(model_state_dict, strict=True)
         
-        #remove self.cfg['decoder']['_name_']
-        del self.cfg['decoder']['_name_']
-        self.cfg['decoder']['d_model'] = self.cfg['model']['config']['d_model']
-        self.decoder = JointMaskingDecoder(**self.cfg['decoder']) #could do with instantiating, but that is rather complex
-        self.decoder.load_state_dict(decoder_state_dict, strict=True)
-        
-        del self.cfg['encoder']['_name_']
-        self.cfg['encoder']['d_model'] = self.cfg['model']['config']['d_model']
+        # decoder_name = self.cfg['decoder'].pop('_name_')
+        # self.cfg['decoder']['d_model'] = self.cfg['model']['config']['d_model']
+        # self.decoder = decoders_module.registry[decoder_name](**self.cfg['decoder'])
+
+        # encoder_name = self.cfg['encoder'].pop('_name_')
+        # self.cfg['encoder']['d_model'] = self.cfg['model']['config']['d_model']
         # self.cfg['encoder']['celltypes'] = self.cfg['dataset']['celltypes']
+        # if encoder_numcelltypes is not None:
+        #     self.cfg['encoder']['celltypes'] = encoder_numcelltypes
+        # self.encoder = encoders_module.registry[encoder_name](**self.cfg['encoder'])
+
         if encoder_numcelltypes is not None:
             self.cfg['encoder']['celltypes'] = encoder_numcelltypes
-        self.encoder = JointCNN(**self.cfg['encoder'])
+        self.encoder = encoders_module._instantiate(self.cfg['encoder'], dataset=None, model=self.backbone)
         self.encoder.load_state_dict(encoder_state_dict, strict=True)
+
+        self.decoder = decoders_module._instantiate(self.cfg['decoder'], model=self.backbone, dataset=None)
+        self.decoder.load_state_dict(decoder_state_dict, strict=True)
         
         self.encoder.to(self.device).eval()
         self.backbone.to(self.device).eval()
@@ -149,32 +158,66 @@ class Evals():
     def __call__(self, idx=None, data=None, softplus=True, og=False, ctt_val=None):
         #now evaluate the model on one example
         if data is None:
-            (seq,acc),(seq_unmask,acc_unmask) = self.dataset[idx]
-            
+            outputs1, outputs2 = self.dataset[idx]
+            seq, acc = outputs1[0], outputs1[1]
+            if len(outputs1) > 2 and ctt_val is None:
+                ctt_val = outputs1[2].item()
+
+            seq_unmask, acc_unmask = outputs2[0], outputs2[1]
+            expr_unmask = outputs2[2] if len(outputs2) > 2 else None
+
             x = seq.unsqueeze(0)
             y = acc.unsqueeze(0)
         else:
-            x,y,seq_unmask,acc_unmask = data
-
+            if len(data) == 2:
+                outputs1, outputs2 = data
+                x, y = outputs1[0], outputs1[1]
+                seq_unmask, acc_unmask = outputs2[0], outputs2[1]
+                expr_unmask = outputs2[2] if len(outputs2) > 2 else None
+                if len(outputs1) > 2 and ctt_val is None:
+                    ctt_val = outputs1[2].item()  # extract scalar to match manual ctt_val usage
+            else:
+                (x,y,seq_unmask,acc_unmask) = data
+                expr_unmask = None
+            
             if x.dim() == 2:
                 x = x.unsqueeze(0) #add batch dim
                 y = y.unsqueeze(0) #add batch dim
         
         x,y = x.to(self.device), y.to(self.device)
         if ctt_val is not None:
-            ctt_val = torch.tensor(ctt_val).to(self.device).unsqueeze(0) #makes it size 1
+            ctt_val = torch.tensor(ctt_val, device=self.device) #shape []
+            ctt_val = ctt_val.expand(x.size(0))
+            # ctt_val = torch.tensor(ctt_val).to(self.device).unsqueeze(0) #makes it size 1
+            #now repeat it until size of batch size of x
+            # ctt_val = ctt_val.repeat(x.size(0), 1) #repeat along batch dimension
         
         with torch.no_grad():
-            x1,intermediates = self.encoder(x,y,ctt_token=ctt_val)
-            x1,_ = self.backbone(x1)
-            x1 = self.decoder(x1, intermediates=intermediates)
-            seq,acc = x1
+            with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+                x1,intermediates = self.encoder(x,y,ctt_token=ctt_val)
+                x1,_ = self.backbone(x1)
+                x1 = self.decoder(x1, intermediates=intermediates)
+            # seq,acc = x1
+            if isinstance(x1,tuple):
+                seq, acc = x1[0], x1[1]
+                if softplus and not self.skip_softplus:
+                    acc = torch.nn.functional.softplus(x1[1])
+            else:
+                seq = None
+                acc = torch.nn.functional.softplus(x1) if (softplus and not self.skip_softplus) else x1
 
-            if softplus and not self.skip_softplus:
-                acc = torch.nn.functional.softplus(x1[1])
+            # if softplus and not self.skip_softplus:
+            #     if isinstance(x1, tuple):
+
+            #         acc = torch.nn.functional.softplus(x1[1])
+            #     else:
+            #         acc = torch.nn.functional.softplus(x1)
+            #         seq = None
         
+        if expr_unmask is not None:
+            return seq, acc, seq_unmask, acc_unmask, expr_unmask
         return seq, acc, seq_unmask, acc_unmask
-    
+
     def freeze(self):
         '''freezes the model, so that it doesn't update the weights during training'''
         for param in self.backbone.parameters():
@@ -216,7 +259,12 @@ class Evals():
         if data is not None:
             (x,y,seq_unmask,acc_unmask) = data
         elif idx is not None:
-            (x,y),(seq_unmask,acc_unmask) = self.dataset[idx]
+            outputs1, outputs2 = self.dataset[idx]
+            seq_unmask, acc_unmask = outputs2[0], outputs2[1]
+            if len(outputs2) > 2:
+                raise NotImplementedError("Don't know how to handle expr_unmask in masking function yet")
+            if len(outputs1) > 2 and ctt_val is None:
+                ctt_val = outputs1[2]
         else:
             raise ValueError("Must provide either idx or data")
         

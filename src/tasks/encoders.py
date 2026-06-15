@@ -132,13 +132,14 @@ class JointCNN(Encoder):
         pool_type (str): The type of pooling to use during downsampling ('max' or 'attention'). Default is 'max'.
         ctt (bool): Whether you are both providing and want to include a cell type token. Default is False
     """
-    def __init__(self, d_model, celltypes=None, d_input1=6, d_input2=None, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', ctt=False, norm=None, **kwargs):
+    def __init__(self, d_model, celltypes=None, d_input1=6, d_input2=None, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', ctt=False, norm=None, activation='ReLU', transpose=False, **kwargs):
         super().__init__()
         print(f"JointMaskingEncoder: d_model={d_model}, celltypes={celltypes}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
         # print(kwargs)
         self.joint = joint
         self.combine = combine
         self.downsample = downsample
+        self.transpose = transpose
         self.ctt = ctt
         if self.ctt and downsample > 1:
             print("Warning: When using cell type token with downsampling, the cell type token removes a lot of the input.")
@@ -162,7 +163,7 @@ class JointCNN(Encoder):
             elif acc_type == 'category':
                 d_input2 = 3
         
-        if norm == 'InstanceNorm' or norm == True:
+        if norm == 'InstanceNorm' or norm:
             norm_seq = nn.InstanceNorm1d
             norm_rest = nn.InstanceNorm1d
         elif norm == 'mixed':
@@ -171,31 +172,41 @@ class JointCNN(Encoder):
         elif norm == 'BatchNorm':
             norm_seq = nn.BatchNorm1d
             norm_rest = nn.BatchNorm1d
-        elif norm is None or norm == 'None' or norm == False:
+        elif norm is None or norm == 'None' or not norm:
             norm_seq = nn.Identity
             norm_rest = nn.Identity
         else:
             raise ValueError(f"Unknown norm type {norm}")
         print(f"Using norm: seq={norm_seq}, rest={norm_rest}")
+        
+        if activation == 'ReLU':
+            activation_fn = nn.ReLU
+        elif activation == 'GELU':
+            activation_fn = nn.GELU
+        elif activation is None or activation == 'None' or not activation:
+            activation_fn = nn.Identity
+        else:
+            raise ValueError(f"Unknown activation type {activation}")
+        print(f"Using activation: {activation_fn}")
 
         if joint:
             # Single CNN for joint processing
             self.conv = nn.Sequential(
                 nn.Conv1d(d_input1+d_input2, d_model, kernel_size, padding='same'),
                 norm_rest(d_model, affine=True),
-                nn.ReLU()
+                activation_fn()
             )
         else:
             # Separate CNNs for each input
             self.conv1 = nn.Sequential(
                 nn.Conv1d(d_input1, d_model // 2, kernel_size, padding='same'),
                 norm_seq(d_model // 2, affine=True),
-                nn.ReLU()
+                activation_fn()
             )
             self.conv2 = nn.Sequential(
                 nn.Conv1d(d_input2, d_model // 2, kernel_size, padding='same'),
                 norm_rest(d_model // 2, affine=True),
-                nn.ReLU()
+                activation_fn()
             )
             if combine:
                 self.out = nn.Linear(d_model, d_model)
@@ -273,7 +284,9 @@ class JointCNN(Encoder):
             ctt = self.ctt_embedding(ctt_token).unsqueeze(2) #shape batch x d_model x 1
             #now append to x
             x = torch.cat([ctt, x], dim=2) #concatenate along the length dimension
-
+        
+        if self.transpose:
+            x = x.transpose(1, 2)  # (B, L, d_model)
 
         return x, intermediates
 
@@ -445,8 +458,11 @@ def _instantiate(encoder, dataset=None, model=None):
         model_values = utils.config.extract_attrs_from_obj(model, *model_attrs_list)
         print('model_args:', model_values)
         for attr, value in zip(model_attrs_list, model_values):
-            if value is not None:
-                encoder[attr] = value
+            if attr not in encoder:
+                d_in = getattr(model, 'd_in', None)
+                resolved = d_in if d_in is not None else value
+                if resolved is not None:
+                    encoder[attr] = resolved
     
     # Instantiate the encoder using only keyword arguments
     obj = utils.instantiate(registry, encoder)

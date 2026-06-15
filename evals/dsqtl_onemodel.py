@@ -39,9 +39,10 @@ def main(args):
         for chrom in bims
     }
 
-    length = 524288
-    si = 524288//2 - int(args.mask_size/2)
-    se = 524288//2 + int(args.mask_size/2)
+    length = evals.dataset.length
+    half = length // 2
+    si = half - int(args.mask_size/2)
+    se = half + int(args.mask_size/2)
 
     output_array = np.zeros((qtls.shape[0],args.out_size//args.pool,2))
 
@@ -51,8 +52,8 @@ def main(args):
         bimrow = bim_pos[int(chrom[3:])][rsid]
         bimval = bims[int(chrom[3:])].iloc[bimrow]
         pos = bimval[3]-1
-        start = pos - length//2
-        end = pos + length//2
+        start = pos - half
+        end = pos + half
         
         idx = evals.dataset.expand_seqs(chrom,start,end)
         # data = evals.dataset[idx]
@@ -61,9 +62,11 @@ def main(args):
         data = (None,None,su,au) #can be s and a or None, it isn't used by the mask function
         out = evals.mask(si,se, data=data, mask_accessibility=True, ctt_val=args.ctt_val)
         
-        current_nuc = out[2][524288//2].cpu().numpy()
+        current_nuc = out[2][half].float().cpu().numpy()
+        # print(current_nuc)
         current_nuc = np.argmax(current_nuc)
         current_nuc = onehot_mapping[current_nuc]
+        # print(current_nuc, bimval[4], bimval[5])
         
         if current_nuc == bimval[4]:
             alt_key = 5
@@ -72,15 +75,15 @@ def main(args):
         else:
             raise ValueError("Neither of the alleles match the current nucleotide")
         
-        data[2][524288//2,:4] = mapping[bimval[alt_key]]
+        data[2][half,:4] = mapping[bimval[alt_key]]
 
         out2 = evals.mask(si,se, data=data, mask_accessibility=True, ctt_val=args.ctt_val)
 
-        oi = 524288//2 - args.out_size//2
-        oe = 524288//2 + args.out_size//2
+        oi = half - args.out_size//2
+        oe = half + args.out_size//2
         
-        pred1 = out[1][0, oi:oe, 0].cpu().numpy()
-        pred2 = out2[1][0, oi:oe, 0].cpu().numpy()
+        pred1 = out[1][0, oi:oe, 0].float().cpu().numpy()
+        pred2 = out2[1][0, oi:oe, 0].float().cpu().numpy()
         
         if args.pool > 1:
             pred1 = np.mean(pred1.reshape(-1, args.pool), axis=1)

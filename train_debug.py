@@ -382,8 +382,21 @@ class SequenceLightningModule(pl.LightningModule):
         return x_t
 
     def _shared_step(self, batch, batch_idx, prefix="train"):
-
+        # print(f"Running {prefix} step with batch_idx {batch_idx}")
+        # print(len(batch))
+        # print(batch[0][0].shape) #works exactly like expected!
         self._process_state(batch, batch_idx, training=(prefix == "train")) #does some state stuff
+        if prefix == "train":
+            # Accumulate all micro-batches in the current gradient-accumulation window
+            # so _dump_nan can save all 16 inputs and their indices.
+            acc = getattr(self.trainer, 'accumulate_grad_batches', 1)
+            if batch_idx % acc == 0:
+                self._window_batches = []
+                self._window_batch_idxs = []
+            self._window_batches.append(batch)
+            self._window_batch_idxs.append(batch_idx)
+            self._last_batch = batch
+            self._last_batch_idx = batch_idx
         x, y, w = self.forward(batch) #here the forward is gone through, x is actually y hat, and y is the output, w is the parameters
         if self.hparams.train.get('count_weight', None) is not None:
             w['count_weight'] = self.hparams.train.count_weight
@@ -410,9 +423,14 @@ class SequenceLightningModule(pl.LightningModule):
         else:
             loss = self.loss_val(x, y, **w)
 
+        # if batch_idx == 3:
+        #     loss = loss * float('nan') # Inject a NaN loss at a specific batch index for testing
+        
         if torch.isnan(loss) or torch.isinf(loss):
             print(f"\n*** Non-finite loss ({loss.item():.4f}) detected at global_step={self.global_step}, prefix={prefix} ***\n")
-            raise ValueError("Non-finite loss detected")
+            if prefix == "train":
+                self._dump_nan(trigger="loss", loss=loss)
+                raise ValueError("Non-finite loss detected. See dump.")
 
         # Metrics
         metrics = self.metrics(x, y, **w)
@@ -444,6 +462,92 @@ class SequenceLightningModule(pl.LightningModule):
             sync_dist=True,
         )
         return loss
+
+    # ------------------------------------------------------------------
+    # NaN forensics: three detection points, one shared dump helper.
+    #   1. grad check (configure_gradient_clipping) — primary. Weights are
+    #      still clean, _last_batch holds the causal micro-batch, grads are
+    #      the bad ones. This is the dump you actually want to load offline.
+    #   2. weight check (on_train_batch_end) — safety net if the grad check
+    #      missed something (e.g. optimizer-state corruption from an earlier
+    #      step). Weights are post-step.
+    #   3. loss check (in _shared_step above) — fallback for the case where
+    #      weights went NaN via some path neither hook caught.
+    # ------------------------------------------------------------------
+    def _weights_finite(self):
+        params = [p for p in self.parameters() if p.numel() > 0]
+        if not params:
+            return True
+        total = torch.stack(torch._foreach_norm(params)).sum()
+        return bool(torch.isfinite(total).item())
+
+    def _dump_nan(self, trigger, loss=None):
+        if getattr(self, "_nan_dump_saved", False):
+            return
+        self._nan_dump_saved = True
+        dump_path = os.path.join(
+            self.trainer.default_root_dir,
+            f"nan_dump_rank{self.global_rank}_step{self.global_step}_{trigger}.pt",
+        )
+        nan_grad_params = [
+            n for n, p in self.named_parameters()
+            if p.grad is not None and not torch.isfinite(p.grad).all()
+        ]
+        nan_weight_params = [
+            n for n, p in self.named_parameters()
+            if not torch.isfinite(p).all()
+        ]
+        save_dict = {
+            "trigger": trigger,
+            "global_step": self.global_step,
+            "epoch": self.current_epoch,
+            "batch_idx": getattr(self, "_last_batch_idx", None),
+            "batch": getattr(self, "_last_batch", None),
+            "window_batches": getattr(self, "_window_batches", None),
+            "window_batch_idxs": getattr(self, "_window_batch_idxs", None),
+            "nan_grad_params": nan_grad_params,
+            "nan_weight_params": nan_weight_params,
+            "model_state": self.state_dict(),
+            "optimizer_state": self.optimizers().optimizer.state_dict(),
+            "rng_state_cpu": torch.get_rng_state(),
+            "rng_state_cuda": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
+        }
+        print(f"  Non-finite grad params: {nan_grad_params}")
+        print(f"  Non-finite weight params: {nan_weight_params}")
+        if loss is not None:
+            save_dict["loss"] = loss.detach().cpu()
+        if trigger == "grad":
+            # Grads are populated at this hook, and they're the non-finite ones we care about.
+            save_dict["gradients"] = {
+                n: p.grad.detach().cpu()
+                for n, p in self.named_parameters() if p.grad is not None
+            }
+        torch.save(save_dict, dump_path)
+        print(f"Saved NaN dump ({trigger} trigger) to {dump_path}")
+
+    def configure_gradient_clipping(self, optimizer, gradient_clip_val, gradient_clip_algorithm):
+        # print(f"Configuring gradient clipping with val={gradient_clip_val} and algorithm={gradient_clip_algorithm}")
+        # Grads are populated here, weights still clean. error_if_nonfinite=True raises
+        # on NaN/inf grads, which we catch to dump and crash cleanly.
+        try:
+            total_norm = torch.nn.utils.clip_grad_norm_(
+                self.parameters(),
+                max_norm=gradient_clip_val,
+                error_if_nonfinite=True,
+            )
+            self.log(
+                "trainer/grad_norm", total_norm,
+                on_step=True, on_epoch=False, sync_dist=True,
+            )
+        except RuntimeError:
+            self._dump_nan(trigger="grad")
+            raise ValueError("Non-finite gradient detected. See dump.")
+
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        # Weights are post-optimizer-step here. Safety net if grad check missed.
+        if not self._weights_finite():
+            self._dump_nan(trigger="weights_post_step")
+            raise ValueError("Non-finite weights after optimizer step. See dump.")
 
     def on_train_epoch_start(self):
         # Reset training torchmetrics
@@ -551,7 +655,7 @@ class SequenceLightningModule(pl.LightningModule):
     #                 print("  !!! MISMATCH: exp_avg shape does not match grad shape !!!")
     #                 print(f"  Param index {i} | Param shape: {param.shape}, Grad shape: {param.grad.shape}, exp_avg shape: {exp_avg.shape}")
     #         else:
-    #             print("  No exp_avg state found.")
+    #             print("  No exp_avg state found."
 
     def on_validation_epoch_start(self):
         if getattr(self, "stop_training_due_to_time", False):
@@ -1002,6 +1106,7 @@ def train(config):
     #     model = torch.compile(model, mode="reduce-overhead")
     #     print('compiled model!')
     # print(model)
+    torch.autograd.set_detect_anomaly(True)
     if config.train.ckpt is not None and fsspec_exists(config.train.ckpt): #makes sure it's a real path!
         print('restoring checkpoint!!')
         trainer.fit(model, ckpt_path=config.train.ckpt)
@@ -1044,9 +1149,6 @@ def main(config: OmegaConf):
 
     # Pretty print config using Rich library
     utils.train.print_config(config, resolve=True)
-
-    if config.train.get("print_config_only", False):
-        return
 
     train(config)
     print('model trained')

@@ -307,7 +307,7 @@ class EnformerDecoder(Decoder):
     def __init__(self, d_model = 128, d_output = 4675, l_output = 0, mode='pool', use_lengths=False, convolutions=False,
                  yshape=114688, bin_size=128, downsampled=False, dropout_rate=0.1,
                  num_downsamples=7, dim_divisible_by=128, kmer_len=None, conjoin_train=True, conjoin_test=False,
-                 mouse = False, d_output_mouse = None, d_output2=None):
+                 mouse = False, d_output_mouse = None, d_output2=None, log=False):
         super().__init__()
         # if d_output is None:
         #     d_output = yshape//bin_size
@@ -349,8 +349,12 @@ class EnformerDecoder(Decoder):
             d_model = twice_dim
         
         self.output_transform = nn.Linear(d_model, d_output)
+        for p in self.output_transform.parameters():
+            p._no_weight_decay = True
         if mouse:
             self.output_transform_mouse = nn.Linear(d_model, d_output_mouse)
+            for p in self.output_transform_mouse.parameters():
+                p._no_weight_decay = True
         self.pool = nn.AvgPool1d(kernel_size=bin_size) #default stride is kernel size
 
         if l_output == 0:
@@ -363,6 +367,7 @@ class EnformerDecoder(Decoder):
         self.use_lengths = use_lengths
         self.bin_size = bin_size
         self.softplus = nn.Softplus()
+        self.log = log
 
     def forward(self, x, state=None, lengths=None, l_output=None, mask=None, mouse=False, intermediates=None):
         """
@@ -465,6 +470,9 @@ class EnformerDecoder(Decoder):
             
         #softplus activation
         x = self.softplus(x)
+        if self.log:
+            self.metrics = {'decoder/rate_min': x.detach().min().float()}
+
 
         return x
 
@@ -558,9 +566,13 @@ class JointMaskingDecoder(Decoder):
     finetune is whether we are finetuning, if so only output the value of the decoder2
     Key issue is that this does not apply softplus or sigmoid, so need to do that in eval class
     """
-    def __init__(self, d_model, d_output1=5, d_output2=1, upsample=1, finetune=False):
+    def __init__(self, d_model, d_output1=5, d_output2=1, upsample=1, finetune=False, dpout=0.0):
         super().__init__()
         print(f"JointMaskingDecoder: d_model={d_model}, d_output1={d_output1}, d_output2={d_output2}, upsample={upsample}")
+        if dpout > 0:
+            self.dropout = nn.Dropout(dpout)
+        else:
+            self.dropout = nn.Identity()
 
         self.upsample = upsample
         self.finetune = finetune
@@ -597,7 +609,11 @@ class JointMaskingDecoder(Decoder):
         
         if not self.finetune:
             self.decoder1 = nn.Linear(d_model, d_output1)
+            for p in self.decoder1.parameters():
+                p._no_weight_decay = True
         self.decoder2 = nn.Linear(d_model, d_output2)
+        for p in self.decoder2.parameters():
+            p._no_weight_decay = True
             
 
     def forward(self, x, intermediates=None, state=None, lengths=None, l_output=None, mask=None):
@@ -618,6 +634,7 @@ class JointMaskingDecoder(Decoder):
             x = x.permute(0, 2, 1)  # (n_batch, l_seq, d_model)
             # print(x.shape)
         
+        x = self.dropout(x)
         x2 = self.decoder2(x)
         if self.finetune:
             #do softplus on x2, because this poisson loss expects it to be softplussed
@@ -853,16 +870,39 @@ def _instantiate(decoder, model=None, dataset=None):
 
     if isinstance(decoder, str):
         name = decoder
+        decoder = {"_name_": name}
     else:
         name = decoder["_name_"]
+        decoder = decoder.copy()
 
-    # Extract arguments from attribute names
     dataset_args = utils.config.extract_attrs_from_obj(
         dataset, *dataset_attrs.get(name, [])
     )
-    model_args = utils.config.extract_attrs_from_obj(model, *model_attrs.get(name, []))
-    # Instantiate decoder
-    obj = utils.instantiate(registry, decoder, *model_args, *dataset_args)
+    model_attrs_list = model_attrs.get(name, [])
+    model_values = utils.config.extract_attrs_from_obj(model, *model_attrs_list)
+
+    # Decoders whose model_attrs key is 'd_model' use keyword instantiation so we can
+    # apply the same config-first / d_in / d_model priority as the encoder.
+    # Decoders with other attr names (e.g. 'state': ['d_state', 'state_to_tensor'])
+    # keep the legacy positional path because the attr names don't match constructor params.
+    if model_attrs_list == ['d_model']:
+        if model and 'd_model' not in decoder:
+            d_in = getattr(model, 'd_in', None)
+            resolved = d_in if d_in is not None else (model_values[0] if model_values else None)
+            if resolved is not None:
+                decoder['d_model'] = resolved
+        obj = utils.instantiate(registry, decoder, *dataset_args)
+    else:
+        # Legacy positional approach; apply d_in resolution for dimension-typed attrs
+        resolved_model_args = []
+        for attr, value in zip(model_attrs_list, model_values):
+            if attr in ('d_model', 'd_output') and model:
+                d_in = getattr(model, 'd_in', None)
+                resolved_model_args.append(d_in if d_in is not None else value)
+            else:
+                resolved_model_args.append(value)
+        obj = utils.instantiate(registry, decoder, *resolved_model_args, *dataset_args)
+
     return obj
 
 

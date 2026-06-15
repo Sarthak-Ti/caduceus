@@ -473,7 +473,23 @@ def poisson_loss_nll(profile, label_profile, len_batch=None, ignore_index=-100, 
         profile = profile[0].squeeze()
         label_profile = label_profile[0]
     # profile = torch.exp(profile)
-    poisson_loss = F.poisson_nll_loss(profile, label_profile, log_input=False, full=False) #gotta test this
+    poisson_loss = F.poisson_nll_loss(profile, label_profile, log_input=False, full=False, eps=1e-6)
+    return poisson_loss
+
+def poisson_loss_nll_nan(profile, label_profile, len_batch=None, ignore_index=-100, mask=True, count_weight=3.6):
+    '''same as poisson_loss_nll but gracefully skips nan loss by returning zero gradient'''
+    if isinstance(profile, tuple) or isinstance(profile, list):
+        profile = profile[0].squeeze()
+        label_profile = label_profile[0]
+    poisson_loss = F.poisson_nll_loss(profile, label_profile, log_input=False, full=False, eps=1e-6)
+    if torch.isnan(poisson_loss) or torch.isinf(poisson_loss):
+        if not torch.isnan(profile).any() and not torch.isinf(profile).any():
+            print(f"WARNING: poisson loss is {poisson_loss.item():.4f} but predictions are finite — returning zero loss to skip batch")
+            return profile.mean() * 0.0
+        else:
+            print(f"WARNING: poisson loss is {poisson_loss.item():.4f} and predictions contain non-finite values — stropping training")
+            raise ValueError("Poisson loss is non-finite and predictions contain non-finite values")
+            # return torch.nan_to_num(profile, nan=0.0).mean() * 0.0
     return poisson_loss
 
 def custom_profile_loss(outs, y, len_batch=None, ignore_index=-100, mask = True, count_weight = 3.6):
@@ -799,6 +815,7 @@ output_metric_fns = {
     'custom_profile_loss': custom_profile_loss,
     'cbpnet_multinomial_nll': cbpnet_multinomial_nll,
     'poisson_loss': poisson_loss_nll,
+    'poisson_loss_nan': poisson_loss_nll_nan,
     'custom_profile_poisson_loss': custom_profile_poisson_loss,
     'joint_loss': joint_loss,
     'poisson_loss_mask': poisson_loss_mask,

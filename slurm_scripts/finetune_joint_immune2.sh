@@ -1,12 +1,12 @@
 #!/bin/bash
 
 #SBATCH --partition=lesliec,gpu
-#SBATCH --ntasks-per-node=4
-#SBATCH --cpus-per-task=8
+#SBATCH --ntasks-per-node=2
+#SBATCH --cpus-per-task=12
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
-#SBATCH --gres=gpu:a100:4
-#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_primary_immune_2
+#SBATCH --gres=gpu:a100:2
+#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_ctt_legacy
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 #use this to start it later sbatch --begin=now+55hours slurm_scripts/finetune_joint_immune2.sh
@@ -26,7 +26,7 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  model=caduceus model.config.d_model=256 model.config.n_layer=16 model.config.bidirectional=true \
  model._name_=dna_embedding_caduceus model.config.bidirectional_strategy=add model.config.bidirectional_weight_tie=true model.config.rcps=false \
- optimizer.lr="1e-4" +train.remove_test_loader_in_eval=true \
+ optimizer.lr="1e-4" +train.remove_test_loader_in_eval=true train.interval=epoch \
  \
  dataset.acc_type=continuous \
  \
@@ -35,12 +35,14 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  \
  +model.config.skip_embedding=true trainer.devices=$NUM_GPUS \
  \
+ encoder._name_=jointcnn_ctt \
+ \
  +decoder.conjoin_train=false +decoder.conjoin_test=false +decoder.convolutions=true \
  +decoder.d_model=256 +decoder.d_output=1 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/labels.zarr \
  +dataset.additional_data_idxs=/data1/lesliec/sarthak/data/DK_zarr/idx_lists/all_matched_immune_CAGE.json \
- +dataset.data_idxs=/data1/lesliec/sarthak/data/DK_zarr/idx_lists/all_matched_immune.json \
- train.ckpt="/data1/lesliec/sarthak/caduceus/outputs/2025-08-01/06-40-17-632468/checkpoints/last.ckpt" +train.pretrained_model_state_hook.load_decoder=true \
-#  train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-07-15/09-59-40-094118/checkpoints/last.ckpt"
+ +dataset.data_idxs=/data1/lesliec/sarthak/data/DK_zarr/idx_lists/all_matched_immune.json +dataset.return_celltype_idx_og=true \
+ train.ckpt="/data1/lesliec/sarthak/caduceus/outputs/2026-04-30/12-52-20-114786/checkpoints/last.ckpt" +train.pretrained_model_state_hook.load_decoder=true +train.print_config_only=false trainer.accumulate_grad_batches=4 \
+#  train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-10-31/13-49-05-409924/checkpoints/last.ckpt"
 #either finetune model or continue training, if continue training then load decoder!
 
 #now let's set it to gpu 3 and then run it

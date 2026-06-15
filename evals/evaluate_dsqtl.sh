@@ -3,7 +3,7 @@
 #SBATCH --partition=lesliec,gpu
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=20:00:00
+#SBATCH --time=48:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:1
 #SBATCH --job-name=dsqtl_benchmark
@@ -17,14 +17,16 @@ cd /data1/lesliec/sarthak/caduceus/evals
 nvidia-smi
 
 
-outputs=("alternating_2.npy" "gm12878_5seqmask_countweight16.npy")
+outputs=("phastcons_redo.npy" "arsenal_redo.npy")
 
 ckpts=( \
-  "/data1/lesliec/sarthak/caduceus/outputs/2026-02-16/14-57-20-463663/checkpoints/last.ckpt" \
-  "/data1/lesliec/sarthak/caduceus/outputs/2025-11-19/21-02-33-010281/checkpoints/last.ckpt" \
+  "/data1/lesliec/sarthak/caduceus/outputs/2025-12-01/14-46-22-759501/checkpoints/last.ckpt" \
+  "/data1/lesliec/sarthak/caduceus/outputs/2026-04-28/20-15-27-263513/checkpoints/last.ckpt" \
+  "/data1/lesliec/sarthak/caduceus/outputs/2026-04-30/10-45-54-347624/checkpoints/last.ckpt" \
 )
 
 data_paths=( \
+  "/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz" \
   "/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz" \
   "/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz" \
 )
@@ -45,9 +47,9 @@ pixi run python -u dsqtl_onemodel.py \
   --ckpt_path "$CKPT" \
   --mask_size "$MASK_SIZE" \
   --data_path "$data_path" \
-  --load_data
+  --load_data \
+  # --ctt_val 4 \
   # --encoder_numcelltypes 7 \
-  # --ctt_val 6 \
   # --pool 128 \
   # --out_size 196608 \
   # --load_data

@@ -18,10 +18,13 @@ except ImportError:
     ColumnParallelLinear = None
 
 
+from omegaconf import DictConfig, OmegaConf
+
 from caduceus.configuration_caduceus import CaduceusConfig
 from caduceus.modeling_caduceus import Caduceus
 from src.models.sequence.long_conv_lm import LMBackbone
 from src.models.sequence.long_conv_lm import _init_weights
+from src.models.sequence.striped_backbone import StripedMambaBackbone
 
 
 class DNAEmbeddingModel(nn.Module, GenerationMixin):
@@ -243,6 +246,37 @@ class DNAEmbeddingModelCaduceus(DNAEmbeddingModel):
             return torch.stack([hidden_states, hidden_states_rc], dim=-1), None
 
         return self.caduceus(input_ids, return_dict=False), None
+
+
+class DNAEmbeddingModelStriped(nn.Module):
+    """DNA Embedding Model wrapper for StripedMambaBackbone.
+
+    Accepts a config dict/DictConfig with the same kwargs as StripedMambaBackbone.
+    No internal embedding layer — expects pre-embedded (B, L, d_model) input from the encoder.
+    """
+
+    def __init__(self, config, device=None, dtype=None):
+        super().__init__()
+        if isinstance(config, DictConfig):
+            cfg = OmegaConf.to_container(config, resolve=True)
+        else:
+            cfg = dict(config)
+        self.d_model = cfg['d_model']
+        # When global_pooling > 1, the backbone outputs at d_in resolution (start channels),
+        # not d_model. d_output reflects what actually comes out of forward().
+        d_in = cfg.get('d_in', cfg['d_model'])
+        self._d_output = d_in if cfg.get('global_pooling', 1) > 1 else cfg['d_model']
+        # d_in is exposed so encoder/decoder instantiation can prefer it over d_model.
+        # None means global_pooling == 1, so d_in == d_model and no special handling needed.
+        self.d_in = d_in if cfg.get('global_pooling', 1) > 1 else None
+        self.backbone = StripedMambaBackbone(**cfg)
+
+    def forward(self, input_ids, position_ids=None, inference_params=None, state=None):
+        return self.backbone(input_ids), None
+
+    @property
+    def d_output(self):
+        return self._d_output
 
 
 # def load_backbone(model, state_dict, freeze_backbone=False, ignore_head=True): #this is the caduceus version, we use our old one

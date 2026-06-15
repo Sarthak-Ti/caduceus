@@ -23,6 +23,7 @@ import json
 import sys
 sys.path.append('/data1/lesliec/sarthak/caduceus/')
 from src.dataloaders.utils.mask_seq import mask_seq
+from src.dataloaders.utils.fasta_utils import fasta_to_genome
 # from ..utils.mask_seq import mask_seq
 
 # splits_dict = {
@@ -54,7 +55,10 @@ def get_data_idxs(data_path, data):
         return None
     
     if data_path == 'all':
-        data_idxs = np.array(range(data['chr22'].shape[0])) #just is the number of data points in the full npz or zarr file
+        # data_idxs = np.array(range(data['chr22'].shape[0])) #just is the number of data points in the full npz or zarr file
+        #make it more general by grabbing a random chrom
+        random_chrom = next(iter(data.keys()))
+        data_idxs = np.array(range(data[random_chrom].shape[0])) #just is the number of data points in the full npz or zarr file
 
     elif isinstance(data_path, int): #means inputted single number
         data_idxs = np.array([data_path]) #just is the number of data points in the full npz or zarr file, so just a single number
@@ -105,6 +109,9 @@ class GeneralDataset():
         additional_data: str = None, #if you want to add additional data, like expression data, in enformer style just grab the idx!
         additional_data_idxs: str = None, #if you want to add additional data, like expression data, in enformer style just grab the idx, get the idxs from some file with json. Can also be a list
         additional_tracks: str = None, #if you want to add additional tracks, like expression data, in genome style
+        additional_tracks_idxs: str = None, #mapping from celltype_idx_og to track row in additional_tracks. If None, uses celltype_idx_og directly (linear). Json file, list, or int like data_idxs
+        additional_tracks_stranded: bool = False, #if True, expects interleaved +/- layout (plus=2*i, minus=2*i+1) and returns 2 tracks per cell type
+        crop_additional: int = None, #if set, crops this many bp from each side of additional_data or additional_tracks output
         return_celltype_idx_og: bool = False, #if True, will return the celltype index as well, this is used if you want the cell type token
         multitasking: bool = False, #if True, will return all cell types for the given file, so shape will be (celltypes, length, channels)
         mask_tie: float = 1.0, #how much masking is tied across categories. 1 means fully tied, so all tracks are masked the same, 0 means fully indepdendent masking across categories
@@ -172,6 +179,7 @@ class GeneralDataset():
         self.additional_data_path = additional_data #if you want to add additional data, like expression data, in enformer style just grab the idx!
         self.additional_data_idxs = additional_data_idxs #if you want to add additional data, like expression data, in enformer style just grab the idx, get the idxs from some file with json
         self.additional_tracks_path = additional_tracks #if you want to add additional tracks, like expression data, in genome style
+        self.additional_tracks_idxs_path = additional_tracks_idxs
         self.return_celltype_idx_og = return_celltype_idx_og
         self.mask_tie = mask_tie
         self.multitasking = multitasking
@@ -220,6 +228,9 @@ class GeneralDataset():
             print(f'replacing cell type number with data indices, {len(self.data_idxs)}')
             self.celltypes = len(self.data_idxs)
         self.additional_data_idxs = get_data_idxs(additional_data_idxs, self.data)
+        self.additional_tracks_idxs = get_data_idxs(additional_tracks_idxs, self.additional_tracks)
+        self.additional_tracks_stranded = additional_tracks_stranded
+        self.crop_additional = crop_additional
         
         # if additional_tracks is not None:
         #     raise NotImplementedError("Additional tracks not implemented yet, need to make sure it can properly read in data and other things for the target")
@@ -270,7 +281,7 @@ class GeneralDataset():
         
         """
         if not self.load_in: #each worker gets its own so modifying self is fine
-            self.genome = open_data(self.genome_seq_file, load_in=False)
+            self.genome = open_data(self.genome_seq_file, load_in=False)  # FASTA already loaded, skip re-read
             self.data = open_data(self.data_path, load_in=False)
 
             self.additional_data = open_data(self.additional_data_path, load_in=False) #function returns None if path is None
@@ -481,20 +492,31 @@ class GeneralDataset():
             # additional_data = self.additional_data[index]
             if flip:
                 additional_data = additional_data.flip(dims=[0]) #flip the additional data if we flipped the seq, this assumes that the additional data is in the same order as the sequence, which is true for enformer style data but may not be true for other types of data, so may need to modify this for other types of data
+            if self.crop_additional:
+                additional_data = additional_data[self.crop_additional:-self.crop_additional]
             outputs2.append(additional_data) #append the additional data to the outputs2 list
         elif self.additional_tracks is not None:
             #this is if you have like genome arrays that you're predicting over. So it will be like need the chormosome and start and stop like the data
-            tracks = self.additional_tracks[chrom][:, start:end] # (n_tracks, seq_len)
+            if self.celltypes > 1:
+                if self.additional_tracks_idxs is not None:
+                    track_idx = self.additional_tracks_idxs[celltype_idx_og]
+                else:
+                    track_idx = celltype_idx_og #linear mapping: use position in cell type list directly
+                if self.additional_tracks_stranded:
+                    row_slice = slice(2*track_idx, 2*track_idx+2)
+                else:
+                    row_slice = slice(track_idx, track_idx+1)
+            else:
+                row_slice = slice(None) #all tracks
+            tracks = self.additional_tracks[chrom][row_slice, start:end] # only load needed rows
             lpad = np.zeros((tracks.shape[0], len(leftpad)), dtype=tracks.dtype) #left padding
             rpad = np.zeros((tracks.shape[0], len(rightpad)), dtype=tracks.dtype)
             additional_data = np.concatenate([lpad, tracks, rpad], axis=1) #this is a way to get all the additional track data, so now is shape n_tracks x seq_len
-            
-            # additional_data = np.concatenate([leftpad[None]*0, self.additional_tracks[chrom][:,start:end], rightpad[None]*0], axis=1) #this is a way to get all the additional track data?
-            if self.additional_data_idxs is not None:
-                raise NotImplementedError("Additional tracks with data idxs not implemented yet, need to figure out how to handle this")
             if flip:
-                additional_data = additional_data.flip(dims=[1]) #flip the additional data if we flipped the seq, this assumes that the additional data is in the same order as the sequence, which is true for enformer style data but may not be true for other types of data, so may need to modify this for other types of data
-            outputs2.append(additional_data.transpose(1,0)) #transpose it to be seq_len x n_tracks, so we can use it for the rest of the processing
+                additional_data = additional_data[:, ::-1] #numpy flip along seq dim
+            if self.crop_additional:
+                additional_data = additional_data[:, self.crop_additional:-self.crop_additional]
+            outputs2.append(torch.FloatTensor(np.ascontiguousarray(additional_data)).transpose(1, 0)) #transpose it to be seq_len x n_tracks, so we can use it for the rest of the processing
         
         if self.return_celltype_idx_og:
             outputs1.append(torch.tensor(celltype_idx_og))
@@ -568,22 +590,15 @@ dataset = GeneralDataset(
     additional_data_idxs='/data1/lesliec/sarthak/data/DK_zarr/idx_lists/gm12878_RNA.json',
 )
 
-dataset = GeneralDataset(
-    split='train',
-    data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/test_chrom_dnase_chunkchrom.zarr',
-    length=524288,
-    mlm=0.25,
-    acc_mlm=0.25,
-    data_idxs='/data1/lesliec/sarthak/data/DK_zarr/idx_lists/all_matched_immune.json'
-)
-
+from src.dataloaders.datasets.general_dataset import GeneralDataset
 dataset = GeneralDataset(
     split='train',
     data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz',
     length=524288,
     mlm=0.25,
     acc_mlm=0.25,
-    additional_data='/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz',
+    weights_seq='/data1/lesliec/sarthak/data/gpn/hg38_phastcons100way.npz',
+    alternating=True,
 )
 
 from src.dataloaders.datasets.general_dataset import GeneralDataset
@@ -595,6 +610,19 @@ dataset = GeneralDataset(
     acc_mlm=0.25,
     weights_seq='/data1/lesliec/sarthak/data/gpn/hg38_phastcons100way.npz',
     alternating=True,
+)
+
+from src.dataloaders.datasets.general_dataset import GeneralDataset
+dataset = GeneralDataset(
+    split='train',
+    data_path='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/dnase_chunkchrom_processed.zarr',
+    length=524288,
+    mlm=0.0,
+    acc_mlm=0.25,
+    additional_data_track='/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/k562plus10_CAGE.zarr',
+    return_celltype_idx_og=True,
+    sequences_bed_file='/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed',
+    data_idxs='/data1/lesliec/sarthak/data/DK_zarr/idx_lists/k562plus10.json',
 )
 
 out = dataset[0]
