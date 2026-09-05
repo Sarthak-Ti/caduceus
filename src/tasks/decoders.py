@@ -649,14 +649,27 @@ class TSSDecoder(Decoder):
 
     Two modes:
     - bp_predictor=False (default): averages embeddings over the mask region, then maps
-      the averaged embedding to a scalar via an MLP or linear head.
+      the averaged embedding to a scalar via an MLP or linear head. The head is a PLAIN
+      regression head -- no output activation and no log -- because the target
+      (dataset counts, y[2]) is already log1p/log2 transformed, so the prediction lives
+      directly on the target's log scale and is trained under MSE (`mse_tss`).
     - bp_predictor=True: projects each position independently (d_model -> 1), applies the
       mask, sums the per-position predictions, then applies Softplus. This is an additive
-      model where each base pair contributes independently to the total expression.
+      model where each base pair contributes independently to the total expression. Here
+      the sum is genuinely in LINEAR count space, so log2(sum + 1) is the correct
+      transform onto the target scale and is kept.
+
+    pool_region controls which positions the readout pools over:
+    - 'tss'  (default): pool over the mask passed at call time (the TSS-neighborhood mask),
+      preserving the original TSS-region-averaging behavior.
+    - 'all'            : ignore the passed mask and pool over the ENTIRE window (Decima
+      style), relying on the gene mask appended as an input channel to select the gene.
     """
-    def __init__(self, d_model, d_output=1, hidden_dim=128, dropout=0, simple=False, bp_predictor=False):
+    def __init__(self, d_model, d_output=1, hidden_dim=128, dropout=0, simple=False, bp_predictor=False, pool_region='tss'):
         super().__init__()
 
+        assert pool_region in ('tss', 'all'), f"pool_region must be 'tss' or 'all', got {pool_region}"
+        self.pool_region = pool_region
         self.bp_predictor = bp_predictor
 
         if bp_predictor:
@@ -668,19 +681,21 @@ class TSSDecoder(Decoder):
             # a non-negative count. This matches the additive counts interpretation.
             self.softplus = nn.Softplus()
         elif simple:
-            self.output_transform = nn.Sequential(
-                nn.Linear(d_model, d_output),
-                nn.Softplus()  # Enforces outputs >= 0 to match log2(Count + 1) targets
-            )
+            # Bare linear readout, unconstrained output: the target is already on a log
+            # scale, so no Softplus. (A Softplus here would additionally have made small
+            # negative predictions for zero-expression genes impossible while killing
+            # their gradient, for no benefit under MSE.)
+            self.output_transform = nn.Linear(d_model, d_output)
         else:
             # Upgraded to an MLP for non-linear capacity
+            # No final activation -- matches TSSProfileDecoder.count_head, which regresses
+            # the same log-scale target under MSE.
             self.output_transform = nn.Sequential(
                 nn.Linear(d_model, hidden_dim),
                 nn.LayerNorm(hidden_dim),
                 nn.GELU(),
                 nn.Dropout(p=dropout),
                 nn.Linear(hidden_dim, d_output),
-                nn.Softplus()
             )
 
     def forward(self, x, mask, state=None, **kwargs):
@@ -689,8 +704,13 @@ class TSSDecoder(Decoder):
         mask: (batch, length)          - float or bool; 1/True marks positions to include
 
         Returns:
-            (batch, 1) - scalar prediction per sequence
+            (batch, 1) - scalar prediction per sequence, on the target's log scale
         """
+        # pool_region='all' ignores the supplied mask and pools over every position
+        # (Decima-style mean pool); the gene mask lives in the input channels instead.
+        if self.pool_region == 'all':
+            mask = torch.ones(x.shape[0], x.shape[1], device=x.device, dtype=x.dtype)
+
         mask = mask.unsqueeze(-1).float()  # (batch, length, 1
 
         if self.bp_predictor:
@@ -701,8 +721,137 @@ class TSSDecoder(Decoder):
 
         # Averaging mode: pool over masked positions then apply head
         avg_embedding = (x * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)  # (batch, d_model)
-        linear_pred = self.output_transform(avg_embedding)  # (batch, d_output)
-        return torch.log2(linear_pred + 1)  # Explicit log transformation to match log2(Count + 1) targets
+        # Returned as-is: the target is already log-transformed, so a second log here
+        # would force the head to emit 2**target in linear space.
+        return self.output_transform(avg_embedding)  # (batch, d_output)
+
+
+class TSSProfileDecoder(Decoder):
+    """Decoder that jointly predicts a per-position RNA-seq profile and a scalar count
+    from base-pair embeddings (chrombpnet / Decima style).
+
+    Two heads share the trunk embeddings:
+    - profile head: a per-position projection (d_model -> n_tracks) producing a shape
+      logit at every position. The downstream multinomial loss softmaxes these over the
+      length axis, so this head only learns the RELATIVE shape of the coverage profile.
+    - count head: mean-pools the embeddings over the readout region, then maps the pooled
+      vector to a scalar via an MLP. Trained with MSE against the precomputed log(1+CPM)
+      count (dataset outputs2[2]).
+
+    profile_region ('all' | 'gene') controls the profile head's support:
+    - 'all'  (default): the profile spans every position (Decima-style; the gene mask is
+      only an input-channel hint).
+    - 'gene'          : the profile logits outside the gene body are pushed very negative
+      so they drop out of the softmax / multinomial. Requires `gene_mask` at call time.
+
+    profile_softplus (bool) controls what the profile head emits:
+    - False (default): raw, unactivated logits. This is what `cbpnet_multinomial_nll`
+      wants -- it log_softmaxes them over the length axis, so only relative shape matters.
+    - True           : Softplus is applied, so the head emits a non-negative RATE per
+      position rather than a logit. This makes the head numerically identical to the
+      region-based 3' model's readout (EnformerDecoder applies Softplus unconditionally,
+      see `EnformerDecoder.forward`), so `tss_profile_poisson_loss(profile_softplus=True)`
+      runs the exact same `F.poisson_nll_loss(..., log_input=False, eps=1e-6)` computation
+      as `poisson_loss_nll_nan` does there. Prefer this over letting the Poisson loss
+      exponentiate raw logits: exp() is the canonical log link but has multiplicative
+      gradients that overflow readily under bf16, whereas Softplus is bounded and is the
+      parameterization that actually trained on this target.
+      The multinomial term stays available under this flag -- the loss takes
+      log(rate + eps) as the logits, and log_softmax of that just normalizes the rate.
+
+    count_region ('all' | 'gene' | 'tss') controls the region the count head mean-pools
+    over, independently of the profile head. Defaults to `profile_region` so existing
+    configs are unchanged.
+    - 'all' : pool over the entire window.
+    - 'gene': pool over the gene body. Requires `gene_mask` at call time.
+    - 'tss' : pool over the TSS-neighborhood `mask` passed at call time. This makes the
+      count head exactly equivalent to TSSDecoder(pool_region='tss') -- same head, same
+      pooling, same region. Not offered for the profile head, where restricting the
+      softmax to the TSS neighborhood would not be a coverage profile.
+
+    n_tracks > 1 is not supported by the count head: the count target is one scalar per gene.
+
+    Returns a (profile, counts) tuple. PassthroughSequential leaves this tuple intact
+    (its last element is a tensor, not a kwargs dict), so the task receives it as `outs`
+    and the combined loss (`tss_profile_loss`) unpacks it.
+    """
+    def __init__(self, d_model, n_tracks=1, hidden_dim=128, dropout=0, profile_region='all',
+                 count_region=None, profile_softplus=False):
+        super().__init__()
+
+        assert profile_region in ('all', 'gene'), \
+            f"profile_region must be 'all' or 'gene', got {profile_region}"
+        self.profile_region = profile_region
+        self.profile_softplus = profile_softplus
+        # None means "follow the profile head", preserving the old single-flag behavior.
+        count_region = profile_region if count_region is None else count_region
+        assert count_region in ('all', 'gene', 'tss'), \
+            f"count_region must be 'all', 'gene' or 'tss', got {count_region}"
+        self.count_region = count_region
+        self.n_tracks = n_tracks
+
+        # Per-position shape head: independent projection at every base pair.
+        self.profile_head = nn.Linear(d_model, n_tracks)
+
+        # Count head: pooled embedding -> scalar count(s). MLP for non-linear capacity.
+        # No final activation: the target is log(1+CPM), trained directly under MSE.
+        self.count_head = nn.Sequential(
+            nn.Linear(d_model, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(hidden_dim, n_tracks),
+        )
+
+    def forward(self, x, mask=None, gene_mask=None, state=None, **kwargs):
+        """
+        x:         (batch, length, d_model) - per-base-pair embeddings
+        mask:      (batch, length)          - TSS-neighborhood mask, required if count_region=='tss'
+        gene_mask: (batch, length)          - gene-body mask, required if either region is 'gene'
+
+        Returns:
+            profile: (batch, n_tracks, length) - per-position shape logits, or a non-negative
+                                                 per-position rate if profile_softplus (expression layout)
+            counts:  (batch, n_tracks)         - scalar count prediction per track
+        """
+        # Region the count head pools over, chosen independently of the profile head.
+        # .float() everywhere so the pooled mean is computed in fp32 and does not depend
+        # on the autocast dtype -- matches TSSDecoder.
+        if self.count_region == 'gene':
+            assert gene_mask is not None, "count_region='gene' requires gene_mask"
+            count_region = gene_mask.float()
+        elif self.count_region == 'tss':
+            assert mask is not None, "count_region='tss' requires mask"
+            count_region = mask.float()
+        else:
+            count_region = torch.ones(x.shape[0], x.shape[1], device=x.device, dtype=torch.float)
+
+        # Count head: masked mean-pool over the region, then MLP.
+        region_e = count_region.unsqueeze(-1)  # (batch, length, 1)
+        pooled = (x * region_e).sum(dim=1) / region_e.sum(dim=1).clamp(min=1)  # (batch, d_model)
+        counts = self.count_head(pooled)  # (batch, n_tracks)
+
+        # Profile head: per-position logits, transposed to the (batch, n_tracks, length)
+        # layout the expression targets use so the multinomial softmax runs over length.
+        profile = self.profile_head(x)          # (batch, length, n_tracks)
+        profile = profile.transpose(1, 2)       # (batch, n_tracks, length)
+        if self.profile_region == 'gene':
+            assert gene_mask is not None, "profile_region='gene' requires gene_mask"
+            # Suppress out-of-gene positions under the softmax. A large finite negative
+            # (not -inf) keeps the log-softmax finite, so the multinomial's 0*logp terms
+            # for zeroed-out positions stay well-defined rather than becoming NaN.
+            profile = profile.masked_fill(gene_mask.unsqueeze(1) == 0, -1e9)  # (batch, 1, length) broadcast
+
+        if self.profile_softplus:
+            # Applied AFTER the gene masking above so out-of-gene positions become a rate of
+            # exactly softplus(-1e9) = 0, i.e. "no coverage predicted here", which is what a
+            # rate-space readout should say. Doing it before would let the masked_fill write
+            # a negative value into a tensor that is supposed to be non-negative.
+            # float() first: softplus/exp in bf16 saturates, and the Poisson NLL downstream
+            # reads this as an actual rate, so the precision matters more than the memory.
+            profile = F.softplus(profile.float())
+
+        return profile, counts
 
 
 class NDDecoder(Decoder):
@@ -839,6 +988,7 @@ registry = {
     'graphreg': GraphRegDecoder,
     'jointmask': JointMaskingDecoder,
     'tss': TSSDecoder,
+    'tss_profile': TSSProfileDecoder,
 }
 model_attrs = {
     "linear": ["d_output"],
@@ -850,6 +1000,7 @@ model_attrs = {
     "token": ["d_output"],
     "jointmask": ["d_model"],
     "tss": ["d_model"],
+    "tss_profile": ["d_model"],
 }
 
 dataset_attrs = {

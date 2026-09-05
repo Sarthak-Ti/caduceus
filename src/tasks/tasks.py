@@ -545,8 +545,11 @@ class JointTSS(BaseTask):
 
         x,intermediates = encoder(*x)
         x,_ = model(x)
-        x,_ = decoder(x, intermediates=intermediates, mask=y[3]) #pass the mask to the decoder, which will use it to only calculate loss on the TSS positions   
-        
+        # mask=y[3] is the TSS-neighborhood mask (used by TSSDecoder's 'tss' pooling);
+        # gene_mask=y[4] is the gene-body mask (used by TSSProfileDecoder / 'gene' region).
+        # Decoders that don't need one simply absorb it via **kwargs.
+        x,_ = decoder(x, intermediates=intermediates, mask=y[3], gene_mask=y[4])
+
         return x, y, {}
 
 class Basic(BaseTask):

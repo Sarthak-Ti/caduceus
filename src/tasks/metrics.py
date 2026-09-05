@@ -759,6 +759,189 @@ def mse_tss(outs, y, len_batch=None):
     return F.mse_loss(preds, targets)
 
 
+def tss_profile_loss(outs, y, len_batch=None, count_weight=1.0, profile_weight=1.0, region='all'):
+    """Combined RNA-seq loss (chrombpnet-style) for the TSSProfileDecoder.
+
+    Adds an MSE term on the total count (magnitude) to a multinomial NLL term on the
+    per-position profile (shape), mirroring `custom_profile_loss` but reading the targets
+    straight out of the TSS dataset's outputs2 tuple.
+
+    outs: (profile, counts) from TSSProfileDecoder
+        profile: (batch, n_tracks, length) per-position shape logits
+        counts:  (batch, n_tracks)          scalar count prediction
+    y:    the dataset outputs2 tuple, using:
+        y[2] = counts     (batch,)                      -> MSE target, log(1+CPM)
+        y[4] = gene_mask  (batch, length)               -> region restriction when region=='gene'
+        y[6] = expression (batch, n_tracks, length)     -> observed profile, multinomial target
+
+    region ('all' | 'gene') MUST match the decoder's profile_region: when 'gene' the
+    observed profile is zeroed outside the gene body so only in-gene positions contribute
+    to the shape term (the decoder already suppresses out-of-gene logits).
+
+    count_weight / profile_weight scale the two terms independently (both default to 1.0,
+    the original behavior). The two terms are on wildly different scales -- the multinomial
+    NLL sums over the whole window (~1e5-1e6) while the count MSE is order 1e0 -- so to
+    make the count term dominate, shrink profile_weight rather than inflating count_weight:
+    the latter reaches the same ratio but scales the total loss and every gradient with it,
+    silently changing the effective learning rate.
+    """
+    profile = outs[0]              # (batch, n_tracks, length)
+    counts = outs[1]               # (batch, n_tracks)
+
+    label_profile = y[6].float()   # (batch, n_tracks, length)
+    label_counts = y[2].float()    # (batch,)
+
+    if region == 'gene':
+        gene_mask = y[4].float().unsqueeze(1)   # (batch, 1, length)
+        label_profile = label_profile * gene_mask
+
+    # Shape term: multinomial NLL over the length axis (squeezes the single-track dim).
+    multinomial_loss = cbpnet_multinomial_nll(profile, label_profile)
+    # Magnitude term: MSE on the scalar count.
+    # n_tracks=1 only: squeeze(-1) reaches the (batch,) target, and `mse` asserts above that.
+    mse_loss = mse(counts.squeeze(-1), label_counts, len_batch)
+    return count_weight * mse_loss + profile_weight * multinomial_loss
+
+
+def _tss_profile_targets(outs, y, region='all'):
+    """Shared unpacking for the TSSProfileDecoder losses/metrics.
+
+    Returns (profile, label_profile) with the profile promoted to fp32 -- every downstream
+    term either exponentiates it or takes its log, and bf16 saturates in both directions.
+    `region='gene'` zeroes the observed profile outside the gene body (y[4]) to match the
+    decoder's own out-of-gene suppression.
+    """
+    profile = outs[0].float()      # (batch, n_tracks, length)
+    label_profile = y[6].float()   # (batch, n_tracks, length)
+    if region == 'gene':
+        gene_mask = y[4].float().unsqueeze(1)   # (batch, 1, length)
+        label_profile = label_profile * gene_mask
+    return profile, label_profile
+
+
+def _tss_profile_poisson_term(profile, label_profile, profile_softplus=True, eps=1e-6,
+                              nan_guard=True):
+    """Poisson NLL on the per-position profile.
+
+    profile_softplus=True treats `profile` as a RATE (the decoder already applied Softplus)
+    and calls F.poisson_nll_loss with log_input=False/eps=1e-6 -- byte for byte the same
+    computation `poisson_loss_nll_nan` runs for the region-based 3' model, whose
+    EnformerDecoder also softpluses its output. Set it to False to treat `profile` as a
+    LOG-rate instead (log_input=True, the canonical log link); that needs no decoder-side
+    activation but exponentiates raw logits, which overflows far more readily.
+
+    nan_guard mirrors poisson_loss_nll_nan: bp-resolution 3' coverage is sparse and spiky,
+    so a non-finite loss on top of finite predictions returns a zero-gradient batch instead
+    of killing the run. A non-finite loss WITH non-finite predictions still raises.
+    """
+    poisson = F.poisson_nll_loss(profile, label_profile,
+                                 log_input=not profile_softplus, full=False, eps=eps)
+    if nan_guard and (torch.isnan(poisson) or torch.isinf(poisson)):
+        if not torch.isnan(profile).any() and not torch.isinf(profile).any():
+            print(f"WARNING: tss profile poisson loss is {poisson.item():.4f} but predictions are finite — returning zero loss to skip batch")
+            return profile.mean() * 0.0
+        raise ValueError("tss profile poisson loss is non-finite and predictions contain non-finite values")
+    return poisson
+
+
+def _tss_profile_logits(profile, profile_softplus=False, eps=1e-6):
+    """Put the profile on the scale `cbpnet_multinomial_nll` expects (something to log_softmax).
+
+    When the decoder softplused its output the profile is a rate, not a logit, so take
+    log(rate + eps): log_softmax of that is exactly the rate normalized over the length
+    axis, which is the multinomial's shape parameter. eps keeps the log finite where the
+    rate underflows to 0 (out-of-gene positions under profile_region='gene').
+    """
+    return torch.log(profile + eps) if profile_softplus else profile
+
+
+def tss_profile_poisson_loss(outs, y, len_batch=None, count_weight=1.0, poisson_weight=1.0,
+                             multinomial_weight=0.0, region='all', profile_softplus=True,
+                             nan_guard=True):
+    """Poisson variant of `tss_profile_loss` for the TSSProfileDecoder.
+
+    Same gene-level count head, but the per-position term is a Poisson NLL instead of (or
+    in addition to) the multinomial. The motivation: the multinomial is scale-free, so ALL
+    magnitude information has to squeeze through the count head's single mean-pooled
+    embedding, whereas Poisson makes every base pair carry magnitude. That is the recipe
+    that worked better for enhancer-gene linking in the region-based 3' model
+    (slurm_scripts/finetune_joint_k562_3prime.sh).
+
+    outs: (profile, counts) from TSSProfileDecoder
+    y:    the dataset outputs2 tuple, using y[2] = counts, y[4] = gene_mask, y[6] = expression
+        -- note this is why `poisson_loss_nan` CANNOT be pointed at this decoder: its
+        tuple-unpacking path takes y[0], which here is the one-hot sequence, not the target.
+
+    loss = count_weight*MSE(count) + poisson_weight*PoissonNLL(profile)
+           [+ multinomial_weight*multinomial_NLL(profile)]
+
+    WEIGHT SCALES DIFFER FROM `tss_profile_loss`. F.poisson_nll_loss reduces with a MEAN
+    over positions (order 1e0), while cbpnet_multinomial_nll SUMS over the length axis
+    (order 1e5-1e6). The profile_weight=1e-6 used by the multinomial recipe is therefore
+    ~1e6 too small here -- start poisson_weight around 1.0 against a count MSE of order 1e0.
+
+    multinomial_weight defaults to 0: Poisson's likelihood already contains the shape
+    information the multinomial isolates, so adding both is redundant by construction. It
+    is exposed for the ablation, not as the default recipe.
+    """
+    profile, label_profile = _tss_profile_targets(outs, y, region=region)
+    counts = outs[1]
+    label_counts = y[2].float()    # (batch,)
+
+    # Magnitude term: MSE on the scalar gene-level count, unchanged from tss_profile_loss.
+    # n_tracks=1 only: squeeze(-1) reaches the (batch,) target, and `mse` asserts above that.
+    total = count_weight * mse(counts.squeeze(-1), label_counts, len_batch)
+    total = total + poisson_weight * _tss_profile_poisson_term(
+        profile, label_profile, profile_softplus=profile_softplus, nan_guard=nan_guard)
+    if multinomial_weight:
+        logits = _tss_profile_logits(profile, profile_softplus=profile_softplus)
+        total = total + multinomial_weight * cbpnet_multinomial_nll(logits, label_profile)
+    return total
+
+
+def tss_profile_poisson(outs, y, len_batch=None, region='all', profile_softplus=True):
+    """Standalone Poisson term of `tss_profile_poisson_loss`, for tracking as a metric.
+
+    Returns the UNweighted Poisson NLL. `region` and `profile_softplus` must match the
+    training loss for the logged value to line up; use the registry aliases
+    'tss_profile_poisson_gene' / 'tss_profile_poisson_exp' for the non-default combinations.
+    The nan guard is off here -- a metric should report a non-finite value rather than
+    silently log a 0.
+    """
+    profile, label_profile = _tss_profile_targets(outs, y, region=region)
+    return _tss_profile_poisson_term(profile, label_profile,
+                                     profile_softplus=profile_softplus, nan_guard=False)
+
+
+def tss_profile_count_mse(outs, y, len_batch=None):
+    """Standalone count (magnitude) term of `tss_profile_loss`, for tracking as a metric.
+
+    Returns the UNweighted MSE piece (no count_weight) so it can be logged separately from
+    the combined loss. outs=(profile, counts); target is y[2] = log(1+CPM).
+    """
+    counts = outs[1]
+    label_counts = y[2].float()
+    # n_tracks=1 only: squeeze(-1) reaches the (batch,) target, and `mse` asserts above that.
+    return mse(counts.squeeze(-1), label_counts, len_batch)
+
+
+def tss_profile_multinomial(outs, y, len_batch=None, region='all', profile_softplus=False):
+    """Standalone profile (shape) term of `tss_profile_loss`, for tracking as a metric.
+
+    Returns the multinomial NLL piece. `region` must match the region used by the training
+    loss so the logged value lines up: use the 'tss_profile_multinomial_gene' registry
+    alias when training with task.loss.region='gene'. outs=(profile, counts); the observed
+    profile is y[6] and (for 'gene') is zeroed outside the gene body via y[4].
+
+    profile_softplus must match the decoder's flag of the same name: when the decoder emits
+    a rate rather than a logit, the shape parameter is log(rate) -- use the
+    'tss_profile_multinomial_softplus' registry alias to log this alongside a Poisson run.
+    """
+    profile, label_profile = _tss_profile_targets(outs, y, region=region)
+    logits = _tss_profile_logits(profile, profile_softplus=profile_softplus)
+    return cbpnet_multinomial_nll(logits, label_profile)
+
+
 # Metrics that can depend on the loss
 def loss(x, y, loss_fn):
     """ This metric may be useful because the training loss may add extra regularization (e.g. weight decay implemented as L2 penalty), while adding this as a metric skips the additional losses """
@@ -822,6 +1005,17 @@ output_metric_fns = {
     'ce_loss_mask_seq': ce_loss_mask_seq,
     'ce_loss_mask_acc': ce_loss_mask_acc,
     'mse_tss': mse_tss,
+    'tss_profile_loss': tss_profile_loss,
+    'tss_profile_poisson_loss': tss_profile_poisson_loss,
+    'tss_profile_count_mse': tss_profile_count_mse,
+    'tss_profile_multinomial': tss_profile_multinomial,
+    'tss_profile_multinomial_gene': partial(tss_profile_multinomial, region='gene'),
+    'tss_profile_multinomial_softplus': partial(tss_profile_multinomial, profile_softplus=True),
+    'tss_profile_poisson': tss_profile_poisson,
+    'tss_profile_poisson_gene': partial(tss_profile_poisson, region='gene'),
+    # profile_softplus=False -> the profile is read as a LOG-rate (log_input=True), for runs
+    # that leave the decoder's profile head unactivated.
+    'tss_profile_poisson_exp': partial(tss_profile_poisson, profile_softplus=False),
 }
 
 loss_metric_fns = {

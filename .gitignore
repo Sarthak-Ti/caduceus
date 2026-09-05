@@ -146,3 +146,6 @@ dmypy.json
 # pixi environments
 .pixi
 *.egg-info
+
+# nbconvert / local run logs
+*.log

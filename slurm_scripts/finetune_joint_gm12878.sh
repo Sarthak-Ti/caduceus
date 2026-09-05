@@ -6,7 +6,7 @@
 #SBATCH --time=168:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:a100:2
-#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_arsenal
+#SBATCH --job-name=joint_cont_sepcnn_combined_gm12878_finetune_borzoi
 #SBATCH --output=/data1/lesliec/sarthak/caduceus/jobs/%j-%x.out
 
 # Source the bashrc file
@@ -30,13 +30,13 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
  dataset.acc_type=continuous \
  \
  dataset.data_path=/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/GM12878_DNase.npz \
- dataset.load_in=false +dataset.sequences_bed_file=/data1/lesliec/sarthak/data/DK_zarr/sequences_enformer.bed \
+ dataset.load_in=false +dataset.sequences_bed_file=/data1/lesliec/sarthak/data/DK_zarr/sequences_borzoi_fold3-4.bed dataset.additional_data=/data1/lesliec/sarthak/data/borzoi/GM12878CAGE.zarr \
  \
- +model.config.skip_embedding=true encoder.joint=true +encoder.norm=true \
+ +model.config.skip_embedding=true encoder.joint=false encoder.combine=true \
  \
  +decoder.conjoin_train=false +decoder.conjoin_test=false +decoder.convolutions=true +encoder.d_input2=2 \
- +decoder.d_model=256 +decoder.d_output=1 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz \
- train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2026-04-28/20-15-27-263513/checkpoints/14-val_loss\=5.48058.ckpt"
+ +decoder.d_model=256 +decoder.d_output=2 ++decoder.yshape=196608 ++decoder.bin_size=32 \
+ train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-04-28/15-26-30-700432/checkpoints/last.ckpt"
 #  train.ckpt="/data1/lesliec/sarthak/caduceus/outputs/2025-07-30/15-18-08-367924/checkpoints/last.ckpt" +train.pretrained_model_state_hook.load_decoder=true \
 
 
@@ -57,5 +57,5 @@ pixi run srun python -m train wandb.group=joint_pretrain wandb.name=$SLURM_JOB_N
 #  +model.config.skip_embedding=true +model.config.checkpoint_mlp=true +model.config.checkpoint_mixer=true \
 #  \
 #  +decoder.conjoin_train=false +decoder.conjoin_test=false +decoder.convolutions=true +encoder.d_input2=2 \
-#  +decoder.d_model=256 +decoder.d_output=1 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz \
+#  +decoder.d_model=256 +decoder.d_output=2 ++decoder.yshape=196608 ++decoder.bin_size=32 +dataset.additional_data=/data1/lesliec/sarthak/data/enformer/data/GM12878CAGE.npz \
 #  train.pretrained_model_path="/data1/lesliec/sarthak/caduceus/outputs/2025-11-28/09-05-34-224617/checkpoints/last.ckpt"

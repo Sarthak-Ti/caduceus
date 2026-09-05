@@ -40,6 +40,13 @@ def main(args):
         data_idxs=args.data_idxs,
         data_path=args.data_path,
         encoder_numcelltypes=args.encoder_numcelltypes,
+        # the eQTL windows are appended to the bed with expand_seqs, so they have no row in
+        # any index-based target array. Null all four so __getitem__ never reaches them --
+        # the third outputs2 element they produce is discarded here anyway.
+        additional_data=None,
+        additional_data_idxs=None,
+        additional_tracks=None,
+        additional_tracks_idxs=None,
     )
     evals.skip_softplus = not args.softplus  # default: skip softplus; pass --softplus to enable
     evals.dataset.return_celltype_idx_og = False  # use hard-coded ctt_val, not dataset token

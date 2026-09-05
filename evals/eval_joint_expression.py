@@ -16,6 +16,10 @@ Key options:
     --out_name NAME save per-sample Pearson/Spearman arrays to
                     /data1/lesliec/sarthak/data/joint_playground/model_out/NAME_{pearson,spearman}.npy
                     shape: (num_regions, num_celltypes, num_strands)
+    --save_outputs  additionally save the model predictions as NAME_outputs.npy
+    --save_targets  additionally save the targets as NAME_targets.npy
+                    both shape: (num_regions, num_celltypes, L, C), post-pooling
+    --float16       store the saved outputs/targets as float16 instead of float32
 """
 import sys
 sys.path.append('/data1/lesliec/sarthak/caduceus/')
@@ -40,12 +44,16 @@ def pool_spatial(arr, pool_size):
     return arr[:L].reshape(-1, pool_size, arr.shape[1]).mean(axis=1)
 
 
-def evaluate_all(evals, pool, num_workers=4):
+def evaluate_all(evals, pool, num_workers=4, save_outputs=False, save_targets=False, dtype=np.float32):
     """
     Single pass over the full dataset. Computes per-region correlations on the fly
     to avoid storing the full (num_regions, num_celltypes, L, C) arrays.
     Dataset layout: index i -> ct = i // num_regions, region = i % num_regions
-    Returns pearson_arr, spearman_arr each of shape (num_regions, num_celltypes, C).
+    Returns pearson_arr, spearman_arr each of shape (num_regions, num_celltypes, C),
+    then outputs_arr and targets_arr, each of shape (num_regions, num_celltypes, L, C)
+    if the corresponding flag is set and None otherwise. Those two are preallocated to
+    NaN, so any (region, celltype) slot that never got written stays NaN and is visible.
+    Values are stored post-pooling, so they line up index-for-index with the correlations.
     """
     num_regions = len(evals.dataset.sequences)
     num_celltypes = evals.dataset.celltypes
@@ -53,6 +61,8 @@ def evaluate_all(evals, pool, num_workers=4):
 
     pearson_arr = None
     spearman_arr = None
+    outputs_arr = None
+    targets_arr = None
 
     for i, data in enumerate(tqdm(loader, desc='evaluating', leave=False)):
         out = evals(data=data)
@@ -75,15 +85,27 @@ def evaluate_all(evals, pool, num_workers=4):
             C = pred.shape[1]
             pearson_arr = np.full((num_regions, num_celltypes, C), np.nan, dtype=np.float32)
             spearman_arr = np.full_like(pearson_arr, np.nan)
+            L = pred.shape[0]
+            if save_outputs:
+                outputs_arr = np.full((num_regions, num_celltypes, L, C), np.nan, dtype=dtype)
+            if save_targets:
+                targets_arr = np.full((num_regions, num_celltypes, L, C), np.nan, dtype=dtype)
 
         ct = i // num_regions
-        assert ct == data[0][2].item(), f"Expected cell type {ct} from index {i}, but got {data[0][2].item()}"
+        if len(data[0]) > 2: #dataset returns the cell type index only if return_celltype_idx_og is set
+            assert ct == data[0][2].item(), f"Expected cell type {ct} from index {i}, but got {data[0][2].item()}"
+        else:
+            assert ct == 0, f"Dataset returns no cell type index, so expected a single cell type, but index {i} implies cell type {ct}"
         region = i % num_regions
         for c in range(pred.shape[1]):
             pearson_arr[region, ct, c] = pearsonr(pred[:, c], tgt[:, c])[0]
             spearman_arr[region, ct, c] = spearmanr(pred[:, c], tgt[:, c])[0]
+        if outputs_arr is not None:
+            outputs_arr[region, ct] = pred
+        if targets_arr is not None:
+            targets_arr[region, ct] = tgt
 
-    return pearson_arr, spearman_arr  # (num_regions, num_celltypes, C)
+    return pearson_arr, spearman_arr, outputs_arr, targets_arr
 
 
 def main():
@@ -100,11 +122,21 @@ def main():
                         help='Torch device string, e.g. "cuda:0" (default: auto)')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of DataLoader worker processes for prefetching (default: 4)')
+    parser.add_argument('--save_outputs', action='store_true',
+                        help='Additionally save the model predictions as <out_name>_outputs.npy '
+                             '(num_regions, num_celltypes, L, C), post-pooling')
+    parser.add_argument('--save_targets', action='store_true',
+                        help='Additionally save the targets as <out_name>_targets.npy, same shape')
+    parser.add_argument('--float16', action='store_true',
+                        help='Store saved outputs/targets as float16 instead of float32 (halves file size)')
     parser.add_argument('--out_name', default=None,
                         help='If set, save per-sample correlation arrays as '
                              f'{OUT_DIR}/<out_name>_pearson.npy and _spearman.npy  '
                              'Shape: (num_regions, num_celltypes, num_strands)')
     args = parser.parse_args()
+    if (args.save_outputs or args.save_targets) and not args.out_name:
+        parser.error('--save_outputs/--save_targets require --out_name, otherwise the arrays are discarded')
+    raw_dtype = np.float16 if args.float16 else np.float32
 
     evals = Evals(args.ckpt_path, split=args.split, device=args.device)
     if args.skip_softplus:
@@ -119,8 +151,11 @@ def main():
     print(f"Cell types   : {num_celltypes}")
     print(f"Pool         : {args.pool} bins")
     print(f"skip_softplus: {evals.skip_softplus}")
+    print(f"save_outputs : {args.save_outputs}   save_targets: {args.save_targets}   dtype: {np.dtype(raw_dtype).name}")
 
-    pearson_arr, spearman_arr = evaluate_all(evals, pool=args.pool, num_workers=args.num_workers)
+    pearson_arr, spearman_arr, outputs_arr, targets_arr = evaluate_all(
+        evals, pool=args.pool, num_workers=args.num_workers,
+        save_outputs=args.save_outputs, save_targets=args.save_targets, dtype=raw_dtype)
     # shape: (num_regions, num_celltypes, num_strands)
 
     print(f"\nMean Pearson : {np.nanmean(pearson_arr):.4f}")
@@ -134,6 +169,15 @@ def main():
         np.save(spearman_path, spearman_arr)
         print(f"Saved Pearson  {pearson_arr.shape} → {pearson_path}")
         print(f"Saved Spearman {spearman_arr.shape} → {spearman_path}")
+        for arr, tag in ((outputs_arr, 'outputs'), (targets_arr, 'targets')):
+            if arr is None:
+                continue
+            path = os.path.join(OUT_DIR, f'{args.out_name}_{tag}.npy')
+            np.save(path, arr)
+            print(f"Saved {tag:8s} {arr.shape} {arr.dtype} ({arr.nbytes / 1e6:.0f} MB) → {path}")
+            unfilled = int(np.isnan(arr[:, :, 0, 0]).sum())
+            if unfilled:
+                print(f"  WARNING: {unfilled} (region, celltype) slots never written, still NaN")
 
 
 if __name__ == '__main__':
