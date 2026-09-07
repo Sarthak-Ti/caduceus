@@ -283,6 +283,15 @@ class Evals():
                 out = out.reshape(out.shape[0] // pool, pool, out.shape[1]).mean(axis=1)
                 label = label.reshape(label.shape[0] // pool, pool, label.shape[1]).mean(axis=1)
 
+            #SLOW: this is a Python double loop over scipy, N examples x T tracks calls, each one
+            #paying scipy's full argument validation. Dominates the runtime of this function.
+            #Both correlations vectorize over tracks in one call, so the whole j loop collapses to:
+            #  pearson : corrs = pearsonr2(label.T, out.T)
+            #  spearman: corrs = pearsonr2(rankdata(label, axis=0).T, rankdata(out, axis=0).T)
+            #(pearsonr2 is defined at the bottom of this file and correlates matching rows, hence
+            #the .T; scipy.stats.rankdata needs the axis= kwarg, so scipy >= 1.10). Expect 10-100x.
+            #NOT TESTED -- verify it reproduces the current corrs array before switching over,
+            #especially the nan -> 0.0 handling below, which the vectorized form has to redo.
             for j in range(len(corrs)):
                 corr = corr_fn(label[:,j], out[:,j])
                 corrs[j] = corr.correlation if not np.isnan(corr.correlation) else 0.0 #basically sets it to 0 if nan!

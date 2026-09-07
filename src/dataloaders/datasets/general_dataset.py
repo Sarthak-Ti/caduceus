@@ -490,6 +490,11 @@ class GeneralDataset():
             else:
                 additional_data = self.additional_data[split][tindex] #with zarr can input it to not require the split, idk about npz tho! can input like path.zarr/train for train data, but then won't work for evals...
             # additional_data = self.additional_data[index]
+            #open_data returns numpy (or zarr), never a torch tensor, so convert here, the same way the
+            #additional_tracks branch below does. Done outside the flip branch on purpose: .flip(dims=)
+            #would AttributeError on an ndarray, but converting *only* when flipped would leave a batch
+            #mixing tensors and ndarrays, which default_collate rejects once batch_size > 1
+            additional_data = torch.FloatTensor(np.ascontiguousarray(additional_data))
             if flip:
                 additional_data = additional_data.flip(dims=[0]) #flip the additional data if we flipped the seq, this assumes that the additional data is in the same order as the sequence, which is true for enformer style data but may not be true for other types of data, so may need to modify this for other types of data
             if self.crop_additional:

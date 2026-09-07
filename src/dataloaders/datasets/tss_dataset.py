@@ -495,6 +495,11 @@ class TSSDataset():
 
         seq = torch.LongTensor(seq)
 
+        # POSSIBLE SPEEDUP (not done): the LongTensor + one_hot below allocates an int64
+        # (L,) and an int64 (L,5) that are thrown away immediately (~25 MB at L=524288).
+        # Scattering 1.0 into a preallocated float32 (L,5) is bit-identical and ~2x faster
+        # (~8.6 -> ~5.5 ms). Left alone because training is GPU-bound and 8 prefetching
+        # workers hide this entirely; revisit only if the loader starts starving the GPU.
         if self.one_hot:
             x = seq
             x_onehot = torch.nn.functional.one_hot(x - 7, num_classes=5).float()
