@@ -7,6 +7,7 @@ from functools import partial
 from typing import Optional, Tuple, Union
 
 import torch
+import torch.utils.checkpoint
 from mamba_ssm.modules.mamba_simple import Mamba
 from mamba_ssm.modules.block import Block
 from torch import nn
@@ -217,6 +218,11 @@ class CaduceusMixerModel(nn.Module):
         self.fused_add_norm = config.fused_add_norm
         self.rcps = config.rcps
         self.residual_in_fp32 = config.residual_in_fp32
+        # Opt-in activation checkpointing (config.gradient_checkpointing). At the
+        # production shape (B=1, L=524288, n_layer=16) the stored activations are what
+        # pins the batch size to 1; recomputing each block in the backward pass trades
+        # ~1 extra forward for roughly an order of magnitude less activation memory.
+        self.gradient_checkpointing = getattr(config, "gradient_checkpointing", False)
 
         self.embeddings = CaduceusEmbeddings(config, **factory_kwargs)
 
@@ -263,13 +269,21 @@ class CaduceusMixerModel(nn.Module):
             hidden_states = self.embeddings(input_ids)
 
         residual = None
+        use_ckpt = self.gradient_checkpointing and self.training and torch.is_grad_enabled()
         for layer in self.layers:
             if output_hidden_states:
                 all_hidden_states.append(hidden_states)
-            # TODO: Add support for gradient checkpointing
-            hidden_states, residual = layer(
-                hidden_states, residual, inference_params=None
-            )
+            # Gradient checkpointing (was a TODO here): non-reentrant so that the
+            # (hidden_states, residual) tuple and the tied bidirectional weights are
+            # handled correctly. Falls back to a plain call in eval / no-grad.
+            if use_ckpt:
+                hidden_states, residual = torch.utils.checkpoint.checkpoint(
+                    layer, hidden_states, residual, None, use_reentrant=False
+                )
+            else:
+                hidden_states, residual = layer(
+                    hidden_states, residual, inference_params=None
+                )
 
         if not self.fused_add_norm:
             if self.rcps:

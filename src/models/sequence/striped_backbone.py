@@ -8,6 +8,7 @@ Supports three modes:
 """
 
 import math
+import warnings
 
 import torch
 import torch.nn as nn
@@ -34,7 +35,7 @@ class StripedMambaBackbone(nn.Module):
         headdim=64,
         ngroups=1,
         chunk_size=256,
-        use_mem_eff_path=True,
+        use_mem_eff_path=False,
         dt_limit_lower=0.0,
         dt_limit_upper=float("inf"),
         a_log_clamp_min=None,
@@ -130,6 +131,16 @@ class StripedMambaBackbone(nn.Module):
         else:
             self.global_down = None
             self.global_up = None
+
+        if use_mem_eff_path:
+            warnings.warn(
+                "use_mem_eff_path=True is slower than the chunked path at every "
+                "sequence length benchmarked (see tests/bench_memeff_crossover.py); "
+                "the two branches are numerically equivalent, so prefer "
+                "use_mem_eff_path=False.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # --- Per-block modules ---
         self.hydra_blocks = nn.ModuleList()

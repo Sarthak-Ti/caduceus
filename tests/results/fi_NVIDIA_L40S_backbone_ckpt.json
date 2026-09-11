@@ -1,0 +1,102 @@
+{
+  "meta": {
+    "mode": "backbone",
+    "variant": "ckpt",
+    "prod_config": {
+      "d_model": 256,
+      "n_layer": 16,
+      "seqlen": 524288,
+      "batch_size": 1,
+      "d_state": 16,
+      "d_conv": 4,
+      "expand": 2,
+      "d_input1": 6,
+      "d_input2": 2,
+      "d_output1": 5,
+      "d_output2": 1,
+      "encoder_kernel_size": 15
+    },
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "isck007.mskcc.org",
+      "slurm_job_id": "11762606",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA L40S",
+      "gpu_mem_gb": 44.4,
+      "sm_count": 142,
+      "capability": "8.9"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 00:31:34"
+  },
+  "results": [
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 131072,
+      "batch_size": 1,
+      "variant": "ckpt",
+      "fwd_ms": 133.3136962890625,
+      "bwd_ms": 468.4310546875,
+      "step_ms": 601.7447509765625,
+      "fwd_std_ms": 2.8032358905180494,
+      "bwd_std_ms": 0.5954027033566672,
+      "peak_alloc_gb": 5.366934776306152,
+      "peak_reserved_gb": 5.55078125,
+      "tokens_per_s_fwd": 983184.8013260253,
+      "tokens_per_s_step": 217819.93077178524,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    },
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "ckpt",
+      "fwd_ms": 271.5275634765625,
+      "bwd_ms": 947.6120361328125,
+      "step_ms": 1219.139599609375,
+      "fwd_std_ms": 4.845857475911831,
+      "bwd_std_ms": 0.8003472787467888,
+      "peak_alloc_gb": 10.687735557556152,
+      "peak_reserved_gb": 10.92578125,
+      "tokens_per_s_fwd": 965441.5803816821,
+      "tokens_per_s_step": 215023.77585306365,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    },
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 524288,
+      "batch_size": 1,
+      "variant": "ckpt",
+      "fwd_ms": 550.4599609375,
+      "bwd_ms": 1906.5645263671875,
+      "step_ms": 2457.0244873046877,
+      "fwd_std_ms": 9.945629652990315,
+      "bwd_std_ms": 1.16500893015877,
+      "peak_alloc_gb": 21.329337120056152,
+      "peak_reserved_gb": 21.67578125,
+      "tokens_per_s_fwd": 952454.3785293193,
+      "tokens_per_s_step": 213383.30273424936,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "mode": "backbone",
+    "variant": "ckpt",
+    "prod_config": {
+      "d_model": 256,
+      "n_layer": 16,
+      "seqlen": 524288,
+      "batch_size": 1,
+      "d_state": 16,
+      "d_conv": 4,
+      "expand": 2,
+      "d_input1": 6,
+      "d_input2": 2,
+      "d_output1": 5,
+      "d_output2": 1,
+      "encoder_kernel_size": 15
+    },
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "iscp001",
+      "slurm_job_id": "11763035",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA H200",
+      "gpu_mem_gb": 139.8,
+      "sm_count": 132,
+      "capability": "9.0"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 01:00:20"
+  },
+  "results": [
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 131072,
+      "batch_size": 1,
+      "variant": "ckpt",
+      "fwd_ms": 67.35194396972656,
+      "bwd_ms": 353.14793701171874,
+      "step_ms": 420.4998809814453,
+      "fwd_std_ms": 0.3694338405065295,
+      "bwd_std_ms": 0.16740324030382275,
+      "peak_alloc_gb": 5.413565635681152,
+      "peak_reserved_gb": 5.55078125,
+      "tokens_per_s_fwd": 1946075.9745689658,
+      "tokens_per_s_step": 311705.2011859751,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    },
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "ckpt",
+      "fwd_ms": 128.88844604492186,
+      "bwd_ms": 686.6704711914062,
+      "step_ms": 815.5589172363282,
+      "fwd_std_ms": 0.2014810648983124,
+      "bwd_std_ms": 0.5209117864093364,
+      "peak_alloc_gb": 10.734366416931152,
+      "peak_reserved_gb": 10.92578125,
+      "tokens_per_s_fwd": 2033882.8502023695,
+      "tokens_per_s_step": 321428.6478386176,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    }
+  ]
+}

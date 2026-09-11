@@ -1,0 +1,283 @@
+{
+  "meta": {
+    "part": "models",
+    "striped_cfg": {
+      "d_model": 256,
+      "n_blocks": 16,
+      "d_state": 64,
+      "d_conv": 5,
+      "expand": 2,
+      "headdim": 64,
+      "ngroups": 1,
+      "chunk_size": 256,
+      "use_mem_eff_path": true,
+      "norm": "rms",
+      "residual_in_fp32": false,
+      "rescale_prenorm_residual": true
+    },
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "isck020.mskcc.org",
+      "slurm_job_id": "11777522",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA L40S",
+      "gpu_mem_gb": 44.4,
+      "sm_count": 142,
+      "capability": "8.9"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 10:47:40"
+  },
+  "results": [
+    {
+      "name": "caduceus_bimamba",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "caduceus_bimamba",
+      "fwd_ms": 10.953728199005127,
+      "bwd_ms": 41.91019248962402,
+      "step_ms": 52.86392068862915,
+      "fwd_std_ms": 0.10738949565618182,
+      "bwd_std_ms": 0.41261292647461933,
+      "peak_alloc_gb": 2.373480796813965,
+      "peak_reserved_gb": 2.73046875,
+      "tokens_per_s_fwd": 1495746.4437987495,
+      "tokens_per_s_step": 309927.8257566723,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 7721216
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp1",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp1",
+      "fwd_ms": 20.280320167541504,
+      "bwd_ms": 60.76584053039551,
+      "step_ms": 81.04616069793701,
+      "fwd_std_ms": 0.05792527989422041,
+      "bwd_std_ms": 0.007760414922613896,
+      "peak_alloc_gb": 2.2459020614624023,
+      "peak_reserved_gb": 2.642578125,
+      "tokens_per_s_fwd": 807876.7921140845,
+      "tokens_per_s_step": 202156.39900653614,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 7886464
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp1_ckpt",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp1_ckpt",
+      "fwd_ms": 20.7586088180542,
+      "bwd_ms": 79.53596878051758,
+      "step_ms": 100.29457759857178,
+      "fwd_std_ms": 0.23136529348794682,
+      "bwd_std_ms": 0.13635348430244437,
+      "peak_alloc_gb": 1.059434413909912,
+      "peak_reserved_gb": 1.13671875,
+      "tokens_per_s_fwd": 789262.909841554,
+      "tokens_per_s_step": 163358.78162403582,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 7886464
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp2",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp2",
+      "fwd_ms": 16.667216300964355,
+      "bwd_ms": 39.630767822265625,
+      "step_ms": 56.29798412322998,
+      "fwd_std_ms": 0.41356106197872045,
+      "bwd_std_ms": 0.2634494976231679,
+      "peak_alloc_gb": 1.303879737854004,
+      "peak_reserved_gb": 1.400390625,
+      "tokens_per_s_fwd": 983007.5823190721,
+      "tokens_per_s_step": 291022.8537515173,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 8610177
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp4",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp4",
+      "fwd_ms": 17.823200225830078,
+      "bwd_ms": 41.96928024291992,
+      "step_ms": 59.79248046875,
+      "fwd_std_ms": 0.5278970326190737,
+      "bwd_std_ms": 0.4205082113124681,
+      "peak_alloc_gb": 1.162912368774414,
+      "peak_reserved_gb": 1.220703125,
+      "tokens_per_s_fwd": 919251.3012481153,
+      "tokens_per_s_step": 274014.3889592095,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 9991298
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp8",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp8",
+      "fwd_ms": 19.061280250549316,
+      "bwd_ms": 43.80668830871582,
+      "step_ms": 62.86796855926514,
+      "fwd_std_ms": 0.8971776040278846,
+      "bwd_std_ms": 0.8731936870016693,
+      "peak_alloc_gb": 1.1074247360229492,
+      "peak_reserved_gb": 1.15625,
+      "tokens_per_s_fwd": 859543.5240782339,
+      "tokens_per_s_step": 260609.66141374418,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 11372419
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp8_din64",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp8_din64",
+      "fwd_ms": 19.115071296691895,
+      "bwd_ms": 43.901872634887695,
+      "step_ms": 63.01694393157959,
+      "fwd_std_ms": 1.0208587110948615,
+      "bwd_std_ms": 0.37645160480184847,
+      "peak_alloc_gb": 0.6667265892028809,
+      "peak_reserved_gb": 0.890625,
+      "tokens_per_s_fwd": 857124.713044385,
+      "tokens_per_s_step": 259993.5664571241,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 9453667
+      }
+    },
+    {
+      "name": "striped_gp8_tp8",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "striped_gp8_tp8",
+      "fwd_ms": 80.72293090820312,
+      "bwd_ms": 136.9661407470703,
+      "step_ms": 217.68907165527344,
+      "fwd_std_ms": 6.112639035833679,
+      "bwd_std_ms": 2.8572137594539186,
+      "peak_alloc_gb": 3.3426389694213867,
+      "peak_reserved_gb": 3.384765625,
+      "tokens_per_s_fwd": 202965.87122972074,
+      "tokens_per_s_step": 75263.30961595198,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 80807859
+      }
+    },
+    {
+      "name": "striped_gp8_tp16",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "striped_gp8_tp16",
+      "fwd_ms": 95.02331161499023,
+      "bwd_ms": 165.85247039794922,
+      "step_ms": 260.87578201293945,
+      "fwd_std_ms": 3.301631709339223,
+      "bwd_std_ms": 1.7064928530768668,
+      "peak_alloc_gb": 3.805239677429199,
+      "peak_reserved_gb": 3.865234375,
+      "tokens_per_s_fwd": 172420.8483322883,
+      "tokens_per_s_step": 62803.83665198694,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 102905795
+      }
+    },
+    {
+      "name": "transformer_only_gp16",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "transformer_only_gp16",
+      "fwd_ms": 15.886735916137695,
+      "bwd_ms": 19.511808395385742,
+      "step_ms": 35.39854431152344,
+      "fwd_std_ms": 2.1875954199060534,
+      "bwd_std_ms": 0.23966923416895722,
+      "peak_alloc_gb": 1.2017326354980469,
+      "peak_reserved_gb": 1.23046875,
+      "tokens_per_s_fwd": 1031300.5822270379,
+      "tokens_per_s_step": 462843.891427096,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 18856196
+      }
+    },
+    {
+      "name": "transformer_only_gp32",
+      "seqlen": 16384,
+      "batch_size": 1,
+      "variant": "transformer_only_gp32",
+      "fwd_ms": 16.889856338500977,
+      "bwd_ms": 21.112832069396973,
+      "step_ms": 38.00268840789795,
+      "fwd_std_ms": 1.2700322281904193,
+      "bwd_std_ms": 0.05213396573403548,
+      "peak_alloc_gb": 1.169133186340332,
+      "peak_reserved_gb": 1.19140625,
+      "tokens_per_s_fwd": 970049.6956064772,
+      "tokens_per_s_step": 431127.39351869054,
+      "n_iters": 2,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 20237317
+      }
+    }
+  ]
+}

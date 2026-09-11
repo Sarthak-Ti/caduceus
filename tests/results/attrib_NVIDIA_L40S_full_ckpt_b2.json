@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "mode": "full",
+    "variant": "ckpt",
+    "prod_config": {
+      "d_model": 256,
+      "n_layer": 16,
+      "seqlen": 524288,
+      "batch_size": 1,
+      "d_state": 16,
+      "d_conv": 4,
+      "expand": 2,
+      "d_input1": 6,
+      "d_input2": 2,
+      "d_output1": 5,
+      "d_output2": 1,
+      "encoder_kernel_size": 15
+    },
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "isck001.mskcc.org",
+      "slurm_job_id": "11762367",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA L40S",
+      "gpu_mem_gb": 44.4,
+      "sm_count": 142,
+      "capability": "8.9"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 00:21:56"
+  },
+  "results": [
+    {
+      "name": "joint_train_step",
+      "seqlen": 524288,
+      "batch_size": 2,
+      "variant": "ckpt",
+      "fwd_ms": 1066.96513671875,
+      "bwd_ms": 3716.2373046875,
+      "step_ms": 4783.20244140625,
+      "fwd_std_ms": 17.264707061609354,
+      "bwd_std_ms": 2.3680557194731784,
+      "peak_alloc_gb": 33.19085884094238,
+      "peak_reserved_gb": 34.361328125,
+      "tokens_per_s_fwd": 982765.0069473663,
+      "tokens_per_s_step": 219220.49355948257,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    }
+  ]
+}

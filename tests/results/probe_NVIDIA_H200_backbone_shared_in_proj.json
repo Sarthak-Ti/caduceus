@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "mode": "backbone",
+    "variant": "shared_in_proj",
+    "prod_config": {
+      "d_model": 256,
+      "n_layer": 16,
+      "seqlen": 524288,
+      "batch_size": 1,
+      "d_state": 16,
+      "d_conv": 4,
+      "expand": 2,
+      "d_input1": 6,
+      "d_input2": 2,
+      "d_output1": 5,
+      "d_output2": 1,
+      "encoder_kernel_size": 15
+    },
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "iscp001",
+      "slurm_job_id": "11762560",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA H200",
+      "gpu_mem_gb": 139.8,
+      "sm_count": 132,
+      "capability": "9.0"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 00:23:26"
+  },
+  "results": [
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 131072,
+      "batch_size": 1,
+      "variant": "shared_in_proj",
+      "fwd_ms": 70.0414794921875,
+      "bwd_ms": 289.1860046386719,
+      "step_ms": 359.22748413085935,
+      "fwd_std_ms": 5.69141194780795,
+      "bwd_std_ms": 0.2769773188220679,
+      "peak_alloc_gb": 17.329825401306152,
+      "peak_reserved_gb": 17.42578125,
+      "tokens_per_s_fwd": 1871348.2489275502,
+      "tokens_per_s_step": 364871.85917058925,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    },
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "shared_in_proj",
+      "fwd_ms": 132.99730224609374,
+      "bwd_ms": 564.9675415039062,
+      "step_ms": 697.96484375,
+      "fwd_std_ms": 3.242634140526193,
+      "bwd_std_ms": 0.9142696687890802,
+      "peak_alloc_gb": 34.54857540130615,
+      "peak_reserved_gb": 34.681640625,
+      "tokens_per_s_fwd": 1971047.4992563198,
+      "tokens_per_s_step": 375583.38696769066,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    }
+  ]
+}

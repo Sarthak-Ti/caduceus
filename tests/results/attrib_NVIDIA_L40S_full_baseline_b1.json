@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "mode": "full",
+    "variant": "baseline",
+    "prod_config": {
+      "d_model": 256,
+      "n_layer": 16,
+      "seqlen": 524288,
+      "batch_size": 1,
+      "d_state": 16,
+      "d_conv": 4,
+      "expand": 2,
+      "d_input1": 6,
+      "d_input2": 2,
+      "d_output1": 5,
+      "d_output2": 1,
+      "encoder_kernel_size": 15
+    },
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "isck001.mskcc.org",
+      "slurm_job_id": "11762367",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA L40S",
+      "gpu_mem_gb": 44.4,
+      "sm_count": 142,
+      "capability": "8.9"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 00:24:31"
+  },
+  "results": [
+    {
+      "name": "joint_train_step",
+      "seqlen": 524288,
+      "batch_size": 1,
+      "variant": "baseline",
+      "fwd_ms": NaN,
+      "bwd_ms": NaN,
+      "step_ms": NaN,
+      "fwd_std_ms": 0.0,
+      "bwd_std_ms": 0.0,
+      "peak_alloc_gb": NaN,
+      "peak_reserved_gb": NaN,
+      "tokens_per_s_fwd": NaN,
+      "tokens_per_s_step": NaN,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": true,
+      "error": "CUDA out of memory. Tried to allocate 512.00 MiB. GPU 0 has a total capacty of 44.39 GiB of which 509.25 MiB is free. Including non-PyTorch memory, this process has 43.89 GiB memory in use. Of the allocated memory 42.81 GiB is allocated by PyTorch, and 580.86 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF",
+      "extra": {}
+    }
+  ]
+}

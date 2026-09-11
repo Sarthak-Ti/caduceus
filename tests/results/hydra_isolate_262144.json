@@ -1,0 +1,335 @@
+{
+  "meta": {
+    "probe": "hydra_isolate",
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "iscb015.mskcc.org",
+      "slurm_job_id": "11788708",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "gpu_mem_gb": 79.3,
+      "sm_count": 108,
+      "capability": "8.0"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 14:02:01"
+  },
+  "results": [
+    {
+      "name": "caduceus BiMamba (d_state=16) [reference]",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 19.247104008992512,
+      "bwd_ms": 43.91662851969401,
+      "step_ms": 63.16373252868652,
+      "fwd_std_ms": 0.06388310874751352,
+      "bwd_std_ms": 0.3517737244434091,
+      "peak_alloc_gb": 4.786587715148926,
+      "peak_reserved_gb": 4.83203125,
+      "tokens_per_s_fwd": 13619919.125366742,
+      "tokens_per_s_step": 4150229.7205274296,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 482304
+      }
+    },
+    {
+      "name": "Mamba2 unidirectional (d_state=16, mem_eff)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": NaN,
+      "bwd_ms": NaN,
+      "step_ms": NaN,
+      "fwd_std_ms": 0.0,
+      "bwd_std_ms": 0.0,
+      "peak_alloc_gb": NaN,
+      "peak_reserved_gb": NaN,
+      "tokens_per_s_fwd": NaN,
+      "tokens_per_s_step": NaN,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "causal_conv1d only supports width between 2 and 4",
+      "extra": {
+        "params": 407256
+      }
+    },
+    {
+      "name": "Mamba2 unidirectional (d_state=64, mem_eff)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": NaN,
+      "bwd_ms": NaN,
+      "step_ms": NaN,
+      "fwd_std_ms": 0.0,
+      "bwd_std_ms": 0.0,
+      "peak_alloc_gb": NaN,
+      "peak_reserved_gb": NaN,
+      "tokens_per_s_fwd": NaN,
+      "tokens_per_s_step": NaN,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "causal_conv1d only supports width between 2 and 4",
+      "extra": {
+        "params": 432408
+      }
+    },
+    {
+      "name": "Hydra bidirectional (d_state=16, mem_eff=True)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 39.887872060139976,
+      "bwd_ms": 102.73894500732422,
+      "step_ms": 142.6268170674642,
+      "fwd_std_ms": 0.19600315087426703,
+      "bwd_std_ms": 0.03821911589420252,
+      "peak_alloc_gb": 8.036780834197998,
+      "peak_reserved_gb": 10.11328125,
+      "tokens_per_s_fwd": 6572022.684107057,
+      "tokens_per_s_step": 1837971.3253784718,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 421784
+      }
+    },
+    {
+      "name": "Hydra bidirectional (d_state=64, mem_eff=True)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 44.75699234008789,
+      "bwd_ms": 121.89730072021484,
+      "step_ms": 166.65429306030273,
+      "fwd_std_ms": 0.1507716706830445,
+      "bwd_std_ms": 0.025419779004806707,
+      "peak_alloc_gb": 8.881180763244629,
+      "peak_reserved_gb": 10.9140625,
+      "tokens_per_s_fwd": 5857051.2962106075,
+      "tokens_per_s_step": 1572980.7806699881,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 472088
+      }
+    },
+    {
+      "name": "Hydra bidirectional (d_state=16, mem_eff=False)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 44.328959147135414,
+      "bwd_ms": 78.29981994628906,
+      "step_ms": 122.62877909342447,
+      "fwd_std_ms": 0.013312413169228057,
+      "bwd_std_ms": 0.3231448861901509,
+      "peak_alloc_gb": 5.933733940124512,
+      "peak_reserved_gb": 6.80078125,
+      "tokens_per_s_fwd": 5913606.027380411,
+      "tokens_per_s_step": 2137703.742449284,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 421784
+      }
+    },
+    {
+      "name": "Hydra bidirectional (d_state=64, mem_eff=False)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 49.29194641113281,
+      "bwd_ms": 95.49755859375,
+      "step_ms": 144.7895050048828,
+      "fwd_std_ms": 0.061247286163019485,
+      "bwd_std_ms": 0.15050539600774884,
+      "peak_alloc_gb": 6.684383869171143,
+      "peak_reserved_gb": 7.20703125,
+      "tokens_per_s_fwd": 5318191.288562985,
+      "tokens_per_s_step": 1810517.9653121931,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 472088
+      }
+    },
+    {
+      "name": "Hydra (d_state=64, chunk_size=64)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 46.272169748942055,
+      "bwd_ms": 126.31347147623698,
+      "step_ms": 172.58564122517905,
+      "fwd_std_ms": 0.03489580605993492,
+      "bwd_std_ms": 0.162693992193325,
+      "peak_alloc_gb": 9.475113868713379,
+      "peak_reserved_gb": 10.923828125,
+      "tokens_per_s_fwd": 5665262.757772312,
+      "tokens_per_s_step": 1518921.2621574395,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 472088
+      }
+    },
+    {
+      "name": "Hydra (d_state=64, chunk_size=128)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 44.74948247273763,
+      "bwd_ms": 121.10711415608723,
+      "step_ms": 165.85659662882486,
+      "fwd_std_ms": 0.07980865533979517,
+      "bwd_std_ms": 0.32458481804174,
+      "peak_alloc_gb": 8.794946193695068,
+      "peak_reserved_gb": 10.9140625,
+      "tokens_per_s_fwd": 5858034.227763503,
+      "tokens_per_s_step": 1580546.1183232854,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 472088
+      }
+    },
+    {
+      "name": "Hydra (d_state=64, chunk_size=256)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 44.765525817871094,
+      "bwd_ms": 122.34854380289714,
+      "step_ms": 167.11406962076825,
+      "fwd_std_ms": 0.0926844079487804,
+      "bwd_std_ms": 0.24881843729906405,
+      "peak_alloc_gb": 8.881180763244629,
+      "peak_reserved_gb": 10.55859375,
+      "tokens_per_s_fwd": 5855934.789340686,
+      "tokens_per_s_step": 1568653.0798686375,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 472088
+      }
+    },
+    {
+      "name": "Hydra (d_state=64, chunk_size=512)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 46.341461181640625,
+      "bwd_ms": 129.20183817545572,
+      "step_ms": 175.54329935709634,
+      "fwd_std_ms": 0.2779580235309272,
+      "bwd_std_ms": 0.11672414861864448,
+      "peak_alloc_gb": 10.256150245666504,
+      "peak_reserved_gb": 10.791015625,
+      "tokens_per_s_fwd": 5656791.851523559,
+      "tokens_per_s_step": 1493329.5714508446,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 472088
+      }
+    },
+    {
+      "name": "Hydra (d_state=64, headdim=32)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 47.99761072794596,
+      "bwd_ms": 132.15095011393228,
+      "step_ms": 180.14856084187824,
+      "fwd_std_ms": 0.14602850154090477,
+      "bwd_std_ms": 0.17144886363688738,
+      "peak_alloc_gb": 8.990700721740723,
+      "peak_reserved_gb": 10.931640625,
+      "tokens_per_s_fwd": 5461605.192930368,
+      "tokens_per_s_step": 1455154.561185152,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 480304
+      }
+    },
+    {
+      "name": "Hydra (d_state=64, headdim=64)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 44.87338638305664,
+      "bwd_ms": 122.61785888671875,
+      "step_ms": 167.4912452697754,
+      "fwd_std_ms": 0.1898043194194333,
+      "bwd_std_ms": 0.23010816731639996,
+      "peak_alloc_gb": 8.881180763244629,
+      "peak_reserved_gb": 10.55859375,
+      "tokens_per_s_fwd": 5841859.086859126,
+      "tokens_per_s_step": 1565120.6102012615,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 472088
+      }
+    },
+    {
+      "name": "Hydra (d_state=64, headdim=128)",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "isolate",
+      "fwd_ms": 43.48859786987305,
+      "bwd_ms": 119.90186564127605,
+      "step_ms": 163.3904635111491,
+      "fwd_std_ms": 0.05480221455264215,
+      "bwd_std_ms": 0.3572328244013372,
+      "peak_alloc_gb": 8.826420783996582,
+      "peak_reserved_gb": 10.90625,
+      "tokens_per_s_fwd": 6027878.865729117,
+      "tokens_per_s_step": 1604402.0830023065,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 467980
+      }
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "meta": {
+    "part": "models",
+    "striped_cfg": {
+      "d_model": 256,
+      "n_blocks": 16,
+      "d_state": 64,
+      "d_conv": 5,
+      "expand": 2,
+      "headdim": 64,
+      "ngroups": 1,
+      "chunk_size": 256,
+      "use_mem_eff_path": true,
+      "norm": "rms",
+      "residual_in_fp32": false,
+      "rescale_prenorm_residual": true
+    },
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "iscb012.mskcc.org",
+      "slurm_job_id": "11788691",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "gpu_mem_gb": 79.3,
+      "sm_count": 108,
+      "capability": "8.0"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 13:56:35"
+  },
+  "results": [
+    {
+      "name": "striped_mamba_only_gp2",
+      "seqlen": 524288,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp2",
+      "fwd_ms": 870.0354614257812,
+      "bwd_ms": 2216.5357259114585,
+      "step_ms": 3086.5711873372397,
+      "fwd_std_ms": 0.22311525549299743,
+      "bwd_std_ms": 1.223929460333758,
+      "peak_alloc_gb": 38.03315782546997,
+      "peak_reserved_gb": 39.71875,
+      "tokens_per_s_fwd": 602605.3227081303,
+      "tokens_per_s_step": 169860.9778225459,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 8610177
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp4",
+      "seqlen": 524288,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp4",
+      "fwd_ms": 424.61729939778644,
+      "bwd_ms": 1134.4169108072917,
+      "step_ms": 1559.0342102050781,
+      "fwd_std_ms": 1.0018974284691071,
+      "bwd_std_ms": 2.1774088708952934,
+      "peak_alloc_gb": 32.604074001312256,
+      "peak_reserved_gb": 33.4140625,
+      "tokens_per_s_fwd": 1234730.6639262498,
+      "tokens_per_s_step": 336290.24723648257,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 9991298
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp8",
+      "seqlen": 524288,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp8",
+      "fwd_ms": 243.6676279703776,
+      "bwd_ms": 689.4933268229166,
+      "step_ms": 933.1609547932942,
+      "fwd_std_ms": 0.979494887394542,
+      "bwd_std_ms": 1.4557541286077602,
+      "peak_alloc_gb": 29.91101312637329,
+      "peak_reserved_gb": 30.833984375,
+      "tokens_per_s_fwd": 2151652.2501041344,
+      "tokens_per_s_step": 561840.9099812108,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 11372419
+      }
+    },
+    {
+      "name": "striped_mamba_only_gp8_din64",
+      "seqlen": 524288,
+      "batch_size": 1,
+      "variant": "striped_mamba_only_gp8_din64",
+      "fwd_ms": 177.3899129231771,
+      "bwd_ms": 478.15953572591144,
+      "step_ms": 655.5494486490885,
+      "fwd_std_ms": 0.5206490155006754,
+      "bwd_std_ms": 0.8094734876762418,
+      "peak_alloc_gb": 17.12996816635132,
+      "peak_reserved_gb": 17.86328125,
+      "tokens_per_s_fwd": 2955568.280971282,
+      "tokens_per_s_step": 799768.8062745181,
+      "n_iters": 3,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 9453667
+      }
+    }
+  ]
+}

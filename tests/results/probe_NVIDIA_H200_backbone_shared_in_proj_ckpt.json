@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "mode": "backbone",
+    "variant": "shared_in_proj_ckpt",
+    "prod_config": {
+      "d_model": 256,
+      "n_layer": 16,
+      "seqlen": 524288,
+      "batch_size": 1,
+      "d_state": 16,
+      "d_conv": 4,
+      "expand": 2,
+      "d_input1": 6,
+      "d_input2": 2,
+      "d_output1": 5,
+      "d_output2": 1,
+      "encoder_kernel_size": 15
+    },
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "iscp001",
+      "slurm_job_id": "11762560",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA H200",
+      "gpu_mem_gb": 139.8,
+      "sm_count": 132,
+      "capability": "9.0"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 00:23:49"
+  },
+  "results": [
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 131072,
+      "batch_size": 1,
+      "variant": "shared_in_proj_ckpt",
+      "fwd_ms": 69.37456512451172,
+      "bwd_ms": 355.2800537109375,
+      "step_ms": 424.65461883544924,
+      "fwd_std_ms": 1.9222585671397063,
+      "bwd_std_ms": 0.24502507260906972,
+      "peak_alloc_gb": 5.351065635681152,
+      "peak_reserved_gb": 5.55078125,
+      "tokens_per_s_fwd": 1889337.9693949113,
+      "tokens_per_s_step": 308655.5383747975,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    },
+    {
+      "name": "caduceus_backbone",
+      "seqlen": 262144,
+      "batch_size": 1,
+      "variant": "shared_in_proj_ckpt",
+      "fwd_ms": 134.3068603515625,
+      "bwd_ms": 690.2146118164062,
+      "step_ms": 824.5214721679687,
+      "fwd_std_ms": 2.300865689020059,
+      "bwd_std_ms": 0.8466994035794584,
+      "peak_alloc_gb": 10.609366416931152,
+      "peak_reserved_gb": 10.67578125,
+      "tokens_per_s_fwd": 1951828.8143569895,
+      "tokens_per_s_step": 317934.7158913006,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {}
+    }
+  ]
+}

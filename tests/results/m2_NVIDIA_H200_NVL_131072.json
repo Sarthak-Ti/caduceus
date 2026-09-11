@@ -1,0 +1,115 @@
+{
+  "meta": {
+    "probe": "mamba1_vs_mamba2",
+    "env": {
+      "python": "3.11.7",
+      "torch": "2.1.2",
+      "cuda": "11.8",
+      "hostname": "iscn008.mskcc.org",
+      "slurm_job_id": "11762727",
+      "mamba_ssm": "2.1.0",
+      "causal_conv1d": "1.5.0.post8",
+      "triton": "2.1.0",
+      "gpu": "NVIDIA H200 NVL",
+      "gpu_mem_gb": 139.8,
+      "sm_count": 132,
+      "capability": "9.0"
+    },
+    "extensions": {
+      "selective_scan_cuda": true,
+      "causal_conv1d_cuda": true,
+      "triton_layer_norm": true
+    },
+    "timestamp": "2026-09-07 00:38:54"
+  },
+  "results": [
+    {
+      "name": "Mamba-1 (d_state=16, expand=2)",
+      "seqlen": 131072,
+      "batch_size": 1,
+      "variant": "baseline",
+      "fwd_ms": 2.504563236236572,
+      "bwd_ms": 9.53834228515625,
+      "step_ms": 12.042905521392823,
+      "fwd_std_ms": 0.5533537609674338,
+      "bwd_std_ms": 0.02756761948899211,
+      "peak_alloc_gb": 1.9262704849243164,
+      "peak_reserved_gb": 1.943359375,
+      "tokens_per_s_fwd": 52333276.358776435,
+      "tokens_per_s_step": 10883752.244602917,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 437760
+      }
+    },
+    {
+      "name": "Mamba-2 SSD (d_state=16, headdim=64)",
+      "seqlen": 131072,
+      "batch_size": 1,
+      "variant": "baseline",
+      "fwd_ms": 1.7158016443252564,
+      "bwd_ms": 5.818195152282715,
+      "step_ms": 7.533996796607971,
+      "fwd_std_ms": 0.47734335628292507,
+      "bwd_std_ms": 0.39521191746715245,
+      "peak_alloc_gb": 2.2172141075134277,
+      "peak_reserved_gb": 2.26953125,
+      "tokens_per_s_fwd": 76391114.57521911,
+      "tokens_per_s_step": 17397405.85754065,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 406712
+      }
+    },
+    {
+      "name": "Mamba-2 SSD (d_state=64, headdim=64)",
+      "seqlen": 131072,
+      "batch_size": 1,
+      "variant": "baseline",
+      "fwd_ms": 1.818412756919861,
+      "bwd_ms": 6.367961692810058,
+      "step_ms": 8.18637444972992,
+      "fwd_std_ms": 0.5025060158134841,
+      "bwd_std_ms": 0.27695479237557785,
+      "peak_alloc_gb": 2.4050374031066895,
+      "peak_reserved_gb": 2.62109375,
+      "tokens_per_s_fwd": 72080444.60819654,
+      "tokens_per_s_step": 16010994.953245053,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 431768
+      }
+    },
+    {
+      "name": "Mamba-2 SSD (d_state=128, headdim=64)",
+      "seqlen": 131072,
+      "batch_size": 1,
+      "variant": "baseline",
+      "fwd_ms": 1.9943488359451294,
+      "bwd_ms": 7.136499214172363,
+      "step_ms": 9.130848050117493,
+      "fwd_std_ms": 0.42150765437187737,
+      "bwd_std_ms": 0.31545650749241416,
+      "peak_alloc_gb": 2.6554694175720215,
+      "peak_reserved_gb": 2.83984375,
+      "tokens_per_s_fwd": 65721702.060153626,
+      "tokens_per_s_step": 14354855.023385633,
+      "n_iters": 5,
+      "alloc_retries": 0,
+      "oom": false,
+      "error": "",
+      "extra": {
+        "params": 465176
+      }
+    }
+  ]
+}

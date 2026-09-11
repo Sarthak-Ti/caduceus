@@ -149,3 +149,9 @@ dmypy.json
 
 # nbconvert / local run logs
 *.log
+
+# notebook analysis caches (large; will move to a dedicated ignored cache dir)
+code_test/dsQTL_benchmark8_cache/
+code_test/eQTL_benchmark7_cache/
+code_test/EP_linking10_cache/
+code_test/IGVF_meeting_figures2_cache/

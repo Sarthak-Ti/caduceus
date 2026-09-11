@@ -56,6 +56,7 @@ class CaduceusConfig(PretrainedConfig):
             cnn_embedding: bool = False,  #if you want to use a CNN to embed instead of a linear layer
             cnn_embedding_dim: int = 4,
             skip_embedding: bool = False,
+            gradient_checkpointing: bool = False,  # recompute each block in backward; see CaduceusMixerModel.forward
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -79,3 +80,4 @@ class CaduceusConfig(PretrainedConfig):
         self.cnn_embedding = cnn_embedding
         self.cnn_embedding_dim = cnn_embedding_dim
         self.skip_embedding = skip_embedding
+        self.gradient_checkpointing = gradient_checkpointing
