@@ -52,7 +52,7 @@ JP = f'{DATA}/joint_playground/model_out'
 QTL = f'{DATA}/joint_playground/eQTL/EPCOTv2_LCLs/'
 DSQ = f'{DATA}/joint_playground/dsQTL'
 CBP = f'{DATA}/chrombpnet/dsqtls.yoruba.lcls.benchmarking.all.tsv'
-DSQTL8_CACHE = ROOT / 'dsQTL_benchmark8_cache'
+DSQTL8_CACHE = ROOT.parent / 'benchmarks' / 'dsqtl' / 'dsQTL_benchmark8_cache'
 
 # --- the example locus for figure 1 -----------------------------------------
 # comparing_model5 §9c rank 9: chr8:40,763,508-40,960,116, minus strand, a

@@ -24,7 +24,7 @@ import pandas as pd
 import numcodecs
 import torch
 
-ROOT = Path('/data1/lesliec/sarthak/caduceus/code_test')
+ROOT = Path(__file__).resolve().parent
 CACHE = Path(os.environ.get('EQTL7_CACHE', str(ROOT / 'eQTL_benchmark7_cache')))
 QTL = Path('/data1/lesliec/sarthak/data/joint_playground/eQTL/EPCOTv2_LCLs')
 BORZOI = Path('/data1/lesliec/sarthak/data/borzoi/borzoi.zarr')

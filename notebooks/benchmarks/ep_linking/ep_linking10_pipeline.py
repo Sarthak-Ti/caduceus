@@ -11,7 +11,7 @@ import numcodecs
 
 ROOT = Path(__file__).resolve().parent
 CACHE = Path(os.environ.get('EP10_CACHE', ROOT / 'EP_linking10_cache'))
-DNASE = ROOT / 'dsQTL_benchmark8_cache'
+DNASE = ROOT.parent / 'dsqtl' / 'dsQTL_benchmark8_cache'
 E2G = Path('/data1/lesliec/sarthak/data/joint_playground/e2g')
 BENCHMARK = Path('/data1/deyk/ENCODE/CRISPR/EPCrisprBenchmark_ensemble_data_GRCh38.tsv')
 GENE_BOUNDS = Path('/data1/deyk/extras/CollapsedGeneBounds.hg38.TSS500bp.bed')

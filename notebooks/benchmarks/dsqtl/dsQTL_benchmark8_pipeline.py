@@ -9,7 +9,7 @@ import numcodecs
 import torch
 import fcntl
 
-ROOT = Path('/data1/lesliec/sarthak/caduceus/code_test')
+ROOT = Path(__file__).resolve().parent
 CACHE = ROOT / 'dsQTL_benchmark8_cache'
 SOURCE = Path('/data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/dnase_chunkchrom_reprocessed.zarr')
 TARGETS = Path('/data1/lesliec/sarthak/data/DK_zarr/targets_DNase_borzoi.txt')

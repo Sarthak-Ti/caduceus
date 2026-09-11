@@ -11,10 +11,10 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=96G
 #SBATCH --time=12:00:00
-#SBATCH --output=/data1/lesliec/sarthak/caduceus/code_test/IGVF_meeting_figures2_cache/slurm-%j.log
+#SBATCH --output=/data1/lesliec/sarthak/caduceus/notebooks/figures/IGVF_meeting_figures2_cache/slurm-%j.log
 set -euo pipefail
 cd /data1/lesliec/sarthak/caduceus
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
-export MPLCONFIGDIR=/data1/lesliec/sarthak/caduceus/code_test/IGVF_meeting_figures2_cache/matplotlib
+export MPLCONFIGDIR=/data1/lesliec/sarthak/caduceus/notebooks/figures/IGVF_meeting_figures2_cache/matplotlib
 mkdir -p "$MPLCONFIGDIR"
-.pixi/envs/default/bin/python -u code_test/igvf_meeting_figures2_pipeline.py "${1:-all}"
+/data1/lesliec/sarthak/caduceus/.pixi/envs/default/bin/python -u /data1/lesliec/sarthak/caduceus/notebooks/figures/igvf_meeting_figures2_pipeline.py "${1:-all}"

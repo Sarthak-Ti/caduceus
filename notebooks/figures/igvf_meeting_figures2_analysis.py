@@ -36,8 +36,10 @@ ROOT = Path(__file__).resolve().parent
 # The locus panels draw with evals.plotting_utils, which lives at the repo root.
 # This has to happen at import time, not inside the panel: the panel's own
 # `from evals...` runs before any helper that could set the path up, so a kernel
-# whose cwd is code_test/ would fail on the import rather than on the lookup.
-CADUCEUS_ROOT = str(ROOT.parent)
+# whose cwd is this directory would fail on the import rather than on the lookup.
+# Hardcoded rather than derived from ROOT: this file sits several levels below the
+# repo root, so a relative climb silently breaks whenever the tree is reorganized.
+CADUCEUS_ROOT = '/data1/lesliec/sarthak/caduceus'
 if CADUCEUS_ROOT not in sys.path:
     sys.path.insert(0, CADUCEUS_ROOT)
 

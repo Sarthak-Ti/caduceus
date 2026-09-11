@@ -32,7 +32,7 @@ outputs/
 # slurm log files
 watch_folder/
 
-data
+/data
 
 # Created by https://www.gitignore.io/api/python
 # Edit at https://www.gitignore.io/?templates=python
@@ -150,8 +150,8 @@ dmypy.json
 # nbconvert / local run logs
 *.log
 
-# notebook analysis caches (large; will move to a dedicated ignored cache dir)
-code_test/dsQTL_benchmark8_cache/
-code_test/eQTL_benchmark7_cache/
-code_test/EP_linking10_cache/
-code_test/IGVF_meeting_figures2_cache/
+# notebook analysis caches (large; each sits beside the pipeline that builds it)
+notebooks/benchmarks/dsqtl/dsQTL_benchmark8_cache/
+notebooks/benchmarks/eqtl/eQTL_benchmark7_cache/
+notebooks/benchmarks/ep_linking/EP_linking10_cache/
+notebooks/figures/IGVF_meeting_figures2_cache/
