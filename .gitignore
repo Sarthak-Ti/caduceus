@@ -155,3 +155,8 @@ notebooks/benchmarks/dsqtl/dsQTL_benchmark8_cache/
 notebooks/benchmarks/eqtl/eQTL_benchmark7_cache/
 notebooks/benchmarks/ep_linking/EP_linking10_cache/
 notebooks/figures/IGVF_meeting_figures2_cache/
+
+# agent-generated experiment scripts/results and job bookkeeping (kept locally, not versioned)
+/tests/
+/job_submissions/cd4_nk_wide256_20261007/
+/claude_summaries/
