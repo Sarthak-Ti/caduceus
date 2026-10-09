@@ -5,13 +5,26 @@ Supports three modes:
              (at further transformer-pooled resolution) with UNET skip connections.
 - 'mamba_only': Only HydraBlocks at global-pooled resolution.
 - 'transformer_only': Only TransformerBlocks at global-pooled resolution.
+
+return_pooled_resolution controls only the global output resolution:
+- False (default), or integer 1: original full-resolution output.
+- True: output at global_pooling resolution, without global upsampling/skips.
+- Integer r: r must be a positive power of 2 no greater than global_pooling;
+             retain only the upsampling stages and skips needed to reach r.
+
+Output shape is (B, L // output_resolution, d_output). Internal transformer
+down/up-sampling and its skips are unchanged. Default/1 strictly loads legacy
+checkpoints; pooled modes require an explicit transfer policy for omitted
+upsampler weights and any change in final normalization width.
 """
 
 import math
 import warnings
+from numbers import Integral
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from src.models.nn.blocks import HydraBlock, TransformerBlock, _build_norm
 from src.models.nn.sampling import DownsampleStack, UpsampleStack, ConvBlock
@@ -72,6 +85,8 @@ class StripedMambaBackbone(nn.Module):
         sampling_use_weight_std=True,
         sampling_checkpoint=False,
         monitor_a_log=False,
+        *,
+        return_pooled_resolution=False,
     ):
         super().__init__()
         self.monitor_a_log = monitor_a_log
@@ -82,6 +97,8 @@ class StripedMambaBackbone(nn.Module):
             f"global_pooling must be a power of 2, got {global_pooling}"
         assert transformer_pooling >= 1 and (transformer_pooling & (transformer_pooling - 1)) == 0, \
             f"transformer_pooling must be a power of 2, got {transformer_pooling}"
+
+        resolution = _resolve_output_resolution(return_pooled_resolution, global_pooling)
 
         if d_in is None:
             d_in = d_model
@@ -230,6 +247,32 @@ class StripedMambaBackbone(nn.Module):
                     with torch.no_grad():
                         p /= math.sqrt(n_residuals)
 
+        self.return_pooled_resolution = return_pooled_resolution
+        self.output_resolution = resolution
+        self.d_output = self.final_norm.weight.numel()
+
+        if resolution == 1:
+            # Preserve modules, initialization order/RNG, keys, and forward
+            # exactly for all existing configurations/checkpoints.
+            return
+
+        upsample_factor = int(self.global_pooling) // resolution
+        steps = upsample_factor.bit_length() - 1
+        if steps == 0:
+            self.d_output = self.global_down.stage_channels[-1]
+            self.global_up = None
+        else:
+            # Original order: coarsest -> finest. Slice only the module list,
+            # preserving retained parameter names and reverse skip indexing.
+            self.global_up.layers = self.global_up.layers[:steps]
+            self.global_up.n_layers = steps
+            self.global_up.stage_channels = self.global_up.stage_channels[-steps:]
+            self.d_output = self.global_up.stage_channels[0]
+
+        self.global_down = _SelectiveSkipDownsampleStack(self.global_down, steps)
+        if self.final_norm.weight.numel() != self.d_output:
+            self.final_norm = _build_norm(self.d_output, norm)
+
     @property
     def metrics(self):
         if not self.monitor_a_log or not self.hydra_blocks:
@@ -243,7 +286,7 @@ class StripedMambaBackbone(nn.Module):
             x: (B, L, d_model) from encoder
 
         Returns:
-            (B, L, d_model) final embedding
+            (B, L // output_resolution, d_output) final embedding
         """
         #first conv block
         x = self.conv_block(x) + x
@@ -296,3 +339,48 @@ class StripedMambaBackbone(nn.Module):
 
         x = self.final_norm(x)
         return x
+
+
+class _SelectiveSkipDownsampleStack(nn.Module):
+    """Reuse existing downsampling weights, retaining only the coarsest skips.
+
+    Dropping an unnecessary skip reference does not remove tensors that autograd
+    independently needs to differentiate the downsampling computations.
+    """
+
+    def __init__(self, source, skip_count):
+        super().__init__()
+        self.layers = source.layers
+        self.n_layers = source.n_layers
+        self.stage_channels = source.stage_channels
+        self.start_channels = source.start_channels
+        self.final_channels = source.final_channels
+        self.skip_count = skip_count
+
+    def forward(self, x):
+        first_skip_level = self.n_layers - self.skip_count
+        intermediates = [x] if first_skip_level == 0 else []
+        x = F.max_pool1d(x.transpose(1, 2), kernel_size=2, stride=2).transpose(1, 2)
+        for level, layer in enumerate(self.layers, start=1):
+            x, skip = layer(x)
+            if level >= first_skip_level:
+                intermediates.append(skip)
+            # In inference, allow an unused pre-pool activation to be released
+            # immediately rather than holding it while the next layer executes.
+            del skip
+        return x, intermediates
+
+
+def _resolve_output_resolution(value, global_pooling):
+    # bool is an int subclass: distinguish False from the invalid integer 0,
+    # and True from the valid integer 1 before checking integer arguments.
+    if isinstance(value, bool):
+        return global_pooling if value else 1
+    if not isinstance(value, Integral):
+        raise TypeError('return_pooled_resolution must be a bool or an integer')
+    resolution = int(value)
+    if resolution < 1 or resolution & (resolution - 1):
+        raise ValueError('return_pooled_resolution must be a positive power of 2')
+    if resolution > global_pooling:
+        raise ValueError('return_pooled_resolution must be <= global_pooling')
+    return resolution

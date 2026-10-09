@@ -1,0 +1,184 @@
+# Full snapshot of run 221: CAGE run 103 initialization, fresh RNA decoder.
+# Optimization/data unchanged; training is capped at 40 epochs.
+train:
+  seed: 2222
+  interval: epoch
+  monitor: val/loss
+  mode: min
+  ema: 0.0
+  test: true
+  debug: false
+  ignore_warnings: false
+  optimizer_param_grouping:
+    bias_weight_decay: false
+    normalization_weight_decay: false
+  state:
+    mode: null
+    n_context: 0
+    n_context_eval: ${.n_context}
+  ckpt: checkpoints/last.ckpt
+  disable_dataset: false
+  validate_at_start: false
+  pretrained_model_path: /data1/lesliec/sarthak/caduceus/outputs/2025-08-15/12-23-01-318424/checkpoints/34-val_loss=-0.18504.ckpt
+  pretrained_model_strict_load: false
+  pretrained_model_state_hook:
+    _name_: load_full_model
+    freeze_backbone: false
+    load_encoder: true
+    load_decoder: false
+    freeze_encoder: false
+  post_init_hook:
+    _name_: null
+  layer_decay:
+    _name_: null
+    decay: 0.7
+  gpu_mem: ${eval:"round(float(__import__('subprocess').check_output('nvidia-smi -i
+    0 --query-gpu=memory.total --format=csv,noheader,nounits', shell=True).strip().decode())
+    / 1000)"}
+  global_batch_size: ${dataset.batch_size}
+  remove_test_loader_in_eval: true
+wandb:
+  project: dna
+  group: cage_to_3prime
+  job_type: training
+  mode: online
+  name: k562_tss_sc_rna_poisson_from_cage103
+  save_dir: .
+  id: ${.name}
+trainer:
+  _target_: pytorch_lightning.Trainer
+  devices: 2
+  accelerator: gpu
+  accumulate_grad_batches: 16
+  max_epochs: 40
+  gradient_clip_val: 1.0
+  log_every_n_steps: 10
+  limit_train_batches: 1.0
+  limit_val_batches: 1.0
+  num_sanity_val_steps: 0
+  num_nodes: 1
+  precision: bf16
+  strategy: auto
+loader:
+  num_workers: 7
+  pin_memory: true
+  drop_last: true
+dataset:
+  _name_: TSSLoader
+  dataset_name: GeneralLoader
+  batch_size_eval: ${eval:${.batch_size} * 2}
+  shuffle: true
+  pin_memory: true
+  batch_size: 1
+  num_workers: 7
+  data_path: /data1/lesliec/sarthak/data/DK_zarr/zarr_arrays/cell_type_arrays/K562_DNase.npz
+  length: 524288
+  shift_sequences: 2000
+  load_in: false
+  rc_aug: false
+  mlm: 0
+  acc_mlm: 0
+  acc_type: continuous
+  acc_mask_size: 500
+  weight_peaks: false
+  additional_data: null
+  rc_strand: true
+  tss_json_file: /data1/lesliec/sarthak/data/DE_danwei/k562_sc_rna_info_cellranger.json
+  append_gene_mask: true
+  upstream: 163840
+  expression_data_path: /data1/lesliec/sarthak/data/DE_danwei/K562_gex/K562_rnaseq_stranded_fixed.npz
+  expression_stranded: true
+optimizer:
+  _name_: adamw
+  lr: 0.0001
+  weight_decay: 0.1
+  betas:
+  - 0.9
+  - 0.95
+scheduler:
+  _name_: constant
+callbacks:
+  learning_rate_monitor:
+    logging_interval: ${train.interval}
+  timer:
+    step: true
+    inter_step: false
+    epoch: true
+    val: true
+  params:
+    total: true
+    trainable: true
+    fixed: true
+  model_checkpoint:
+    monitor: ${train.monitor}
+    mode: ${train.mode}
+    save_top_k: -1
+    save_last: true
+    dirpath: checkpoints/
+    filename: '{epoch:02d}-val_loss={val/loss:.5f}'
+    auto_insert_metric_name: false
+    verbose: true
+    every_n_epochs: 1
+encoder:
+  _name_: jointcnn
+  joint: false
+  combine: true
+  acc_type: ${dataset.acc_type}
+decoder:
+  _name_: tss_profile
+  n_tracks: 1
+  profile_region: all
+  count_region: all
+  hidden_dim: 128
+  profile_softplus: true
+model:
+  _name_: dna_embedding_caduceus
+  config:
+    _target_: caduceus.configuration_caduceus.CaduceusConfig
+    d_model: 256
+    n_layer: 16
+    vocab_size: 1
+    ssm_cfg:
+      d_state: 16
+      d_conv: 4
+      expand: 2
+      dt_rank: auto
+      dt_min: 0.001
+      dt_max: 0.1
+      dt_init: random
+      dt_scale: 1.0
+      dt_init_floor: 0.0001
+      conv_bias: true
+      bias: false
+      use_fast_path: true
+    rms_norm: true
+    fused_add_norm: true
+    residual_in_fp32: false
+    pad_vocab_size_multiple: 1
+    norm_epsilon: 1.0e-05
+    initializer_cfg:
+      initializer_range: 0.02
+      rescale_prenorm_residual: true
+      n_residuals_per_layer: 1
+    bidirectional: true
+    bidirectional_strategy: add
+    bidirectional_weight_tie: true
+    rcps: false
+    complement_map: null
+    skip_embedding: true
+task:
+  _name_: joint_tss
+  loss:
+    _name_: tss_profile_poisson_loss
+    count_weight: 1.0
+    poisson_weight: 1.0
+    region: all
+  metrics:
+  - tss_profile_count_mse
+  - tss_profile_poisson
+  - tss_profile_multinomial_softplus
+hydra:
+  run:
+    dir: /data1/lesliec/sarthak/caduceus/outputs/cage103_to_3prime_20260922/training
+  job:
+    chdir: true

@@ -160,3 +160,8 @@ notebooks/figures/IGVF_meeting_figures2_cache/
 /tests/
 /job_submissions/cd4_nk_wide256_20261007/
 /claude_summaries/
+
+# saved notebook outputs (regenerable)
+notebooks/benchmarks/**/*_cutoff_sweep/
+notebooks/benchmarks/eqtl/gtex_enformer_audit_20260925/
+notebooks/benchmarks/eqtl/nb8_figs/

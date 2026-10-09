@@ -1,0 +1,35 @@
+[
+ {
+  "target": "enformer_cage",
+  "n_regions": 1837,
+  "arms": [
+   "enformer_pre",
+   "enformer_n1_1536",
+   "mamba_1ct",
+   "alphagenome",
+   "epibert"
+  ]
+ },
+ {
+  "target": "ag_cage",
+  "n_regions": 1687,
+  "arms": [
+   "enformer_pre",
+   "enformer_n1_1536",
+   "mamba_ag_cage",
+   "alphagenome",
+   "epibert"
+  ]
+ },
+ {
+  "target": "rampage_observed",
+  "n_regions": 868,
+  "arms": [
+   "enformer_pre",
+   "enformer_n1_1536",
+   "mamba_rampage",
+   "alphagenome",
+   "epibert"
+  ]
+ }
+]

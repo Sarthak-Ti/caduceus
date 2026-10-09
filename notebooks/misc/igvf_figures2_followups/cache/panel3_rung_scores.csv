@@ -1,0 +1,169 @@
+target,arm,label,rung_i,rung,auroc,lo,hi,by_construction
+enformer_cage,mamba_nopre,cis-Mamba (no pretraining),0,R0 · all bins,0.8994806632221521,0.8938001001677931,0.9062208793417372,False
+enformer_cage,mamba_nopre,cis-Mamba (no pretraining),1,R1 · promoters,0.8943835608327866,0.8849147222963312,0.901654263644141,False
+enformer_cage,mamba_nopre,cis-Mamba (no pretraining),2,R2 · + disagreement,0.49635809591432206,0.45492656866541764,0.5446259811045856,False
+enformer_cage,mamba_nopre,cis-Mamba (no pretraining),3,R3 · + accessibility,0.7288567202028741,0.680535300545924,0.7705529204493075,False
+enformer_cage,null_avg,[null] Enformer CAGE average,0,R0 · all bins,0.9327601211133755,0.9286639076355044,0.9368418357058912,False
+enformer_cage,null_avg,[null] Enformer CAGE average,1,R1 · promoters,0.9090950769013969,0.9027864062176569,0.9145344708652396,False
+enformer_cage,null_avg,[null] Enformer CAGE average,2,R2 · + disagreement,0.0,0.0,0.0,False
+enformer_cage,null_avg,[null] Enformer CAGE average,3,R3 · + accessibility,0.0,0.0,0.0,False
+enformer_cage,mamba_1ct,cis-Mamba (Enformer CAGE),0,R0 · all bins,0.9036168966496512,0.8977019558584831,0.9094695748894168,False
+enformer_cage,mamba_1ct,cis-Mamba (Enformer CAGE),1,R1 · promoters,0.8980057973685855,0.8887770930337185,0.9070364871903589,False
+enformer_cage,mamba_1ct,cis-Mamba (Enformer CAGE),2,R2 · + disagreement,0.5408449454158161,0.4896833158845341,0.5851075181298794,False
+enformer_cage,mamba_1ct,cis-Mamba (Enformer CAGE),3,R3 · + accessibility,0.7820002113271344,0.7372335994568616,0.8163832459985896,False
+enformer_cage,acc_atac,GM12878 ATAC (measured),0,R0 · all bins,0.7523973849941512,0.7417631216538514,0.7629749300706563,False
+enformer_cage,acc_atac,GM12878 ATAC (measured),1,R1 · promoters,0.7855106794622815,0.7723644421023261,0.7976659690441057,False
+enformer_cage,acc_atac,GM12878 ATAC (measured),2,R2 · + disagreement,0.5556847430549392,0.5132683471192633,0.5997633914591932,False
+enformer_cage,acc_atac,GM12878 ATAC (measured),3,R3 · + accessibility,1.0,1.0,1.0,True
+enformer_cage,mamba_rampage,cis-Mamba (RAMPAGE),0,R0 · all bins,0.7873344902605632,0.7730558684331408,0.8009371757440117,False
+enformer_cage,mamba_rampage,cis-Mamba (RAMPAGE),1,R1 · promoters,0.8334331043947104,0.8177560963025821,0.8491207965618451,False
+enformer_cage,mamba_rampage,cis-Mamba (RAMPAGE),2,R2 · + disagreement,0.6147909825153102,0.564910470921117,0.6633398053744413,False
+enformer_cage,mamba_rampage,cis-Mamba (RAMPAGE),3,R3 · + accessibility,0.854635989010989,0.813630978419438,0.8849575470389631,False
+enformer_cage,mamba_8ct,cis-Mamba (8 cell types),0,R0 · all bins,0.9022458206224135,0.896906289091934,0.9079818768809018,False
+enformer_cage,mamba_8ct,cis-Mamba (8 cell types),1,R1 · promoters,0.9029292355388429,0.8962326528774929,0.9086275593230344,False
+enformer_cage,mamba_8ct,cis-Mamba (8 cell types),2,R2 · + disagreement,0.3386423478595308,0.2991507805038019,0.37628505792837247,False
+enformer_cage,mamba_8ct,cis-Mamba (8 cell types),3,R3 · + accessibility,0.5685016906170752,0.512849792871301,0.6136279648002884,False
+enformer_cage,mamba_ag_cage,cis-Mamba (AG CAGE),0,R0 · all bins,0.8611176091552488,0.8528782392864197,0.8698531915431552,False
+enformer_cage,mamba_ag_cage,cis-Mamba (AG CAGE),1,R1 · promoters,0.8760670717339688,0.8657332755929275,0.8854214808719005,False
+enformer_cage,mamba_ag_cage,cis-Mamba (AG CAGE),2,R2 · + disagreement,0.5256235022632466,0.4813686712969931,0.5650794059156435,False
+enformer_cage,mamba_ag_cage,cis-Mamba (AG CAGE),3,R3 · + accessibility,0.7741863905325443,0.7289329818207911,0.8117322139915757,False
+enformer_cage,enformer_pre,Enformer (pretrained),0,R0 · all bins,0.9054854089399089,0.8999199086819785,0.9105685400006635,False
+enformer_cage,enformer_pre,Enformer (pretrained),1,R1 · promoters,0.905880400366184,0.8977432270701136,0.9115588977778174,False
+enformer_cage,enformer_pre,Enformer (pretrained),2,R2 · + disagreement,0.35654862282181,0.30679335402768687,0.40805051062364667,False
+enformer_cage,enformer_pre,Enformer (pretrained),3,R3 · + accessibility,0.48593617920541,0.4196442026449286,0.5364683457281811,False
+enformer_cage,enformer_n1,"Enformer (retrained, 1 CT, 768ch)",0,R0 · all bins,0.8786517771886715,0.8723455280848066,0.8840311300118117,False
+enformer_cage,enformer_n1,"Enformer (retrained, 1 CT, 768ch)",1,R1 · promoters,0.8580114659628688,0.8480885787067831,0.8659406438001469,False
+enformer_cage,enformer_n1,"Enformer (retrained, 1 CT, 768ch)",2,R2 · + disagreement,0.23779326055442146,0.20121556638239,0.28134585827633096,False
+enformer_cage,enformer_n1,"Enformer (retrained, 1 CT, 768ch)",3,R3 · + accessibility,0.35716398985629755,0.29417718103833207,0.42129372492941275,False
+enformer_cage,enformer_n1_1536,"Enformer (retrained, 1 CT, 1536ch)",0,R0 · all bins,0.8915423613065603,0.8851559020801253,0.8973961342762707,False
+enformer_cage,enformer_n1_1536,"Enformer (retrained, 1 CT, 1536ch)",1,R1 · promoters,0.8785265792793572,0.8694797485288503,0.8865786069055251,False
+enformer_cage,enformer_n1_1536,"Enformer (retrained, 1 CT, 1536ch)",2,R2 · + disagreement,0.2959823673855803,0.25313759004692954,0.3355464935002922,False
+enformer_cage,enformer_n1_1536,"Enformer (retrained, 1 CT, 1536ch)",3,R3 · + accessibility,0.42570794590025357,0.3656212695646069,0.47600079684155705,False
+enformer_cage,enformer_n16,"Enformer (retrained, 16 CTs)",0,R0 · all bins,0.8924935948086807,0.8864074525700735,0.8980063712470389,False
+enformer_cage,enformer_n16,"Enformer (retrained, 16 CTs)",1,R1 · promoters,0.8782658559399966,0.8699340956523041,0.8852551214234211,False
+enformer_cage,enformer_n16,"Enformer (retrained, 16 CTs)",2,R2 · + disagreement,0.20976746250110945,0.1752954113044756,0.243973207054873,False
+enformer_cage,enformer_n16,"Enformer (retrained, 16 CTs)",3,R3 · + accessibility,0.31782544378698224,0.25968322153647916,0.363227170423853,False
+enformer_cage,enformer_n42,"Enformer (retrained, 42 CTs)",0,R0 · all bins,0.8891442069049651,0.8830339472059939,0.8945864761928044,False
+enformer_cage,enformer_n42,"Enformer (retrained, 42 CTs)",1,R1 · promoters,0.8687594587674414,0.8590333252140034,0.876014262894239,False
+enformer_cage,enformer_n42,"Enformer (retrained, 42 CTs)",2,R2 · + disagreement,0.16634123250791397,0.1371884820172269,0.19780362906080065,False
+enformer_cage,enformer_n42,"Enformer (retrained, 42 CTs)",3,R3 · + accessibility,0.26564349112426033,0.2173759362941336,0.3027570397144149,False
+enformer_cage,alphagenome,AlphaGenome,0,R0 · all bins,0.8678659975119324,0.8608338352944893,0.8751716614280075,False
+enformer_cage,alphagenome,AlphaGenome,1,R1 · promoters,0.9182279872400252,0.9123071236372955,0.9231684651767689,False
+enformer_cage,alphagenome,AlphaGenome,2,R2 · + disagreement,0.2218381112984823,0.18549124758487984,0.26101611165566413,False
+enformer_cage,alphagenome,AlphaGenome,3,R3 · + accessibility,0.40973689771766697,0.3556114485720888,0.46126889043819297,False
+enformer_cage,epibert,EpiBERT (RAMPAGE),0,R0 · all bins,0.8180273849507219,0.8079562389699088,0.8293936866217756,False
+enformer_cage,epibert,EpiBERT (RAMPAGE),1,R1 · promoters,0.8764356957925217,0.8654834596232478,0.8872743804980081,False
+enformer_cage,epibert,EpiBERT (RAMPAGE),2,R2 · + disagreement,0.5932154374130942,0.5473377413165477,0.639502995874315,False
+enformer_cage,epibert,EpiBERT (RAMPAGE),3,R3 · + accessibility,0.8916605029585799,0.8675469736291902,0.9124003539762549,False
+ag_cage,null_avg,[null] Enformer CAGE average,0,R0 · all bins,0.848758062739802,0.843419536168497,0.8551933316925142,False
+ag_cage,null_avg,[null] Enformer CAGE average,1,R1 · promoters,0.8432646342440815,0.8353074055431274,0.8494181370466745,False
+ag_cage,null_avg,[null] Enformer CAGE average,2,R2 · + disagreement,0.0,0.0,0.0,False
+ag_cage,null_avg,[null] Enformer CAGE average,3,R3 · + accessibility,0.0,0.0,0.0,False
+ag_cage,acc_atac,GM12878 ATAC (measured),0,R0 · all bins,0.7601956293785758,0.7503012150183211,0.7719515515240436,False
+ag_cage,acc_atac,GM12878 ATAC (measured),1,R1 · promoters,0.7584747762566837,0.744713017173746,0.7737452986236709,False
+ag_cage,acc_atac,GM12878 ATAC (measured),2,R2 · + disagreement,0.4968875059892959,0.46382096177322807,0.5334639123573366,False
+ag_cage,acc_atac,GM12878 ATAC (measured),3,R3 · + accessibility,1.0,1.0,1.0,True
+ag_cage,mamba_1ct,cis-Mamba (Enformer CAGE),0,R0 · all bins,0.8499868487221425,0.840995177845987,0.8589571326846207,False
+ag_cage,mamba_1ct,cis-Mamba (Enformer CAGE),1,R1 · promoters,0.8539984604169927,0.8428248743958366,0.8634851451103589,False
+ag_cage,mamba_1ct,cis-Mamba (Enformer CAGE),2,R2 · + disagreement,0.43842790439628865,0.4069326918858612,0.47499699000543005,False
+ag_cage,mamba_1ct,cis-Mamba (Enformer CAGE),3,R3 · + accessibility,0.703467377854501,0.6725448892697325,0.7433357478042518,False
+ag_cage,mamba_nopre,cis-Mamba (no pretraining),0,R0 · all bins,0.8410949159865504,0.83189535882329,0.8496541011151933,False
+ag_cage,mamba_nopre,cis-Mamba (no pretraining),1,R1 · promoters,0.8476012304451204,0.8369735041940368,0.8560843687508337,False
+ag_cage,mamba_nopre,cis-Mamba (no pretraining),2,R2 · + disagreement,0.39932648306605395,0.36679917850009963,0.4370873776874803,False
+ag_cage,mamba_nopre,cis-Mamba (no pretraining),3,R3 · + accessibility,0.6545805194323534,0.622231486706155,0.6867708703509658,False
+ag_cage,mamba_rampage,cis-Mamba (RAMPAGE),0,R0 · all bins,0.8109920897583073,0.7971782978053586,0.8236869977053769,False
+ag_cage,mamba_rampage,cis-Mamba (RAMPAGE),1,R1 · promoters,0.8065630652738923,0.788198402245841,0.8208020217580254,False
+ag_cage,mamba_rampage,cis-Mamba (RAMPAGE),2,R2 · + disagreement,0.5838755545554536,0.54113814171991,0.6248188058650161,False
+ag_cage,mamba_rampage,cis-Mamba (RAMPAGE),3,R3 · + accessibility,0.8495058885408624,0.8188039912934256,0.8808284942733183,False
+ag_cage,mamba_8ct,cis-Mamba (8 cell types),0,R0 · all bins,0.8525375204507573,0.8458063465085224,0.8600991271942057,False
+ag_cage,mamba_8ct,cis-Mamba (8 cell types),1,R1 · promoters,0.8551004492040654,0.8459086093554653,0.8627652154826224,False
+ag_cage,mamba_8ct,cis-Mamba (8 cell types),2,R2 · + disagreement,0.2718288739347783,0.2461845384070797,0.3031982342605068,False
+ag_cage,mamba_8ct,cis-Mamba (8 cell types),3,R3 · + accessibility,0.5155701584325996,0.4826843967665122,0.5531388878203249,False
+ag_cage,mamba_ag_cage,cis-Mamba (AG CAGE),0,R0 · all bins,0.8593132611844371,0.8512026535401012,0.8675646530645205,False
+ag_cage,mamba_ag_cage,cis-Mamba (AG CAGE),1,R1 · promoters,0.8502159446452356,0.8405592227535408,0.8592564571884354,False
+ag_cage,mamba_ag_cage,cis-Mamba (AG CAGE),2,R2 · + disagreement,0.48617719004545074,0.4542851725391767,0.5233469842738284,False
+ag_cage,mamba_ag_cage,cis-Mamba (AG CAGE),3,R3 · + accessibility,0.7594599333092824,0.7271803616710716,0.7965765113660888,False
+ag_cage,enformer_pre,Enformer (pretrained),0,R0 · all bins,0.8394966234207154,0.830916474210054,0.8462851992874839,False
+ag_cage,enformer_pre,Enformer (pretrained),1,R1 · promoters,0.8552946160392949,0.8464866075408641,0.8629879442279855,False
+ag_cage,enformer_pre,Enformer (pretrained),2,R2 · + disagreement,0.2946725819248385,0.2608195723144619,0.3338805331761955,False
+ag_cage,enformer_pre,Enformer (pretrained),3,R3 · + accessibility,0.44305158921485,0.39099586879491677,0.4860869049673408,False
+ag_cage,epibert,EpiBERT (RAMPAGE),0,R0 · all bins,0.8480361554239978,0.8377403733834997,0.8578604854639268,False
+ag_cage,epibert,EpiBERT (RAMPAGE),1,R1 · promoters,0.8501379632774723,0.8386372116738761,0.8608192345127068,False
+ag_cage,epibert,EpiBERT (RAMPAGE),2,R2 · + disagreement,0.5547674795297021,0.5219685565418006,0.5906567687357384,False
+ag_cage,epibert,EpiBERT (RAMPAGE),3,R3 · + accessibility,0.8840768325617935,0.8645854272902324,0.9074520428283811,False
+ag_cage,alphagenome,AlphaGenome,0,R0 · all bins,0.8836187984221822,0.8774719489559524,0.890692238396497,False
+ag_cage,alphagenome,AlphaGenome,1,R1 · promoters,0.894021455695961,0.8883647197173359,0.8995078074404084,False
+ag_cage,alphagenome,AlphaGenome,2,R2 · + disagreement,0.2078889938564858,0.1838827855915909,0.23604520884108648,False
+ag_cage,alphagenome,AlphaGenome,3,R3 · + accessibility,0.40519162623527866,0.36301047141440485,0.4488235075382768,False
+borzoi_cage,borzoi_pre,Borzoi (pretrained),0,R0 · all bins,0.8920122109683218,0.8893414736516934,0.8942989353037127,False
+borzoi_cage,borzoi_pre,Borzoi (pretrained),1,R1 · promoters,0.8892747015471296,0.8860596469530538,0.8922164867995984,False
+borzoi_cage,borzoi_pre,Borzoi (pretrained),2,R2 · + disagreement,0.09209963077863596,0.08446430017204769,0.09870105154901777,False
+borzoi_cage,borzoi_pre,Borzoi (pretrained),3,R3 · + accessibility,0.17683077225028013,0.1642682180820602,0.18937536631235438,False
+borzoi_cage,borzoi_lora,Borzoi (LoRA),0,R0 · all bins,0.8937787810767736,0.8909321652004051,0.8962303411496221,False
+borzoi_cage,borzoi_lora,Borzoi (LoRA),1,R1 · promoters,0.895837414710441,0.8919781200391185,0.8991230917421629,False
+borzoi_cage,borzoi_lora,Borzoi (LoRA),2,R2 · + disagreement,0.23116857103806926,0.21949529664715006,0.2429302622519065,False
+borzoi_cage,borzoi_lora,Borzoi (LoRA),3,R3 · + accessibility,0.39498408491033354,0.3724607187890124,0.4110789699358373,False
+borzoi_cage,borzoi_trunk,Borzoi (full FT),0,R0 · all bins,0.8922689535312441,0.8894610309946874,0.894826860669386,False
+borzoi_cage,borzoi_trunk,Borzoi (full FT),1,R1 · promoters,0.8973478434421224,0.893787694648419,0.9002210540697351,False
+borzoi_cage,borzoi_trunk,Borzoi (full FT),2,R2 · + disagreement,0.3001503407494048,0.28729795307512823,0.3115859587745221,False
+borzoi_cage,borzoi_trunk,Borzoi (full FT),3,R3 · + accessibility,0.46160526030785093,0.439937671093689,0.4796326935459947,False
+borzoi_cage,borzoi_scratch,Borzoi (from scratch),0,R0 · all bins,0.8776334905521646,0.8748302083093698,0.8806334946508534,False
+borzoi_cage,borzoi_scratch,Borzoi (from scratch),1,R1 · promoters,0.8637679218618505,0.859577540911338,0.8684094311539252,False
+borzoi_cage,borzoi_scratch,Borzoi (from scratch),2,R2 · + disagreement,0.23840374517485097,0.2289237952420817,0.2483197239122284,False
+borzoi_cage,borzoi_scratch,Borzoi (from scratch),3,R3 · + accessibility,0.43602488961912544,0.4163317211212402,0.45538043049473637,False
+borzoi_cage,mamba_1ct_borzoi,cis-Mamba (1 cell type),0,R0 · all bins,0.8904495961251327,0.887793383765776,0.8929874473911311,False
+borzoi_cage,mamba_1ct_borzoi,cis-Mamba (1 cell type),1,R1 · promoters,0.8868864758816772,0.8830715874457845,0.8903675708976253,False
+borzoi_cage,mamba_1ct_borzoi,cis-Mamba (1 cell type),2,R2 · + disagreement,0.354356139851778,0.3398781748471135,0.3685313189232246,False
+borzoi_cage,mamba_1ct_borzoi,cis-Mamba (1 cell type),3,R3 · + accessibility,0.6262460546434453,0.6074875916823809,0.639369289327712,False
+borzoi_cage,alphagenome,AlphaGenome,0,R0 · all bins,0.8612289400615358,0.8572419280176391,0.8645437191266409,False
+borzoi_cage,alphagenome,AlphaGenome,1,R1 · promoters,0.9081718776964168,0.9056038384713335,0.9105855839131773,False
+borzoi_cage,alphagenome,AlphaGenome,2,R2 · + disagreement,0.17866460788117297,0.1641358528377515,0.19172353717673882,False
+borzoi_cage,alphagenome,AlphaGenome,3,R3 · + accessibility,0.3482848894728953,0.32477249708463574,0.36775127681488057,False
+borzoi_cage,null_avg,[null] Enformer CAGE average,0,R0 · all bins,0.9097687576324732,0.907823020341949,0.9119452021353648,False
+borzoi_cage,null_avg,[null] Enformer CAGE average,1,R1 · promoters,0.9003098373646763,0.8975364364314848,0.9027482302071352,False
+borzoi_cage,null_avg,[null] Enformer CAGE average,2,R2 · + disagreement,0.0,0.0,0.0,False
+borzoi_cage,null_avg,[null] Enformer CAGE average,3,R3 · + accessibility,0.0,0.0,0.0,False
+borzoi_cage,acc_dnase,GM12878 DNase (measured),0,R0 · all bins,0.6731440837683563,0.668240926083939,0.6776211778692078,False
+borzoi_cage,acc_dnase,GM12878 DNase (measured),1,R1 · promoters,0.735718747666113,0.7280258329446813,0.7422629656680929,False
+borzoi_cage,acc_dnase,GM12878 DNase (measured),2,R2 · + disagreement,0.38860610713297805,0.37514849531680766,0.40439233873761293,False
+borzoi_cage,acc_dnase,GM12878 DNase (measured),3,R3 · + accessibility,1.0,1.0,1.0,True
+rampage_observed,mamba_1ct,cis-Mamba (Enformer CAGE),0,R0 · all bins,0.9136464035773351,0.8747892645742781,0.9348610387614241,False
+rampage_observed,mamba_1ct,cis-Mamba (Enformer CAGE),1,R1 · promoters,0.9101332892766419,0.9009289343516045,0.9171957175169784,False
+rampage_observed,mamba_1ct,cis-Mamba (Enformer CAGE),2,R2 · + disagreement,0.33279135154890505,0.28232530909918724,0.3725066762205273,False
+rampage_observed,mamba_1ct,cis-Mamba (Enformer CAGE),3,R3 · + accessibility,0.5974752694522368,0.5177786792183415,0.665295609003933,False
+rampage_observed,mamba_nopre,cis-Mamba (no pretraining),0,R0 · all bins,0.9131928225203317,0.8786181245401458,0.9330491748093233,False
+rampage_observed,mamba_nopre,cis-Mamba (no pretraining),1,R1 · promoters,0.9063261164059567,0.8979816381171146,0.9145776823905563,False
+rampage_observed,mamba_nopre,cis-Mamba (no pretraining),2,R2 · + disagreement,0.3192874912265401,0.2660084972739757,0.3642832158871147,False
+rampage_observed,mamba_nopre,cis-Mamba (no pretraining),3,R3 · + accessibility,0.5671120626015059,0.486497876951378,0.6455485518994708,False
+rampage_observed,mamba_8ct,cis-Mamba (8 cell types),0,R0 · all bins,0.914664387382869,0.8798397971580041,0.9352187285478292,False
+rampage_observed,mamba_8ct,cis-Mamba (8 cell types),1,R1 · promoters,0.9151622771064216,0.9063678834799207,0.9221234983967866,False
+rampage_observed,mamba_8ct,cis-Mamba (8 cell types),2,R2 · + disagreement,0.22406482185204105,0.18304968146998532,0.2605499623472806,False
+rampage_observed,mamba_8ct,cis-Mamba (8 cell types),3,R3 · + accessibility,0.4392514395393474,0.37366848037499517,0.5072383054474885,False
+rampage_observed,enformer_pre,Enformer (pretrained),0,R0 · all bins,0.9056443143108402,0.8738407086290017,0.9245022421958851,False
+rampage_observed,enformer_pre,Enformer (pretrained),1,R1 · promoters,0.9075035630408491,0.8952155788738781,0.9187172211585136,False
+rampage_observed,enformer_pre,Enformer (pretrained),2,R2 · + disagreement,0.25146708862336625,0.20612848143267934,0.29255175793130145,False
+rampage_observed,enformer_pre,Enformer (pretrained),3,R3 · + accessibility,0.4094492839214528,0.3309292210453446,0.47510495038750544,False
+rampage_observed,alphagenome,AlphaGenome,0,R0 · all bins,0.9443064153368576,0.9153361953366853,0.9598029864114561,False
+rampage_observed,alphagenome,AlphaGenome,1,R1 · promoters,0.9438918530203174,0.9400413439388787,0.9477834412935993,False
+rampage_observed,alphagenome,AlphaGenome,2,R2 · + disagreement,0.2617958909059194,0.21239490663678154,0.30544666750486466,False
+rampage_observed,alphagenome,AlphaGenome,3,R3 · + accessibility,0.493164033663074,0.42868868724338116,0.5596849473721608,False
+rampage_observed,mamba_ag_cage,cis-Mamba (AG CAGE),0,R0 · all bins,0.9186326446532023,0.8820921260199635,0.9383607083958897,False
+rampage_observed,mamba_ag_cage,cis-Mamba (AG CAGE),1,R1 · promoters,0.906199246056417,0.8973018563767668,0.913391695831596,False
+rampage_observed,mamba_ag_cage,cis-Mamba (AG CAGE),2,R2 · + disagreement,0.35814613157905667,0.3114939387877941,0.4010280983581901,False
+rampage_observed,mamba_ag_cage,cis-Mamba (AG CAGE),3,R3 · + accessibility,0.6451129484718736,0.5837209172560606,0.7102618873052763,False
+rampage_observed,mamba_rampage,cis-Mamba (RAMPAGE),0,R0 · all bins,0.9544067108668114,0.9487914728741382,0.960095524162607,False
+rampage_observed,mamba_rampage,cis-Mamba (RAMPAGE),1,R1 · promoters,0.913674419429303,0.9060685276738449,0.9223972636793896,False
+rampage_observed,mamba_rampage,cis-Mamba (RAMPAGE),2,R2 · + disagreement,0.5809733245287251,0.5392425630882712,0.6246870274985706,False
+rampage_observed,mamba_rampage,cis-Mamba (RAMPAGE),3,R3 · + accessibility,0.8598553078399528,0.8112730502063896,0.8923807052706382,False
+rampage_observed,epibert,EpiBERT (RAMPAGE),0,R0 · all bins,0.9707076103031463,0.9666306733264579,0.9743802363015469,False
+rampage_observed,epibert,EpiBERT (RAMPAGE),1,R1 · promoters,0.9406664792777812,0.9359488148385934,0.9451519721485397,False
+rampage_observed,epibert,EpiBERT (RAMPAGE),2,R2 · + disagreement,0.5622303069568865,0.5182800779543942,0.6027339623404222,False
+rampage_observed,epibert,EpiBERT (RAMPAGE),3,R3 · + accessibility,0.8679536394507603,0.8348946750196926,0.9019461436002131,False
+rampage_observed,null_avg,[null] Enformer CAGE average,0,R0 · all bins,0.8993602253002101,0.8628094084121892,0.9213510992604694,False
+rampage_observed,null_avg,[null] Enformer CAGE average,1,R1 · promoters,0.9062675022926651,0.898672270625172,0.913613590865707,False
+rampage_observed,null_avg,[null] Enformer CAGE average,2,R2 · + disagreement,0.0,0.0,0.0,False
+rampage_observed,null_avg,[null] Enformer CAGE average,3,R3 · + accessibility,0.0,0.0,0.0,False
+rampage_observed,acc_atac,GM12878 ATAC (measured),0,R0 · all bins,0.8910595775791456,0.849929844866142,0.9145278499950534,False
+rampage_observed,acc_atac,GM12878 ATAC (measured),1,R1 · promoters,0.8765500642238969,0.8678344292217054,0.8842019569426738,False
+rampage_observed,acc_atac,GM12878 ATAC (measured),2,R2 · + disagreement,0.5201945320059971,0.4666455047920886,0.5564967236850544,False
+rampage_observed,acc_atac,GM12878 ATAC (measured),3,R3 · + accessibility,1.0,1.0,1.0,True

@@ -262,14 +262,16 @@ class DNAEmbeddingModelStriped(nn.Module):
         else:
             cfg = dict(config)
         self.d_model = cfg['d_model']
-        # When global_pooling > 1, the backbone outputs at d_in resolution (start channels),
-        # not d_model. d_output reflects what actually comes out of forward().
         d_in = cfg.get('d_in', cfg['d_model'])
-        self._d_output = d_in if cfg.get('global_pooling', 1) > 1 else cfg['d_model']
         # d_in is exposed so encoder/decoder instantiation can prefer it over d_model.
         # None means global_pooling == 1, so d_in == d_model and no special handling needed.
         self.d_in = d_in if cfg.get('global_pooling', 1) > 1 else None
         self.backbone = StripedMambaBackbone(**cfg)
+        # Pooled outputs can have a different width from the encoder input.
+        # The final norm also exposes the width for the legacy backbone.
+        self._d_output = getattr(
+            self.backbone, 'd_output', self.backbone.final_norm.weight.numel()
+        )
 
     def forward(self, input_ids, position_ids=None, inference_params=None, state=None):
         return self.backbone(input_ids), None

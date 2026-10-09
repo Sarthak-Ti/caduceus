@@ -1,0 +1,16 @@
+target,arm,label,n_regions,median_sm,mean_sm
+enformer_cage,enformer_pre,Enformer (pretrained),1837,0.658281683921814,0.6524979325987816
+enformer_cage,enformer_n1_1536,"Enformer (retrained, 1 CT, 1536ch)",1837,0.6075766682624817,0.5984546630128723
+enformer_cage,mamba_1ct,cis-Mamba (Enformer CAGE),1837,0.6509868502616882,0.6418522065125151
+enformer_cage,alphagenome,AlphaGenome,1837,0.45699286460876465,0.48516578206165845
+enformer_cage,epibert,EpiBERT (RAMPAGE),1837,0.2935636639595032,0.3557745279577772
+ag_cage,enformer_pre,Enformer (pretrained),1687,0.44682568311691284,0.460557113553093
+ag_cage,enformer_n1_1536,"Enformer (retrained, 1 CT, 1536ch)",1687,0.41953012347221375,0.4293685476958293
+ag_cage,mamba_ag_cage,cis-Mamba (AG CAGE),1687,0.4544140696525574,0.4424225532031714
+ag_cage,alphagenome,AlphaGenome,1687,0.589066743850708,0.5208605718904689
+ag_cage,epibert,EpiBERT (RAMPAGE),1687,0.4512854516506195,0.4107594041206092
+rampage_observed,enformer_pre,Enformer (pretrained),868,0.6741071939468384,0.5661993822519971
+rampage_observed,enformer_n1_1536,"Enformer (retrained, 1 CT, 1536ch)",868,0.6204495429992676,0.5266058254284016
+rampage_observed,mamba_rampage,cis-Mamba (RAMPAGE),868,0.7885550260543823,0.6625588923436503
+rampage_observed,alphagenome,AlphaGenome,868,0.6310504078865051,0.5628953997115765
+rampage_observed,epibert,EpiBERT (RAMPAGE),868,0.8534092903137207,0.7165253438881152

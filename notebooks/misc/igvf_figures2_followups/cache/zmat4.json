@@ -1,0 +1,44 @@
+{
+ "locus": {
+  "chrom": "chr8",
+  "start": 40763508,
+  "end": 40960116,
+  "n_bin": 6144,
+  "n_cell_types": 638
+ },
+ "r_sm_ag_target": {
+  "borzoi_lora": -0.003035505466297906,
+  "borzoi_trunk": -0.0031285592419347296,
+  "borzoi_scratch": 0.0015922779713204507,
+  "mamba_1ct_borzoi": 0.030107845001494105,
+  "alphagenome": -0.01574330127263335,
+  "borzoi_pre": -0.008490824789495328,
+  "true": 0.007495353455258135,
+  "avg": 0.0009542152592107365,
+  "mamba_ag_cage": 0.0013975500261596712,
+  "ag_observed": 1.0
+ },
+ "peak_windows": [
+  {
+   "name": "average_peak",
+   "peak_bin": 4197,
+   "peak_center": 40897828.0,
+   "start": 40897300,
+   "end": 40898324
+  },
+  {
+   "name": "ag_observed_peak_1",
+   "peak_bin": 2346,
+   "peak_center": 40838596.0,
+   "start": 40838068,
+   "end": 40839092
+  },
+  {
+   "name": "ag_observed_peak_2",
+   "peak_bin": 3381,
+   "peak_center": 40871716.0,
+   "start": 40871188,
+   "end": 40872212
+  }
+ ]
+}

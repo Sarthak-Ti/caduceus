@@ -55,7 +55,20 @@ class Evals():
         #now set up dataset
         if dataset is None:
             dataset_args = self.cfg['dataset']
-            assert dataset_args['mlm'] == 0 and dataset_args['acc_mlm'] == 0, "MLM and acc_mlm should be 0 for the training"
+            assert dataset_args['mlm'] == 0, "MLM should be 0 for the training"
+            #acc_mlm=1 means the accessibility track is masked at rate 1.0. Combined with
+            #mask_only that skips the BERT-style 10% random / 10% unchanged split, so every
+            #position is zeroed with the mask channel set to 1 -- deterministic, and the only
+            #setting that reproduces training for the ATAC-withheld models. Any rate strictly
+            #between 0 and 1 is stochastic and would make the eval irreproducible, so it still
+            #fails here.
+            assert dataset_args['acc_mlm'] in (0, 1), \
+                f"acc_mlm must be 0 or 1 for evaluation, got {dataset_args['acc_mlm']}"
+            if dataset_args['acc_mlm'] == 1:
+                print(f"WARNING: acc_mlm=1 (mask_only={dataset_args.get('mask_only')}) -- the "
+                      "accessibility track is fully masked, so this model never sees a real "
+                      "accessibility value. Any accessibility perturbation is a no-op on it; "
+                      "use a sequence perturbation (dinucleotide shuffle) instead.", flush=True)
             sig = inspect.signature(GeneralDataset.__init__)
             sig = {k: v for k, v in sig.parameters.items() if k != 'self'}
             to_remove = []
