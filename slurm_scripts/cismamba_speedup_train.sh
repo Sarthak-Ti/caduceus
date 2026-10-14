@@ -63,7 +63,9 @@ if [[ "$stage" == smoke ]]; then
 else
   extra+=(trainer.max_epochs=30)
 fi
-exec pixi run --frozen python -u -m train \
+# CISMAMBA_PYTHON optionally selects another interpreter (e.g. an isolated venv);
+# unset keeps the pixi environment's python.
+exec pixi run --frozen "${CISMAMBA_PYTHON:-python}" -u -m train \
   experiment=hg38/joint_pretrain model=striped_hydra wandb=null \
   "hydra.run.dir=$run_dir" train.test=false \
   +train.remove_test_loader_in_eval=true "train.ckpt=$resume" \

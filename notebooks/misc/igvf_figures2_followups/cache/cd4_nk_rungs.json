@@ -1,0 +1,86 @@
+{
+  "rungs": {
+    "CD4": [
+      {
+        "name": "R0 \u00b7 all bins",
+        "subtitle": "any allowed bin",
+        "n_pos": 83082,
+        "n_neg": 1387500,
+        "n_preg": 1839,
+        "n_nreg": 1840
+      },
+      {
+        "name": "R1 \u00b7 promoters",
+        "subtitle": "protein-coding TSS only",
+        "n_pos": 14213,
+        "n_neg": 31586,
+        "n_preg": 857,
+        "n_nreg": 1098
+      },
+      {
+        "name": "R2 \u00b7 + disagreement",
+        "subtitle": "cross-CT average points the wrong way",
+        "n_pos": 1428,
+        "n_neg": 713,
+        "n_preg": 457,
+        "n_nreg": 342
+      },
+      {
+        "name": "R3 \u00b7 + accessibility",
+        "subtitle": "DNase-confirmed",
+        "n_pos": 444,
+        "n_neg": 360,
+        "n_preg": 229,
+        "n_nreg": 211
+      }
+    ],
+    "NK": [
+      {
+        "name": "R0 \u00b7 all bins",
+        "subtitle": "any allowed bin",
+        "n_pos": 99875,
+        "n_neg": 1359591,
+        "n_preg": 1839,
+        "n_nreg": 1840
+      },
+      {
+        "name": "R1 \u00b7 promoters",
+        "subtitle": "protein-coding TSS only",
+        "n_pos": 16759,
+        "n_neg": 29309,
+        "n_preg": 868,
+        "n_nreg": 1089
+      },
+      {
+        "name": "R2 \u00b7 + disagreement",
+        "subtitle": "cross-CT average points the wrong way",
+        "n_pos": 2006,
+        "n_neg": 626,
+        "n_preg": 529,
+        "n_nreg": 314
+      },
+      {
+        "name": "R3 \u00b7 + accessibility",
+        "subtitle": "DNase-confirmed",
+        "n_pos": 640,
+        "n_neg": 527,
+        "n_preg": 306,
+        "n_nreg": 273
+      }
+    ]
+  },
+  "meta": {
+    "CD4": {
+      "track": 4759,
+      "ag_column": 7,
+      "checkpoint": "/data1/lesliec/sarthak/caduceus/outputs/cage_finetuning/20261003_cd4_nk/CD4/test_evaluation_20261012",
+      "n_regions": 1840
+    },
+    "NK": {
+      "track": 4764,
+      "ag_column": 38,
+      "checkpoint": "/data1/lesliec/sarthak/caduceus/outputs/cage_finetuning/20261003_cd4_nk/NK/test_evaluation_20261012",
+      "n_regions": 1840
+    }
+  }
+}

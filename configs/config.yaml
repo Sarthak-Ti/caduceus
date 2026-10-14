@@ -44,6 +44,8 @@ train:
 
   disable_dataset: False # Disable dataset loading
   validate_at_start: false
+  compile: false # torch.compile encoder/backbone/decoder in place (needs torch >= 2.2, i.e. the modern env)
+  compile_emulate_precision: false # with compile: round fused intermediates to bf16 like eager (true) or keep fp32 (false)
 
   pretrained_model_path: null # Path to pretrained model
   pretrained_model_strict_load: true # Whether to load the pretrained model even if the model is not compatible

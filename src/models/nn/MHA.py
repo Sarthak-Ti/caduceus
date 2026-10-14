@@ -142,6 +142,27 @@ def apply_rotary_emb_qkv_(
     return ApplyRotaryEmbQKV_.apply(qkv, cos, sin, interleaved, cu_seqlens, max_seqlen)
 
 
+def _rotate_half_torch(
+    x: Float[Tensor, "b l h d"],
+    cos: Float[Tensor, "l d"],
+    sin: Float[Tensor, "l d"],
+) -> Float[Tensor, "b l h d"]:
+    """Non-interleaved RoPE over the full head dim, out of place, in plain PyTorch.
+
+    Same math as flash-attn's Triton `apply_rotary` (fp32 compute, cast back), but it
+    writes new memory instead of mutating q/k views of qkv. torch.compile mis-handles
+    that in-place mutation of strided views (out-of-bounds read in Inductor).
+    """
+    c = cos[None, : x.shape[1], None, :].float()
+    s = sin[None, : x.shape[1], None, :].float()
+    x1, x2 = x.float().chunk(2, dim=-1)
+    return torch.cat([x1 * c - x2 * s, x1 * s + x2 * c], dim=-1).to(x.dtype)
+
+
+# torch.compiler.is_compiling is newer than torch 2.1; torch._dynamo.is_compiling is the older name.
+_is_compiling = getattr(torch.compiler, "is_compiling", None) or torch._dynamo.is_compiling
+
+
 class RotaryEmbedding(torch.nn.Module):
     """The rotary position embeddings from RoFormer_ (Su et. al).
 
@@ -220,7 +241,8 @@ class RotaryEmbedding(torch.nn.Module):
             or self._cos_cached is None
             or self._cos_cached.device != device
             or self._cos_cached.dtype != dtype
-            or (self.training and self._cos_cached.is_inference())
+            # is_inference() cannot be traced by torch.compile; skip it while compiling
+            or (self.training and not _is_compiling() and self._cos_cached.is_inference())
         ):
             self._seq_len_cached = seqlen
             # We want fp32 here, not self.inv_freq.dtype, since the model could be
@@ -252,8 +274,10 @@ class RotaryEmbedding(torch.nn.Module):
         cu_seqlens: Integer[Tensor, " b+1"] | None = None,
         max_seqlen: int | None = None,
     ) -> Float[Tensor, "b l 3 h d"] | Float[Tensor, "(b l) 3 h d"]:
-        """Apply rotary embedding *inplace* to qkv.
+        """Apply rotary embedding to qkv.
 
+        Padded, non-interleaved inputs are rotated out of place in plain PyTorch;
+        otherwise the in-place Triton path is used.
         This implementation supports both padded and unpadded inputs.
 
         Args:
@@ -270,6 +294,14 @@ class RotaryEmbedding(torch.nn.Module):
             max_seqlen = qkv.shape[1]
 
         self._update_cos_sin_cache(max_seqlen, device=qkv.device, dtype=qkv.dtype)
+
+        # Padded, non-interleaved, full-head-dim RoPE: rotate q and k out of place and
+        # rebuild qkv. Unpadded/interleaved/partial-dim inputs keep the in-place Triton path.
+        if cu_seqlens is None and not self.interleaved and self._cos_cached.shape[-1] * 2 == qkv.shape[-1]:
+            q, k, v = qkv.unbind(2)
+            q = _rotate_half_torch(q, self._cos_cached, self._sin_cached)
+            k = _rotate_half_torch(k, self._cos_cached, self._sin_cached)
+            return torch.stack([q, k, v], dim=2)
 
         return apply_rotary_emb_qkv_(
             qkv,

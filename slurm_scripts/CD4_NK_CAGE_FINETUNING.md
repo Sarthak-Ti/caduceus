@@ -163,3 +163,64 @@ Submitted resume jobs: **17232989 (CD4)** and **17232990 (NK)**. Current states
 are recorded with a timestamp in the run directory's `runtime_status.json`;
 the commands and checkpoint hashes are in `submission.json` and
 `resume_20261005_validation.json`.
+
+
+## Held-out CAGE evaluation, October 12, 2026
+
+Both training resumes completed with exit code 0 after epoch 16 (17 total epochs).
+The runtime guard stopped each run before another epoch would exceed the seven-day
+budget. Test evaluation fixes the lowest-validation-Poisson-loss checkpoint before
+reading any test scores: CD4 epoch 16 (-0.09986649), NK epoch 8 (-0.27512944).
+The checkpoint paths, SHA256 hashes, adjacent model-config hashes, Slurm commands
+and job IDs are recorded in `test_evaluation_20261012.json` in the run directory.
+
+`slurm_scripts/evaluate_cd4_nk_cage.py` reuses the strict `Evals` loader and
+`eval_joint_expression.evaluate_all`. `evaluate_cd4_nk_cage.sh` runs one A100 job
+per cell. It evaluates all 1,937 original test rows with the same genome and
+cell-matched measured DNase input, no masking/shifts/RC augmentation, and forward
+orientation. Inputs are 524,288 bp; CAGE outputs are the central 114,688 bp,
+896 bins of 128 bp, one unstranded channel. The existing bf16 inference path is
+used and results are stored in float32. The decoder applies Softplus once;
+`Evals.skip_softplus=True` prevents an extra Softplus in the evaluation helper.
+Data are preloaded into host memory to avoid repeated whole-chromosome NPZ reads.
+There is no pooling or target filtering. Saved targets must match every value in
+the extracted Zarr test array exactly; BED order, cell type, and track index are
+also checked.
+
+Results are written under `<run>/<cell>/test_evaluation_20261012/`:
+
+- `expression_outputs.npy` and `expression_targets.npy`: shape `(1937, 1, 896, 1)`,
+  axes `(test_region, cell_type, bin, CAGE_track)`.
+- `expression_pearson.npy` and `expression_spearman.npy`: shape `(1937, 1, 1)`,
+  raw-signal correlation across the 896 bins **within each region**.
+- `regions.tsv`: original test-row index, cell type, BED/input/output coordinates
+  (0-based, half-open; input coordinates may include padding), predicted/observed
+  region sums, within-region correlations and per-region Poisson loss.
+- `metrics.json` and `metrics.tsv`: named aggregate scores. Within-region means
+  give every defined region correlation equal weight. Across-region correlations
+  compare the 1,937 **summed region signals**, using Pearson and Spearman on raw
+  totals and `log1p(total)`. Separately labelled pooled-bin correlations flatten
+  all regions/bins. Log1p profile Pearson and training-compatible Poisson loss
+  are also reported; the Poisson loss omits the target-only factorial term and
+  can be negative. Constant-profile correlations are undefined (NA/null), with
+  counts reported; these regions remain in saved arrays and other metrics.
+- `provenance.json`: selected checkpoint/config/code hashes, evaluation settings,
+  coordinate/array definitions, target identity check and output checksums.
+  `SUCCESS` is written only after all predictions, metrics and checks complete.
+
+A synthetic check verifies that within-region shape and across-region amplitude
+can have opposite correlations, and that Poisson loss matches the training loss.
+A completed evaluation is reused only for the same checkpoint; incomplete output
+directories are not silently overwritten.
+
+To reproduce, create a manifest with fixed validation-selected checkpoint/config
+hashes and unused output paths, then submit the existing flat Slurm script:
+
+```bash
+sbatch --output=/absolute/run/logs/test_CD4_%j.out \
+  /data1/lesliec/sarthak/caduceus/slurm_scripts/evaluate_cd4_nk_cage.sh \
+  /absolute/run/test_evaluation_20261012.json CD4
+```
+
+Repeat with NK. This evaluates CAGE given sequence plus observed accessibility;
+it is separate from the TenK10K caQTL benchmark and from allele-effect scoring.

@@ -247,6 +247,17 @@ class SequenceLightningModule(pl.LightningModule):
         # Extract the modules, so they show up in the top level parameter count
         self.encoder = U.PassthroughSequential(self.task.encoder, encoder)
         self.decoder = U.PassthroughSequential(decoder, self.task.decoder)
+
+        # Opt-in torch.compile. Module.compile() compiles in place, so parameter names and
+        # checkpoints stay identical to eager (torch.compile(module) would add "_orig_mod.").
+        if self.hparams.train.get("compile", False):
+            assert hasattr(torch.nn.Module, "compile"), "train.compile needs torch >= 2.2 (the modern env)"
+            import torch._inductor.config as inductor_config
+            # True: round fused intermediates to bf16 exactly like eager. False: keep them in fp32 (default)
+            inductor_config.emulate_precision_casts = bool(self.hparams.train.get("compile_emulate_precision", False))
+            for module in (self.encoder, self.model, self.decoder):
+                module.compile()
+            log.info(f"torch.compile enabled (emulate_precision_casts={inductor_config.emulate_precision_casts})")
         #actually had defined a task.decoder, this was the issue! so renamed it
         self.loss = self.task.loss
         self.loss_val = self.task.loss
@@ -805,9 +816,15 @@ def create_trainer(config, **kwargs):
         # Can pass in config_exclude_keys='wandb' to remove certain groups
         import wandb
 
+        # The modern env's wandb (0.30) removed the start_method setting; older versions keep fork
+        settings = wandb.Settings()
+        settings_fields = getattr(wandb.Settings, "model_fields", None)
+        if settings_fields is None or "start_method" in settings_fields:
+            settings = wandb.Settings(start_method="fork")
+
         logger = CustomWandbLogger(
             config=utils.to_dict(config, recursive=True),
-            settings=wandb.Settings(start_method="fork"),
+            settings=settings,
             **config.wandb,
         )
 

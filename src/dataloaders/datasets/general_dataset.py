@@ -37,7 +37,7 @@ from src.dataloaders.utils.fasta_utils import fasta_to_genome
 def open_data(data_path, load_in=False):
     if data_path is None:
         return None
-    if data_path.endswith('.zarr'):
+    if data_path.endswith('.zarr') or '.zarr/' in data_path: #also allow a group inside a zarr, like panc_atac.zarr/panc
         data = zarr.open(data_path, mode='r')
         if load_in:
             data = {key: np.array(data[key]) for key in data}
@@ -113,6 +113,8 @@ class GeneralDataset():
         additional_tracks_stranded: bool = False, #if True, expects interleaved +/- layout (plus=2*i, minus=2*i+1) and returns 2 tracks per cell type
         crop_additional: int = None, #if set, crops this many bp from each side of additional_data or additional_tracks output
         return_celltype_idx_og: bool = False, #if True, will return the celltype index as well, this is used if you want the cell type token
+        trans_info: str = None, #path to an npz of per-cell-type trans vectors (e.g. motifs/final/celltype_inputs.npz), must have a 'celltypes' key of names
+        trans_info_key: str = None, #which matrix in the trans_info npz to use, e.g. 'sea_scaled' or 'chromvar_dev', shape (n_celltypes, n_features)
         multitasking: bool = False, #if True, will return all cell types for the given file, so shape will be (celltypes, length, channels)
         mask_tie: float = 1.0, #how much masking is tied across categories. 1 means fully tied, so all tracks are masked the same, 0 means fully indepdendent masking across categories
         independent_tracks: bool = False, #if True, will treat each track as independent for masking purposes, so each track will have its own masking
@@ -227,6 +229,19 @@ class GeneralDataset():
         if self.celltypes == 1 and self.data_idxs is not None and not self.multitasking: #if we are multitasking, then we keep celltypes as is
             print(f'replacing cell type number with data indices, {len(self.data_idxs)}')
             self.celltypes = len(self.data_idxs)
+        #trans info, a global vector per cell type. The npz order can differ from the data rows, so join by name
+        #through the data store's 'celltypes' attribute and index by the data row (celltype_idx), not celltype_idx_og
+        self.trans_info = None
+        if trans_info is not None:
+            assert trans_info_key is not None, "trans_info_key must be provided with trans_info"
+            assert data_path.endswith('.zarr') or '.zarr/' in data_path, "trans_info needs a zarr data_path with a 'celltypes' attribute"
+            with np.load(trans_info) as trans_npz:
+                trans_by_name = dict(zip(trans_npz['celltypes'].tolist(), trans_npz[trans_info_key]))
+            data_celltypes = zarr.open(data_path, mode='r').attrs['celltypes'] #names in data row order
+            missing = [name for name in data_celltypes if name not in trans_by_name]
+            assert not missing, f"cell types missing from {trans_info}: {missing}"
+            self.trans_info = np.stack([trans_by_name[name] for name in data_celltypes]).astype(np.float32) #shape (n_data_rows, n_features)
+            print(f'loaded trans info {trans_info_key} with shape {self.trans_info.shape}')
         self.additional_data_idxs = get_data_idxs(additional_data_idxs, self.data)
         self.additional_tracks_idxs = get_data_idxs(additional_tracks_idxs, self.additional_tracks)
         self.additional_tracks_stranded = additional_tracks_stranded
@@ -523,8 +538,11 @@ class GeneralDataset():
                 additional_data = additional_data[:, self.crop_additional:-self.crop_additional]
             outputs2.append(torch.FloatTensor(np.ascontiguousarray(additional_data)).transpose(1, 0)) #transpose it to be seq_len x n_tracks, so we can use it for the rest of the processing
         
-        if self.return_celltype_idx_og:
+        #the encoder is called as encoder(*x), so trans info must come after the celltype index to land in trans_info, not ctt_token
+        if self.return_celltype_idx_og or self.trans_info is not None:
             outputs1.append(torch.tensor(celltype_idx_og))
+        if self.trans_info is not None:
+            outputs1.append(torch.from_numpy(self.trans_info[celltype_idx])) #index by data row, the npz order was aligned to it in init
 
         return tuple(outputs1), tuple(outputs2) #return the sequence, targets, unmasked sequence and unmasked accessibility if we do masking, else empty tensors
     

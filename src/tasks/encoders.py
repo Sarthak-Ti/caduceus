@@ -131,8 +131,10 @@ class JointCNN(Encoder):
         downsample (int): Factor by which to downsample the output sequence length. Must be a power of 2. Default is 1 (no downsampling).
         pool_type (str): The type of pooling to use during downsampling ('max' or 'attention'). Default is 'max'.
         ctt (bool): Whether you are both providing and want to include a cell type token. Default is False
+        trans_emb (int, optional): Channels reserved for global trans information. None disables conditioning.
+        trans_input_dim (int): Number of trans input features. Default is 693.
     """
-    def __init__(self, d_model, celltypes=None, d_input1=6, d_input2=None, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', ctt=False, norm=None, activation='ReLU', transpose=False, **kwargs):
+    def __init__(self, d_model, celltypes=None, d_input1=6, d_input2=None, joint=False, kernel_size=15, combine=True, acc_type='continuous', downsample=1, pool_type='max', ctt=False, norm=None, activation='ReLU', transpose=False, trans_emb=None, trans_input_dim=693, **kwargs):
         super().__init__()
         print(f"JointMaskingEncoder: d_model={d_model}, celltypes={celltypes}, d_input1={d_input1}, d_input2={d_input2}, joint={joint}, kernel_size={kernel_size}, combine={combine}, acc_type={acc_type}")
         # print(kwargs)
@@ -141,6 +143,20 @@ class JointCNN(Encoder):
         self.downsample = downsample
         self.transpose = transpose
         self.ctt = ctt
+        self.trans_emb = trans_emb
+        self.trans_input_dim = trans_input_dim
+        if trans_emb is not None:
+            if not isinstance(trans_emb, int) or not 0 < trans_emb < d_model:
+                raise ValueError("trans_emb must be a positive integer smaller than d_model")
+            if not isinstance(trans_input_dim, int) or trans_input_dim <= 0:
+                raise ValueError("trans_input_dim must be a positive integer")
+            d_model -= trans_emb
+            self.trans_mlp = nn.Sequential(
+                nn.Linear(trans_input_dim, 32),
+                nn.GELU(),
+                nn.Linear(32, trans_emb),
+            )
+        cnn_dim = d_model
         if self.ctt and downsample > 1:
             print("Warning: When using cell type token with downsampling, the cell type token removes a lot of the input.")
         
@@ -153,6 +169,8 @@ class JointCNN(Encoder):
                 d_model = d_model // 2
                 grow_channels = d_model // (self.n_pools-1)
             # out_dim = [d_model + i * d_model // self.n_pools for i in range(self.n_pools + 1)]
+        if trans_emb is not None and not joint and d_model % 2:
+            raise ValueError("The CNN stem width must be even when joint=False")
         # print(d_input1, d_input2)
         # print('dmodel', d_model)
         # print('acc_type', acc_type)
@@ -224,8 +242,12 @@ class JointCNN(Encoder):
             self.down_blocks = nn.ModuleList()
             for i in range(self.n_pools - 1):
                 in_dim = d_model + i * grow_channels
+                block_growth = grow_channels
+                if trans_emb is not None and i == self.n_pools - 2:
+                    # Absorb rounding so the final CNN width leaves exactly trans_emb channels.
+                    block_growth = cnn_dim - in_dim
                 self.down_blocks.append(
-                    DownsampleBlock(in_dim, grow_channels, pool_type=pool_type)
+                    DownsampleBlock(in_dim, block_growth, pool_type=pool_type)
                 )
             # for i in range(self.n_pools):
             #     in_dim = d_model + i * d_diff
@@ -237,9 +259,9 @@ class JointCNN(Encoder):
             
         if self.ctt:
             assert celltypes is not None, "celltypes must be provided when ctt is True"
-            self.ctt_embedding = nn.Embedding(celltypes, d_model)  #dummy embedding, just to have the right shape
+            self.ctt_embedding = nn.Embedding(celltypes, cnn_dim if trans_emb is not None else d_model)
                 
-    def forward(self, x1, x2, ctt_token=None):
+    def forward(self, x1, x2, ctt_token=None, trans_info=None):
         """
         Forward pass for the JointCNN.
 
@@ -247,6 +269,8 @@ class JointCNN(Encoder):
             x1 (torch.Tensor): The first input tensor of shape (batch_size, d_input1, seq_len).
             x2 (torch.Tensor): The second input tensor of shape (batch_size, d_input2, seq_len).
             ctt_token (torch.Tensor, optional): The cell type token of shape (batch_size). Not used unless `ctt` is True.
+            trans_info (torch.Tensor, optional): Floating-point features of shape (batch_size, trans_input_dim).
+                Required when trans_emb is enabled.
 
         Returns:
             torch.Tensor: The output tensor of shape (batch_size, d_model, seq_len).
@@ -254,6 +278,16 @@ class JointCNN(Encoder):
             torch.Tensor: A dictionary containing intermediate outputs at different bin sizes.
             The keys are "bin_size_2", "bin_size_4", etc., corresponding to the downsampled outputs. each will be of shape (batch_size, d_model + i * grow_channels, seq_len // (2 ** (i + 1)))
         """
+        if self.trans_emb is not None:
+            if trans_info is None:
+                raise ValueError("trans_info must be provided when trans_emb is enabled")
+            if trans_info.ndim != 2 or trans_info.shape != (x1.size(0), self.trans_input_dim):
+                raise ValueError(f"trans_info must have shape ({x1.size(0)}, {self.trans_input_dim})")
+            if not trans_info.is_floating_point():
+                raise TypeError("trans_info must be a floating-point tensor")
+            if trans_info.device != x1.device:
+                raise ValueError("trans_info must be on the same device as the sequence input")
+
         if self.joint:
             # Concatenate inputs along the channel dimension and process jointly
             x = torch.cat([x1, x2], dim=1)  # Concatenate along channel dimension
@@ -284,6 +318,11 @@ class JointCNN(Encoder):
             ctt = self.ctt_embedding(ctt_token).unsqueeze(2) #shape batch x d_model x 1
             #now append to x
             x = torch.cat([ctt, x], dim=2) #concatenate along the length dimension
+
+        if self.trans_emb is not None:
+            trans = self.trans_mlp(trans_info).to(dtype=x.dtype)
+            trans = trans.unsqueeze(-1).expand(-1, -1, x.size(-1))
+            x = torch.cat([x, trans], dim=1)
         
         if self.transpose:
             x = x.transpose(1, 2)  # (B, L, d_model)
