@@ -534,7 +534,31 @@ class JointFinetune(BaseTask):
         x,intermediates = encoder(*x)
         x,_ = model(x)
         x,_ = decoder(x, intermediates=intermediates)
-        
+
+        return x, y, {}
+
+class JointFinetuneAcc(BaseTask):
+    """Enformer-style joint expression and accessibility outputs at the expression resolution.
+    The measured accessibility (acc_unmask value channel) is summed into bin_size bins over the same
+    central crop as the expression targets, and appended as the last target channel, so the decoder's d_output
+    is the number of expression tracks + 1. The accessibility input itself is controlled by the dataset masking.
+    """
+    def __init__(self, *args, bin_size=128, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bin_size = bin_size
+
+    def forward(self, batch, encoder, model, decoder, _state):
+        x, y, *_ = batch
+        expr, acc = y[-1], y[-2][..., 0] #(batch, bins, tracks) and (batch, length)
+        bins = expr.shape[1]
+        start = (acc.shape[1] - bins * self.bin_size) // 2 #same centered crop as the enformer decoder
+        acc = acc[:, start:start + bins * self.bin_size].reshape(acc.shape[0], bins, self.bin_size).sum(-1)
+        y = torch.cat([expr, acc.unsqueeze(-1).to(expr.dtype)], dim=-1)
+
+        x,intermediates = encoder(*x)
+        x,_ = model(x)
+        x,_ = decoder(x, intermediates=intermediates)
+
         return x, y, {}
 
 class JointTSS(BaseTask):
@@ -787,5 +811,6 @@ registry = {
     'basic': Basic,
     'joint': Joint,
     'joint_finetune': JointFinetune,
+    'joint_finetune_acc': JointFinetuneAcc,
     'joint_tss': JointTSS,
 }

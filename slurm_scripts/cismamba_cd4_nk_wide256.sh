@@ -15,7 +15,13 @@ WIDE_REPO=/data1/lesliec/sarthak/caduceus
 WIDE_MANIFEST=${1:?manifest.json required}
 WIDE_CELL=${2:?CD4 or NK required}
 WIDE_STAGE=${3:?pretrain or finetune required}
-export PATH="$WIDE_REPO/.pixi/envs/default/bin:$PATH"
+# Modern env (torch 2.13 + torch.compile), as in panc_pretrain.sh. pixi run applies its activation
+# env (TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD), which the driver's torch.load calls rely on.
+# Pretraining (completed 2026-10-13) ran in the old repo env, $WIDE_REPO/.pixi/envs/default.
+T=/data1/lesliec/sarthak/triton_upgrade_test
+export PATH="/home/tiwaris2/.pixi/bin:$PATH"
+export PIXI_CACHE_DIR=$T/.pixi_cache
+export TRITON_CACHE_DIR=$T/triton_cache/modern
 export PYTHONPATH="$WIDE_REPO${PYTHONPATH:+:$PYTHONPATH}"
 export OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=4
 export PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HYDRA_FULL_ERROR=1
@@ -26,11 +32,11 @@ export MPLCONFIGDIR="$TMPDIR/mpl" XDG_CACHE_HOME="$TMPDIR/cache"
 mkdir -p "$TMPDIR" "$MPLCONFIGDIR" "$XDG_CACHE_HOME"
 cd "$WIDE_REPO"
 nvidia-smi
-"$WIDE_REPO/.pixi/envs/default/bin/python" -B - <<'PY'
+pixi run --manifest-path $T/pixi.toml python -B - <<'PY'
 from multiprocessing.connection import Listener
 with Listener(family='AF_UNIX') as listener:
     print('Worker socket check passed:', listener.address, flush=True)
 PY
-exec "$WIDE_REPO/.pixi/envs/default/bin/python" -B -u \
+exec pixi run --manifest-path $T/pixi.toml python -B -u \
   "$WIDE_REPO/slurm_scripts/cismamba_cd4_nk_wide256.py" stage \
   --manifest "$WIDE_MANIFEST" --cell "$WIDE_CELL" --stage "$WIDE_STAGE"

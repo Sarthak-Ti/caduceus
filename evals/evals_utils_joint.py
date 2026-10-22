@@ -218,6 +218,16 @@ class Evals():
             return seq, acc, seq_unmask, acc_unmask, expr_unmask
         return seq, acc, seq_unmask, acc_unmask
 
+    def full_input_masks(self):
+        '''returns (accessibility, sequence) flags for inputs that the checkpoint's dataset masked at 100% during training, mirroring GeneralDataset's mask_only handling'''
+        dataset_cfg = self.cfg['dataset']
+        if dataset_cfg.get('alternating', 0):
+            return False, False
+        mask_only = dataset_cfg.get('mask_only', False)
+        full_acc = (dataset_cfg.get('acc_mlm') or 0) >= 1 and mask_only in (1, 0.5)
+        full_seq = (dataset_cfg.get('mlm') or 0) >= 1 and mask_only == 1
+        return full_acc, full_seq
+
     def freeze(self):
         '''freezes the model, so that it doesn't update the weights during training'''
         for param in self.backbone.parameters():
@@ -298,7 +308,16 @@ class Evals():
         if mask_sequence:
             seq[-1,start:stop] = 1
             seq[:-1,start:stop] = 0 #zero out the original sequence values
-        
+
+        #inputs were rebuilt from the unmasked data above, so re-apply any input the model was trained with fully masked (e.g. sequence-only or accessibility-only models)
+        full_acc, full_seq = self.full_input_masks()
+        if full_acc:
+            acc[numtracks//2:] = 1
+            acc[:numtracks//2] = 0
+        if full_seq:
+            seq[-1] = 1
+            seq[:-1] = 0
+
         if run:
             x = seq.unsqueeze(0).to(self.device)
             y = acc.unsqueeze(0).to(self.device)

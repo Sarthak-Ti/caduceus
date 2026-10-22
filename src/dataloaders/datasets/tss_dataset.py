@@ -2,20 +2,23 @@
 TSS-centered dataset that loads gene-level data from a JSON dictionary.
 
 Sequences are centered around the transcription start site (TSS) of each gene.
-Unlike GeneralDataset, each gene is one sample (no celltypes multiplier).
+With a single cell type each gene is one sample. With data_idxs listing several cell types
+(store rows of a multi-cell-type zarr, as in GeneralDataset), every (gene, cell type) pair is
+a sample, ordered cell-type major: index = celltype_position * n_genes + gene_position.
 Additional data (enformer-style) has been removed and replaced with TSS-derived outputs.
 
 The TSS JSON file should map gene names to a sub-dict with:
     'chrom'      : str         - chromosome name
     'tss'        : int         - main TSS genomic coordinate (0-based)
-    'counts'     : float       - expression count for the gene
+    'counts'     : float       - expression count for the gene, or a dict {celltype name: count}
+                                 for multi-cell-type data (names as in the zarr 'celltypes' attr)
     'alt_tss'    : list of int - alternative TSS genomic coordinates (0-based)
     'strand'     : str         - '+' or '-'
     'gene_start' : int         - gene-body start (0-based, inclusive)
     'gene_end'   : int         - gene-body end (0-based, exclusive)
 
 Returns two output tuples per sample:
-    outputs1: (seq, targets)
+    outputs1: (seq, targets[, celltype_idx_og[, trans_info]])
     outputs2: (seq_unmask, acc_umask, counts, tss_mask, gene_mask, strand, expression)
 """
 
@@ -35,7 +38,7 @@ from src.dataloaders.utils.mask_seq import mask_seq
 def open_data(data_path, load_in=False):
     if data_path is None:
         return None
-    if data_path.endswith('.zarr'):
+    if data_path.endswith('.zarr') or '.zarr/' in data_path: #also allow a group inside a zarr, like panc_atac.zarr/panc
         data = zarr.open(data_path, mode='r')
         if load_in:
             data = {key: np.array(data[key]) for key in data}
@@ -58,13 +61,14 @@ def get_data_idxs(data_path, data):
     elif isinstance(data_path, int):
         data_idxs = np.array([data_path])
 
-    elif isinstance(data_path, list):
-        data_idxs = np.array(data_path)
-
     elif isinstance(data_path, str) and data_path.endswith('.json'):
         with open(data_path, 'r') as f:
             data_idxs = json.load(f)
         data_idxs = np.array(data_idxs, dtype=int)
+
+    elif not isinstance(data_path, str):
+        # list, tuple, or the ListConfig hydra passes for a list override
+        data_idxs = np.array(list(data_path), dtype=int)
     else:
         raise ValueError(f"data_idxs must be a list or a json file, got {data_path}")
     return data_idxs
@@ -86,12 +90,22 @@ class TSSDataset():
         upstream: int = None,         # if set, place TSS this many bp from the left edge (Decima-style) instead of centering
         append_gene_mask: bool = False,  # if True, append the gene-body mask as an extra sequence channel (Decima-style), in place of MLM masking
         append_tss_mask: bool = False,   # same idea, but appends the TSS-neighborhood mask instead of the gene body; mutually exclusive with append_gene_mask
-        data_idxs: str = None,        # JSON or list to select specific tracks from data_path
+        data_idxs: str = None,        # store rows of data_path to use as cell types (int, list or JSON); each (gene, cell type) is one sample
         expression_data_path: str = None,   # optional RNA-seq zarr/npz, same format as data_path; aligned per-bp like self.data
         expression_data_idxs: str = None,   # optional track selection for the expression data
         expression_stranded: bool = False,  # if True, pick a single strand-matched expression track per gene
         expression_plus_track: int = 0,     # track index used for + strand genes when expression_stranded
         expression_minus_track: int = 1,    # track index used for - strand genes when expression_stranded
+        output_pool: int = None,      # if set, pool only the outputs (expression, tss/gene masks) by this factor; the accessibility input stays at bp
+        return_celltype_idx_og: bool = False,  # if True, return the cell type's position in data_idxs (the cell type token)
+        ctt_rows: str = None,         # store rows (list or JSON) that define the cell type token ids; token = position in this list instead of in data_idxs
+        trans_info: str = None,       # npz of per-cell-type trans vectors (e.g. motifs/final/celltype_inputs.npz) with a 'celltypes' key of names
+        trans_info_key: str = None,   # which matrix in the trans_info npz to use, e.g. 'sea_scaled' or 'chromvar_dev'
+        trans_row_override: int = None,  # if set, every sample gets the trans vector of this store row instead of its own (ATAC/trans swap tests)
+        min_cpm: float = None,        # keep genes with CPM >= min_cpm in at least one of filter_celltypes (counts are ln(1+CPM))
+        filter_celltypes: str = None, # cell type names (list or JSON) for min_cpm; defaults to the cell types in data_idxs
+        max_genes: int = None,        # if set, keep a seeded random subset of this many genes (after filtering), e.g. a fixed val subset
+        gene_seed: int = 0,           # seed for the max_genes subset
         genome_seq_file: str = '/data1/lesliec/sarthak/data/chrombpnet_test/hg38_tokenized.npz',
         shift_sequences: int = 0,
         load_in: bool = False,
@@ -127,7 +141,7 @@ class TSSDataset():
         """
         TSS-centered dataset. Sequences are centered around the TSS of each gene.
         Gene-level metadata (counts, TSS positions) comes from tss_json_file.
-        Each gene is one sample; there is no celltypes multiplier.
+        Each gene is one sample per cell type in data_idxs (one cell type by default).
 
         Args:
             split (str): dataset split (train/val/test) — kept for compatibility
@@ -161,7 +175,27 @@ class TSSDataset():
                 self.data at base-pair resolution (identical padding, RC flip, crop, and
                 pooling) and returned as `expression` in outputs2. It is not masked.
             expression_data_idxs (str): optional JSON/list track selection for the
-                expression data (same semantics as data_idxs).
+                expression data, used when expression_stranded is off. All listed rows
+                are returned as tracks of every sample.
+            data_idxs: store rows of data_path to use as cell types. Each sample loads one
+                accessibility row, so with n cell types __len__ is n_genes * n_cells. None
+                means the single row 0 (single-cell-type npz files).
+            output_pool (int): pool only the outputs (expression, tss_mask, gene_mask) by
+                this factor, e.g. 128 for a model returning 128-bp tokens. Unlike `pool`,
+                the accessibility input stays at bp resolution and is not cropped.
+                Mutually exclusive with pool > 1.
+            return_celltype_idx_og / trans_info / trans_info_key: as in GeneralDataset. The
+                cell type index (position in data_idxs) and then the trans vector (looked up
+                by name through the zarr 'celltypes' attribute) are appended to outputs1, so
+                encoder(*x) receives them as ctt_token and trans_info.
+            trans_row_override (int): give every sample the trans vector of this store row.
+            ctt_rows: the cell type list the token embedding was trained with (e.g. the pretraining
+                data_idxs). The token becomes the position of the sample's store row in this list,
+                so evaluating or fine-tuning on a different or reordered list keeps each cell type's
+                token. A data_idxs row missing from ctt_rows has no token and raises an error.
+            min_cpm / filter_celltypes: gene filter on dict counts, applied after the split
+                filter. filter_celltypes defaults to the names of the data_idxs rows.
+            max_genes / gene_seed: seeded random gene subset, applied after min_cpm.
             ... (remaining args same as GeneralDataset)
         """
         self.evaluating = evaluating
@@ -218,12 +252,18 @@ class TSSDataset():
         self.weights_seq_path = weights_seq
         self.expression_data_path = expression_data_path
 
+        # output_pool pools only the outputs; pool (the old behavior) also pools the accessibility
+        # input, so the two cannot be combined
+        assert not (output_pool and pool > 1), "use either pool or output_pool, not both"
+        self.output_pool = output_pool
+        self.out_pool = output_pool if output_pool else pool  # the factor every output is pooled by
+
         # Verify pool and tss_distance are compatible for clean pooling boundaries
-        if pool > 1:
-            print(f"using max_pool with pool size {pool} and tss_distance {tss_distance}")
-            if pool % tss_distance != 0:
+        if self.out_pool > 1:
+            print(f"using max_pool with pool size {self.out_pool} and tss_distance {tss_distance}")
+            if self.out_pool % tss_distance != 0:
                 print(
-                    f"WARNING: pool ({pool}) is not divisible by tss_distance ({tss_distance}). "
+                    f"WARNING: pool ({self.out_pool}) is not divisible by tss_distance ({tss_distance}). "
                     "This may lead to pooling bins that partially overlap TSS mask regions, which could affect model performance. "
                     "Consider adjusting pool size or tss_distance for cleaner pooling boundaries."
                     "will max pool so if any overlap, that bin will be fully used in the mask!"
@@ -261,9 +301,15 @@ class TSSDataset():
         # Optional additional per-bp tracks (e.g. RNA-seq), same format as self.data
         self.expression_data = open_data(expression_data_path, load_in)
 
-        # Optional track selection from data_path / expression_data_path
+        # Cell types: store rows of data_path. Each sample loads ONE accessibility row; None is
+        # the single-cell-type case (row 0 of an npz/zarr), the old default.
         self.data_idxs = get_data_idxs(data_idxs, self.data)
+        self.celltype_rows = [0] if self.data_idxs is None else [int(r) for r in self.data_idxs]
         self.expression_data_idxs = get_data_idxs(expression_data_idxs, self.expression_data)
+        # names of the store rows, needed to look up dict counts, trans vectors and RNA rows by name
+        self.row_names = None
+        if data_path.endswith('.zarr') or '.zarr/' in data_path:
+            self.row_names = list(zarr.open(data_path, mode='r').attrs.get('celltypes', [])) or None
 
         # Strand-matched expression: when set, the expression track is chosen per gene by
         # the gene's strand (+ genes -> plus_track, - genes -> minus_track) so only the
@@ -275,6 +321,42 @@ class TSSDataset():
         self.expression_stranded = expression_stranded
         self.expression_plus_track = expression_plus_track
         self.expression_minus_track = expression_minus_track
+        # Per cell type (plus row, minus row) of the expression store. A multi-cell-type RNA zarr
+        # records its layout as a 'track_to_index' attr ({'DE_plus': 0, ..., 'DE_minus': 16, ...}),
+        # so rows are found by name; otherwise every cell type uses the fixed plus/minus tracks.
+        self.expression_rows = None
+        if expression_stranded:
+            track_to_index = None
+            if expression_data_path.endswith('.zarr') or '.zarr/' in expression_data_path:
+                track_to_index = zarr.open(expression_data_path, mode='r').attrs.get('track_to_index')
+            if track_to_index is not None:
+                assert self.row_names is not None, "a multi-cell-type RNA store needs a zarr data_path with a 'celltypes' attr"
+                self.expression_rows = [(track_to_index[f'{self.row_names[r]}_plus'],
+                                         track_to_index[f'{self.row_names[r]}_minus']) for r in self.celltype_rows]
+            else:
+                self.expression_rows = [(expression_plus_track, expression_minus_track)] * len(self.celltype_rows)
+
+        # Trans info, a global vector per cell type, joined by name through the zarr 'celltypes'
+        # attr (the npz order differs from the store order) and indexed by store row, as in GeneralDataset
+        self.return_celltype_idx_og = return_celltype_idx_og
+        self.trans_info = None
+        if trans_info is not None:
+            assert trans_info_key is not None, "trans_info_key must be provided with trans_info"
+            assert self.row_names is not None, "trans_info needs a zarr data_path with a 'celltypes' attribute"
+            with np.load(trans_info) as trans_npz:
+                trans_by_name = dict(zip(trans_npz['celltypes'].tolist(), trans_npz[trans_info_key]))
+            missing = [name for name in self.row_names if name not in trans_by_name]
+            assert not missing, f"cell types missing from {trans_info}: {missing}"
+            self.trans_info = np.stack([trans_by_name[name] for name in self.row_names]).astype(np.float32) #shape (n_store_rows, n_features)
+            print(f'loaded trans info {trans_info_key} with shape {self.trans_info.shape}')
+        self.trans_row_override = trans_row_override
+        # Token ids: position in data_idxs by default (as in GeneralDataset), or in ctt_rows
+        self.ctt_tokens = list(range(len(self.celltype_rows)))
+        if ctt_rows is not None:
+            ctt_rows = [int(r) for r in get_data_idxs(ctt_rows, self.data)]
+            missing = [r for r in self.celltype_rows if r not in ctt_rows]
+            assert not missing, f"store rows {missing} have no cell type token in ctt_rows {ctt_rows}"
+            self.ctt_tokens = [ctt_rows.index(r) for r in self.celltype_rows]
 
         # Load TSS dictionary and filter to the requested split.
         # 'val' and 'valid' are treated as equivalent to match either naming convention.
@@ -287,6 +369,35 @@ class TSSDataset():
         self.genes = list(self.tss_dict.keys())
         print(f"TSSDataset: {len(self.genes)} genes in split '{split}'")
 
+        # Dict counts are keyed by cell type name, so they need the store's row names
+        self.dict_counts = len(self.genes) > 0 and isinstance(self.tss_dict[self.genes[0]]['counts'], dict)
+        if self.dict_counts:
+            assert self.row_names is not None, "dict counts need a zarr data_path with a 'celltypes' attribute"
+        else:
+            assert len(self.celltype_rows) == 1, "multiple cell types need dict counts in the TSS json"
+
+        # Expression filter: CPM >= min_cpm in at least one of filter_celltypes (counts are ln(1+CPM))
+        if min_cpm is not None:
+            assert self.dict_counts, "min_cpm needs dict counts"
+            if filter_celltypes is None:
+                filter_names = [self.row_names[r] for r in self.celltype_rows]
+            elif isinstance(filter_celltypes, str):
+                with open(filter_celltypes, 'r') as f:
+                    filter_names = json.load(f)
+            else:
+                filter_names = list(filter_celltypes)
+            min_log = np.log1p(min_cpm)
+            self.genes = [g for g in self.genes
+                          if max(self.tss_dict[g]['counts'][name] for name in filter_names) >= min_log]
+            print(f"TSSDataset: {len(self.genes)} genes with CPM >= {min_cpm} in one of {len(filter_names)} cell types")
+
+        # Seeded gene subset, kept in json order so the subset is the same on every run
+        if max_genes is not None and max_genes < len(self.genes):
+            keep = np.sort(np.random.default_rng(gene_seed).choice(len(self.genes), size=max_genes, replace=False))
+            self.genes = [self.genes[i] for i in keep]
+            print(f"TSSDataset: subset of {len(self.genes)} genes (seed {gene_seed})")
+        print(f"TSSDataset: {len(self.genes)} genes x {len(self.celltype_rows)} cell types = {len(self)} samples")
+
         # RC augmentation complement lookup (A=7, C=8, G=9, T=10, N=11)
         max_key = 11
         self.complement_array = np.zeros(max_key + 1, dtype=int)
@@ -295,7 +406,12 @@ class TSSDataset():
             self.complement_array[int(k)] = v
 
     def __len__(self):
-        return len(self.genes)
+        return len(self.genes) * len(self.celltype_rows)
+
+    def sample_info(self, index):
+        """(gene id, cell type position in data_idxs, store row) of a sample; cell-type major order."""
+        celltype_idx_og, gene_idx = divmod(index, len(self.genes))
+        return self.genes[gene_idx], celltype_idx_og, self.celltype_rows[celltype_idx_og]
 
     def _build_tss_mask(self, tss, alt_tss, window_start):
         """Build a binary mask tensor of length self.length with 1s within
@@ -349,43 +465,44 @@ class TSSDataset():
             mask[lo:hi] = 1.0
         return mask
 
-    def _load_aligned(self, data_source, data_idxs, chrom, start, end, leftpad, rightpad, flip):
+    def _load_aligned(self, data_source, rows, chrom, start, end, leftpad, rightpad, flip, is_input=False):
         """Load a base-pair-resolution data source (zarr/npz, same chromosome-keyed
         format as self.data) for the current window and align it exactly to the sequence
         and to self.data: pad to full length, transpose to (seq_len, n_tracks), reverse if
         the window is RC-flipped, then crop and pool identically to the primary targets.
 
+        rows lists the store rows to load; only those rows are read, so a 16-row zarr costs
+        one row's I/O per sample.
+        is_input marks the accessibility input: with output_pool set it is returned at bp
+        resolution, uncropped and unpooled, since only the outputs are pooled.
+
         Returns a tensor of shape (seq_len_after_crop_pool, n_tracks). Both self.data
         (ATAC targets) and the optional expression data go through this same code path so
         they stay aligned at base-pair resolution.
         """
-        if data_idxs is not None:
-            # Load all tracks then select; np.array() materialises zarr lazily
-            track_data = np.array(data_source[chrom][:, start:end])[data_idxs]  # (n_tracks, seq_len)
-            n_tracks = len(data_idxs)
-            lpad = np.zeros((n_tracks, len(leftpad)))
-            rpad = np.zeros((n_tracks, len(rightpad)))
-            data = np.concatenate([lpad, track_data, rpad], axis=1)
-        else:
-            data = np.concatenate([
-                leftpad[None] * 0,
-                data_source[chrom][0:1, start:end],
-                rightpad[None] * 0
-            ], axis=1)
+        chrom_data = data_source[chrom]  # one lookup: an npz decompresses the whole chromosome per access
+        track_data = np.stack([np.asarray(chrom_data[r, start:end]) for r in rows]).astype(np.float32)  # (n_tracks, seq_len)
+        n_tracks = len(rows)
+        lpad = np.zeros((n_tracks, len(leftpad)), dtype=np.float32)
+        rpad = np.zeros((n_tracks, len(rightpad)), dtype=np.float32)
+        data = np.concatenate([lpad, track_data, rpad], axis=1)
 
         data = data.transpose(1, 0)  # (seq_len, n_tracks)
 
-        out = torch.FloatTensor(data)
+        out = torch.from_numpy(np.ascontiguousarray(data))
         if flip:
             out = out.flip(dims=[0])
+
+        if is_input and self.output_pool:
+            return out
 
         if self.crop_output > 0:
             out = out[self.crop_output:-self.crop_output]
 
-        if self.pool > 1:
-            if out.shape[0] % self.pool != 0:
+        if self.out_pool > 1:
+            if out.shape[0] % self.out_pool != 0:
                 raise ValueError('Pool size must divide sequence length')
-            out = out.view(out.size(0) // self.pool, self.pool, out.size(1))
+            out = out.view(out.size(0) // self.out_pool, self.out_pool, out.size(1))
             if self.pool_type != 'mean':
                 raise NotImplementedError('Only mean pooling implemented')
             out = out.mean(dim=1)
@@ -396,9 +513,10 @@ class TSSDataset():
         """Get the item at the index.
 
         Args:
-            index (int): gene index into self.genes
+            index (int): sample index; cell-type major, see sample_info
         Returns:
-            outputs1 (tuple): (seq, targets). seq is shape NxL. N is 5 if one_hot, or 6 if masking (5 one-hot + MLM indicator) or append_gene_mask / append_tss_mask (5 one-hot + that mask). targets is shape MxL. M is number of targets
+            outputs1 (tuple): (seq, targets[, celltype_idx_og[, trans_info]]); the last two only when
+                return_celltype_idx_og / trans_info are set. seq is shape NxL. N is 5 if one_hot, or 6 if masking (5 one-hot + MLM indicator) or append_gene_mask / append_tss_mask (5 one-hot + that mask). targets is shape MxL. M is number of targets
             outputs2 (tuple): (seq_unmask, acc_umask, counts, tss_mask, gene_mask, strand, expression).
                 counts is a single-value tensor of gene expression. tss_mask marks
                 TSS-neighborhood positions; gene_mask marks the gene body of the gene of
@@ -428,12 +546,14 @@ class TSSDataset():
         seq_unmask = torch.empty(0)
         acc_umask = torch.empty(0)
 
-        # Look up gene metadata from TSS dictionary
-        gene = self.genes[index]
+        # Look up the (gene, cell type) pair, then gene metadata from TSS dictionary
+        gene, celltype_idx_og, row = self.sample_info(index)
         gene_info = self.tss_dict[gene]
         chrom = gene_info['chrom']
         tss = gene_info['tss']
         counts = gene_info['counts']
+        if self.dict_counts:
+            counts = counts[self.row_names[row]]
         alt_tss = gene_info['alt_tss']
         strand = gene_info['strand']
         gene_start = gene_info.get('gene_start')
@@ -558,7 +678,7 @@ class TSSDataset():
             return seq, seq_unmask
 
         # Load primary chromatin data (ATAC), padded/aligned to the sequence window
-        targets = self._load_aligned(self.data, self.data_idxs, chrom, start, end, leftpad, rightpad, flip)
+        targets = self._load_aligned(self.data, [row], chrom, start, end, leftpad, rightpad, flip, is_input=True)
 
         if self.acc_mlm is not None:
             assert not self.pair_mask, "Pair masking not implemented yet"
@@ -596,11 +716,12 @@ class TSSDataset():
             # + gene sees the plus track and a - gene sees the minus track (single channel).
             # Otherwise fall back to the fixed expression_data_idxs for every gene.
             if self.expression_stranded:
-                expr_idxs = np.array(
-                    [self.expression_plus_track if strand == 1 else self.expression_minus_track]
-                )
+                plus_row, minus_row = self.expression_rows[celltype_idx_og]
+                expr_idxs = [plus_row if strand == 1 else minus_row]
+            elif self.expression_data_idxs is not None:
+                expr_idxs = [int(r) for r in self.expression_data_idxs]
             else:
-                expr_idxs = self.expression_data_idxs
+                expr_idxs = [0]
             expression = self._load_aligned(
                 self.expression_data, expr_idxs,
                 chrom, start, end, leftpad, rightpad, flip
@@ -625,12 +746,18 @@ class TSSDataset():
             tss_mask = tss_mask[self.crop_output:-self.crop_output]
             gene_mask = gene_mask[self.crop_output:-self.crop_output]
 
-        if self.pool > 1:
+        if self.out_pool > 1:
             # Max-pool: a bin is active if any position in it overlaps the region
-            tss_mask = tss_mask.view(-1, self.pool).max(dim=1).values
-            gene_mask = gene_mask.view(-1, self.pool).max(dim=1).values
+            tss_mask = tss_mask.view(-1, self.out_pool).max(dim=1).values
+            gene_mask = gene_mask.view(-1, self.out_pool).max(dim=1).values
 
         outputs1 = [seq, targets]
+        #the encoder is called as encoder(*x), so trans info must come after the celltype index to land in trans_info, not ctt_token
+        if self.return_celltype_idx_og or self.trans_info is not None:
+            outputs1.append(torch.tensor(self.ctt_tokens[celltype_idx_og]))
+        if self.trans_info is not None:
+            trans_row = row if self.trans_row_override is None else self.trans_row_override
+            outputs1.append(torch.from_numpy(self.trans_info[trans_row]))
         outputs2 = [seq_unmask, acc_umask, torch.tensor(counts, dtype=torch.float32), tss_mask, gene_mask, torch.tensor(strand), expression]
 
         return tuple(outputs1), tuple(outputs2)

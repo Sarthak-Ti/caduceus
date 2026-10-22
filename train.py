@@ -272,6 +272,7 @@ class SequenceLightningModule(pl.LightningModule):
         self.start_time = time.time()  # Store start time
         self.max_runtime = 7 * 24 * 60 * 60  # 7 days in seconds
         self.epoch_durations = []  # List to track epoch durations
+        self.epoch_start_time = None  # Set by on_train_epoch_start, which Lightning >= 2.5 skips when resuming mid-epoch
 
     def load_state_dict(self, state_dict, strict=False):
         # print(state_dict.keys(),'\n',sep='\n')
@@ -578,6 +579,9 @@ class SequenceLightningModule(pl.LightningModule):
     
     def on_validation_epoch_end(self):
         """Track the duration of each epoch."""
+        # No start time means a partial epoch resumed mid-way (or a sanity check); timing it would underestimate epochs
+        if self.epoch_start_time is None:
+            return
         epoch_time = time.time() - self.epoch_start_time
         self.epoch_durations.append(epoch_time)
         #also we want to make sure we have enough time

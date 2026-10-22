@@ -1241,6 +1241,9 @@ class TSSLoader(HG38):
         self._name_ = kwargs.pop("_name_", self._name_)
         kwargs.pop("dataset_name", None)   # inherited from general_dataset.yaml, not used by TSSDataset
         kwargs.pop("additional_data", None)  # from joint_finetune experiment config, not used by TSSDataset
+        # Fixed, seeded validation gene subset (e.g. 500 genes x 13 cell types); train always uses every gene
+        self.val_max_genes = kwargs.pop("val_max_genes", None)
+        self.val_gene_seed = kwargs.pop("val_gene_seed", 0)
         self.dest_path = dest_path
         self.batch_size = batch_size
         self.batch_size_eval = batch_size_eval if batch_size_eval is not None else self.batch_size
@@ -1266,10 +1269,11 @@ class TSSLoader(HG38):
 
     def setup(self, stage=None):
         self.tokenizer = None
-        self.dataset_train, self.dataset_val = [
-            TSSDataset(split=split, **self.dataset_kwargs)
-            for split in ['train', 'val']
-        ]
+        self.dataset_train = TSSDataset(split='train', **self.dataset_kwargs)
+        # Validation without rc_aug or sequence shifts (evaluating=True), on the seeded gene subset
+        val_kwargs = {**self.dataset_kwargs, 'evaluating': True,
+                      'max_genes': self.val_max_genes, 'gene_seed': self.val_gene_seed}
+        self.dataset_val = TSSDataset(split='val', **val_kwargs)
 
     def test_dataloader(self, *args: Any, **kwargs: Any) -> Union[DataLoader, List[DataLoader]]:
         return self._data_loader(self.dataset_val, batch_size=self.batch_size_eval)

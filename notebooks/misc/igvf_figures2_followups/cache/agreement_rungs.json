@@ -1,0 +1,76 @@
+{
+  "rungs": {
+    "original": [
+      {
+        "name": "R0 \u00b7 all bins",
+        "subtitle": "any allowed bin",
+        "n_pos": 85798,
+        "n_neg": 1364476,
+        "n_preg": 1840,
+        "n_nreg": 1840
+      },
+      {
+        "name": "R1 \u00b7 promoters",
+        "subtitle": "protein-coding TSS only",
+        "n_pos": 15145,
+        "n_neg": 30334,
+        "n_preg": 928,
+        "n_nreg": 1099
+      },
+      {
+        "name": "R2 \u00b7 + disagreement",
+        "subtitle": "cross-CT average points the wrong way",
+        "n_pos": 1186,
+        "n_neg": 570,
+        "n_preg": 469,
+        "n_nreg": 278
+      },
+      {
+        "name": "R3 \u00b7 + accessibility",
+        "subtitle": "ATAC-confirmed",
+        "n_pos": 455,
+        "n_neg": 416,
+        "n_preg": 229,
+        "n_nreg": 214
+      }
+    ],
+    "agreement": [
+      {
+        "name": "R0 \u00b7 all bins",
+        "subtitle": "any allowed bin",
+        "n_pos": 8131,
+        "n_neg": 1358626,
+        "n_preg": 799,
+        "n_nreg": 1840
+      },
+      {
+        "name": "R1 \u00b7 promoters",
+        "subtitle": "protein-coding TSS only",
+        "n_pos": 4871,
+        "n_neg": 29387,
+        "n_preg": 640,
+        "n_nreg": 1096
+      },
+      {
+        "name": "R2 \u00b7 + disagreement",
+        "subtitle": "cross-CT average points the wrong way",
+        "n_pos": 49,
+        "n_neg": 539,
+        "n_preg": 39,
+        "n_nreg": 267
+      },
+      {
+        "name": "R3 \u00b7 + accessibility",
+        "subtitle": "ATAC-confirmed",
+        "n_pos": 41,
+        "n_neg": 402,
+        "n_preg": 32,
+        "n_nreg": 206
+      }
+    ]
+  },
+  "rampage_active_threshold": 0.994342029094696,
+  "rampage_silent_rule": "==0",
+  "cage_active_threshold": 1.0,
+  "cage_silent_threshold": 0.2
+}

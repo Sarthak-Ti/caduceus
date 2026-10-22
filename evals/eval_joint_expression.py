@@ -44,7 +44,7 @@ def pool_spatial(arr, pool_size):
     return arr[:L].reshape(-1, pool_size, arr.shape[1]).mean(axis=1)
 
 
-def evaluate_all(evals, pool, num_workers=4, save_outputs=False, save_targets=False, dtype=np.float32):
+def evaluate_all(evals, pool, num_workers=4, save_outputs=False, save_targets=False, dtype=np.float32, channels=None):
     """
     Single pass over the full dataset. Computes per-region correlations on the fly
     to avoid storing the full (num_regions, num_celltypes, L, C) arrays.
@@ -54,6 +54,8 @@ def evaluate_all(evals, pool, num_workers=4, save_outputs=False, save_targets=Fa
     if the corresponding flag is set and None otherwise. Those two are preallocated to
     NaN, so any (region, celltype) slot that never got written stays NaN and is visible.
     Values are stored post-pooling, so they line up index-for-index with the correlations.
+    channels optionally selects prediction channels (e.g. [0] for the expression track of a model that
+    also predicts accessibility as an extra channel), so they line up with the targets.
     """
     num_regions = len(evals.dataset.sequences)
     num_celltypes = evals.dataset.celltypes
@@ -74,6 +76,8 @@ def evaluate_all(evals, pool, num_workers=4, save_outputs=False, save_targets=Fa
 
         if pred.ndim == 1:
             pred = pred[:, None]
+        if channels is not None:
+            pred = pred[:, channels]
         if tgt.ndim == 1:
             tgt = tgt[:, None]
 

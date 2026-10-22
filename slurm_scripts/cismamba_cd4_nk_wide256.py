@@ -152,6 +152,9 @@ def configuration(manifest, cell, stage, *, output=None, smoke_epochs=None, resu
     if stage == 'finetune':
         cfg['dataset'].update(additional_data=entry['cage'], additional_data_idxs=0)
     cfg['trainer'].update(max_epochs=BUDGETS[stage], enable_progress_bar=False)
+    if stage == 'finetune':
+        # Finetuning runs in the modern env with torch.compile (2026-10-19); pretraining ran eager in the old env.
+        cfg['train']['compile'] = True
     cfg['train']['pretrained_model_path'] = (
         str(Path(entry['runs']['pretrain']) / 'checkpoints/best.ckpt')
         if stage == 'finetune' else None)
@@ -191,7 +194,8 @@ def validate_recipe(manifest, cell, stage, cfg):
     allowed = {'dataset.data_path', 'train.ckpt', 'train.pretrained_model_path',
                'trainer.enable_progress_bar'}
     if stage == 'finetune':
-        allowed |= {'dataset.additional_data', 'dataset.additional_data_idxs'}
+        allowed |= {'dataset.additional_data', 'dataset.additional_data_idxs', 'train.compile'}
+        assert cfg['train']['compile'] is True
     assert set(changes) <= allowed, changes
     assert cfg['model']['config']['d_in'] == cfg['model']['config']['d_model'] == 256
     assert cfg['dataset']['batch_size'] == cfg['trainer']['devices'] == 1
@@ -258,6 +262,8 @@ def build_model(cfg, source=None):
     local = copy.deepcopy(cfg)
     local.pop('hydra', None)
     local['train']['disable_dataset'] = True
+    # Structural and transfer checks run eager (some on CPU); the compiled path is exercised by the smoke fits.
+    local['train']['compile'] = False
     torch.manual_seed(2222)
     model = SequenceLightningModule(OmegaConf.create(local))
     if source is not None:
@@ -362,8 +368,9 @@ def run_fit(manifest, cell, stage, cfg, label, log=None):
     path = save_yaml(Path(manifest['bundle']) / 'configs' / cell / stage / f'{attempt}_{label}.yaml', cfg)
     if log:
         with log.open('w') as handle:
+            # 2400 s rather than 1200 s: compiled smoke fits also pay the torch.compile warmup.
             subprocess.run(train_command(path), cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT,
-                           check=True, timeout=1200)
+                           check=True, timeout=2400)
     else:
         subprocess.run(train_command(path), cwd=ROOT, check=True)
 
